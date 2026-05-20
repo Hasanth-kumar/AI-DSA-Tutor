@@ -1,0 +1,36 @@
+{
+  "name": "@dsa/integrations",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src",
+    "db:seed": "tsx src/scripts/from-notion.ts"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "@dsa/database": "workspace:*",
+    "@dsa/intelligence": "workspace:*",
+    "@dsa/shared": "workspace:*",
+    "better-sqlite3": "^11.8.1",
+    "drizzle-orm": "^0.39.3",
+    "p-queue": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

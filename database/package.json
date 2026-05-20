@@ -1,0 +1,28 @@
+{
+  "name": "@dsa/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schema": {
+      "types": "./dist/sqlite.schema.d.ts",
+      "import": "./dist/sqlite.schema.js"
+    },
+    "./notion-types": {
+      "types": "./dist/notion-types.d.ts",
+      "import": "./dist/notion-types.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.39.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.30.4",
+    "typescript": "^5.7.3"
+  }
+}

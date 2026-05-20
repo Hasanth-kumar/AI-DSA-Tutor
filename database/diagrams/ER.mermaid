@@ -1,0 +1,35 @@
+erDiagram
+    TOPICS {
+        text id PK
+        text name
+        text difficulty
+        text status
+        int revision_count
+        int last_revised
+        int confidence
+        bool is_weak_area
+        real priority_score
+        int next_revision_at
+        text prerequisites
+    }
+    PROBLEMS {
+        text id PK
+        text name
+        text topic_id FK
+        text difficulty
+        text leetcode_link
+        text status
+        int attempts
+        int time_taken
+        text notes
+    }
+    SESSIONS {
+        text id PK
+        int date
+        text topic_id FK
+        int problems_solved
+        int study_duration
+        int productivity_score
+    }
+    TOPICS ||--o{ PROBLEMS : has
+    TOPICS ||--o{ SESSIONS : studied_in

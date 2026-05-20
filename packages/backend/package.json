@@ -1,0 +1,32 @@
+{
+  "name": "@dsa/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@dsa/database": "workspace:*",
+    "@dsa/integrations": "workspace:*",
+    "@dsa/intelligence": "workspace:*",
+    "@dsa/shared": "workspace:*",
+    "bullmq": "^5.40.0",
+    "drizzle-orm": "^0.39.3",
+    "fastify": "^5.2.1",
+    "ioredis": "^5.4.2",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "supertest": "^7.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

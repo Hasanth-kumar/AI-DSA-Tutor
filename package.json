@@ -1,0 +1,28 @@
+{
+  "name": "dsa-mastery-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Autonomous DSA learning intelligence layer over Notion, Ollama, n8n, and WhatsApp",
+  "scripts": {
+    "build": "pnpm --filter @dsa/database build && pnpm -r --filter '!@dsa/database' build",
+    "dev": "pnpm --filter @dsa/backend dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "db:seed": "pnpm --filter @dsa/integrations db:seed",
+    "docker:up": "docker compose -f infrastructure/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker-compose.yml down",
+    "setup": "bash infrastructure/scripts/setup.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "eslint": "^9.20.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0",
+    "vitest": "^3.0.5"
+  }
+}
