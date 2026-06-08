@@ -1,6 +1,7 @@
 import type { IntelligenceOrchestrator, SessionSnapshot } from "@dsa/intelligence";
 import { createNotionClient } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
+import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type {
   CreateSessionInput,
   SessionRepository,
@@ -13,11 +14,13 @@ import type { PlanService } from "./PlanService.js";
 
 export interface CompleteSessionInput extends CreateSessionInput {
   pushToNotion?: boolean;
+  problemId?: string;
 }
 
 export interface SessionResult {
   session: SessionRow;
   topicId: string;
+  problemId?: string;
   nextRevisionAt: string | null;
   confidence: number;
   isWeakArea: boolean;
@@ -30,6 +33,7 @@ export class SessionService {
     private readonly intelligence: IntelligenceOrchestrator,
     private readonly sessionRepo: SessionRepository,
     private readonly topicRepo: TopicRepository,
+    private readonly problemRepo: ProblemRepository,
     private readonly planService: PlanService,
     private readonly notionSync: NotionSyncService,
   ) {}
@@ -46,6 +50,16 @@ export class SessionService {
     const topic = this.topicRepo.findById(input.topicId);
     if (!topic) {
       throw new Error(`Topic not found: ${input.topicId}`);
+    }
+
+    if (input.problemId) {
+      const problem = this.problemRepo.findById(input.problemId);
+      if (!problem) {
+        throw new Error(`Problem not found: ${input.problemId}`);
+      }
+      if (problem.topicId && problem.topicId !== input.topicId) {
+        throw new Error(`Problem ${input.problemId} does not belong to topic ${input.topicId}`);
+      }
     }
 
     const sessionRow = this.sessionRepo.create(input);
@@ -72,8 +86,18 @@ export class SessionService {
       priorityScore: update.weaknessUpdate.score,
     });
 
+    this.notionSync.markTopicDirty(input.topicId);
+
+    if (input.problemId) {
+      this.problemRepo.recordSolve(input.problemId, input.studyDuration);
+      this.notionSync.markProblemDirty(input.problemId);
+    }
+
     if (input.pushToNotion !== false && this.notionSync.isConfigured()) {
       await this.notionSync.pushTopicToNotion(input.topicId);
+      if (input.problemId) {
+        await this.notionSync.pushProblemToNotion(input.problemId);
+      }
       await this.pushSessionToNotion(sessionRow);
     }
 
@@ -84,6 +108,7 @@ export class SessionService {
     return {
       session: sessionRow,
       topicId: input.topicId,
+      problemId: input.problemId,
       nextRevisionAt: updated.nextRevisionAt?.toISOString() ?? null,
       confidence: updated.confidence,
       isWeakArea: updated.isWeakArea,

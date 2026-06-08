@@ -6,10 +6,14 @@ import type {
   IntelligenceSnapshot,
   IntelligenceUpdate,
   PlanOptions,
+  PriorityWeights,
+  ProblemSuggestion,
   SessionSnapshot,
   StudyPlan,
   TopicState,
 } from "../types.js";
+import { explainPriorityScore } from "../topic-priority-engine/explain.js";
+import { computePriorityScore } from "../topic-priority-engine/scoring.js";
 import { WeaknessEngine } from "../weakness-engine/WeaknessEngine.js";
 
 export class IntelligenceOrchestrator {
@@ -21,7 +25,11 @@ export class IntelligenceOrchestrator {
     private readonly roadmap: RoadmapEngine,
   ) {}
 
-  generatePlan(topics: TopicState[], options: PlanOptions = {}): StudyPlan {
+  generatePlan(
+    topics: TopicState[],
+    options: PlanOptions = {},
+    suggestedProblems?: ProblemSuggestion[],
+  ): StudyPlan {
     this.roadmap.registerTopicsByName(topics);
     const unlocked = this.roadmap.getUnlockedTopics(topics);
     const withScores = this.topicPriority.scoreAll(unlocked);
@@ -33,11 +41,30 @@ export class IntelligenceOrchestrator {
     const difficultyRec = this.difficulty.recommendDifficulty(
       withScores[0].topic,
     );
-    return this.topicPriority.buildPlan(withScores, difficultyRec, options);
+    return this.topicPriority.buildPlan(
+      withScores,
+      difficultyRec,
+      options,
+      suggestedProblems,
+    );
   }
 
-  generateDailyPlan(topics: TopicState[], options?: PlanOptions): StudyPlan {
-    return this.generatePlan(topics, options);
+  generateDailyPlan(
+    topics: TopicState[],
+    options?: PlanOptions,
+    suggestedProblems?: ProblemSuggestion[],
+  ): StudyPlan {
+    return this.generatePlan(topics, options, suggestedProblems);
+  }
+
+  explainTopicScore(topic: TopicState, allTopics: TopicState[]) {
+    const map = new Map(allTopics.map((t) => [t.id, t]));
+    const score = computePriorityScore(
+      topic,
+      map,
+      this.topicPriority.weights,
+    );
+    return explainPriorityScore(score, topic);
   }
 
   updateAfterSession(
@@ -58,6 +85,10 @@ export class IntelligenceOrchestrator {
 
   getWeaknessReport(topics: TopicState[]) {
     return this.weakness.detectAllWeaknesses(topics);
+  }
+
+  getDifficultyRecommendation(topic: TopicState) {
+    return this.difficulty.recommendDifficulty(topic);
   }
 
   buildSnapshot(topics: TopicState[]): IntelligenceSnapshot {
@@ -92,12 +123,14 @@ export class IntelligenceOrchestrator {
   }
 }
 
-export function createIntelligenceOrchestrator(): IntelligenceOrchestrator {
+export function createIntelligenceOrchestrator(
+  weights?: PriorityWeights,
+): IntelligenceOrchestrator {
   const revision = new RevisionEngine();
   const weakness = new WeaknessEngine();
   const difficulty = new DifficultyEngine();
   const roadmap = new RoadmapEngine();
-  const topicPriority = new TopicPriorityEngine(revision);
+  const topicPriority = new TopicPriorityEngine(revision, weights);
 
   return new IntelligenceOrchestrator(
     topicPriority,

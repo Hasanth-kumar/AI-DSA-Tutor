@@ -68,11 +68,25 @@ bash infrastructure/scripts/health-check.sh
 - [x] `RoadmapEngine` — DAG prerequisites + violation detection
 - [x] `IntelligenceOrchestrator` — wires all engines (`createIntelligenceOrchestrator()`)
 - [x] `buildSnapshot()` — intelligence state summary
+- [x] Configurable scoring weights via `WEIGHT_*` env vars
+- [x] `explainPriorityScore()` + `GET /api/topics/:id/score/explain`
 - [x] Unit tests for all engines (`pnpm --filter @dsa/intelligence test`)
 
 ```bash
 pnpm --filter @dsa/intelligence test
 ```
+
+## Phase 2 checklist
+
+- [x] `GET /api/plan/today` — daily study plan with real problem suggestions
+- [x] `POST /api/session` — session CRUD + intelligence update
+- [x] `GET /api/topics` + `PATCH /api/topics/:id` — read/update topics
+- [x] `GET /api/problems` + `PATCH /api/problems/:id` — problem catalog
+- [x] `GET /api/revision` — revision queue
+- [x] `GET /api/analytics/summary` — weekly stats
+- [x] Notion sync — pull + pending replay (bidirectional)
+- [x] Session/problem logging updates Notion + marks dirty for sync replay
+- [x] Redis cache for plans + BullMQ schedulers (7 AM, 9 PM, 30 min sync, Sunday digest)
 
 ## Phase 3 checklist (WhatsApp)
 
@@ -80,8 +94,24 @@ pnpm --filter @dsa/intelligence test
 - [x] Webhook: `GET|POST /webhooks/whatsapp` (verify + incoming commands)
 - [x] Commands: `plan`, `done`, `progress`, `hint`, `help`
 - [x] Ollama hints via `HintService`
-- [x] Cron notifications: `POST /api/notifications/daily-plan`, `revision-check`
+- [x] Cron notifications: `POST /api/notifications/daily-plan`, `revision-check`, `weekly-digest`
 - [x] n8n workflow exports + [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md)
 - [x] BullMQ schedulers optionally push to WhatsApp
 
 Setup: see [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
+
+## Phase 4 checklist (Analytics)
+
+- [x] `AnalyticsEngine` — streak, mastery velocity, weakness trend, difficulty analysis
+- [x] `GET /api/analytics/summary` — weekly digest with trend highlights
+- [x] `GET /api/analytics/streak` — current/longest streak + active days
+- [x] `GET /api/analytics/mastery-velocity` — weekly problems/hr + per-topic velocity
+- [x] `GET /api/analytics/weakness-trend` — weak-area count over time (session replay)
+- [x] `GET /api/analytics/difficulty` — solve rates by difficulty + topic alignment
+- [x] Enhanced WhatsApp weekly digest (`progress` command + Sunday cron)
+- [x] n8n `weekly-digest.workflow.json` + BullMQ `weekly-digest` scheduler
+
+```bash
+pnpm --filter @dsa/intelligence test
+pnpm --filter @dsa/backend test
+```

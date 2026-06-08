@@ -131,6 +131,7 @@ export class WhatsAppCommandService {
 
     const result = await this.ctx.sessionService.completeSession({
       topicId: problem.topicId,
+      problemId: problem.id,
       problemsSolved: 1,
       studyDuration,
       productivityScore,

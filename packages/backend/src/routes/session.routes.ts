@@ -28,10 +28,18 @@ export async function sessionRoutes(
       productivityScore: number;
       date?: string;
       pushToNotion?: boolean;
+      problemId?: string;
     };
   }>("/session", async (request, reply) => {
-    const { topicId, problemsSolved, studyDuration, productivityScore, date, pushToNotion } =
-      request.body;
+    const {
+      topicId,
+      problemsSolved,
+      studyDuration,
+      productivityScore,
+      date,
+      pushToNotion,
+      problemId,
+    } = request.body;
 
     if (!topicId || problemsSolved == null || studyDuration == null || productivityScore == null) {
       return reply.status(400).send({
@@ -47,6 +55,7 @@ export async function sessionRoutes(
         productivityScore,
         date: date ? new Date(date) : undefined,
         pushToNotion,
+        problemId,
       });
       return reply.status(201).send(serializeForJson(result));
     } catch (err) {

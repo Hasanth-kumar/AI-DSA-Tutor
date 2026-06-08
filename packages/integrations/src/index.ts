@@ -18,6 +18,7 @@ export { formatProgressForWhatsApp } from "./whatsapp/formatters/progress.format
 export { formatRevisionReminder } from "./whatsapp/formatters/revision.formatter.js";
 export { NotionClient, createNotionClient, type NotionConfig } from "./notion/NotionClient.js";
 export type {
+  ProblemNotionUpdate,
   SessionNotionCreate,
   TopicNotionUpdate,
 } from "./notion/NotionWriter.js";

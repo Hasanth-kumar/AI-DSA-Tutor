@@ -16,3 +16,9 @@ export interface SessionNotionCreate {
   studyDuration: number;
   productivityScore: number;
 }
+
+export interface ProblemNotionUpdate {
+  status?: "Unsolved" | "Solved" | "Attempted";
+  attempts?: number;
+  timeTaken?: number;
+}

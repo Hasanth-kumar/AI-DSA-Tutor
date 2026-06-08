@@ -1,7 +1,11 @@
 import { Client } from "@notionhq/client";
 import type { QueryDatabaseResponse } from "@notionhq/client/build/src/api-endpoints.js";
 import PQueue from "p-queue";
-import type { SessionNotionCreate, TopicNotionUpdate } from "./NotionWriter.js";
+import type {
+  ProblemNotionUpdate,
+  SessionNotionCreate,
+  TopicNotionUpdate,
+} from "./NotionWriter.js";
 
 export interface NotionConfig {
   token: string;
@@ -87,6 +91,29 @@ export class NotionClient {
     }
     if (update.difficulty != null) {
       properties.Difficulty = { multi_select: [{ name: update.difficulty }] };
+    }
+
+    if (Object.keys(properties).length === 0) return;
+
+    await this.requestQueue.add(() =>
+      this.client.pages.update({
+        page_id: pageId,
+        properties: properties as Parameters<Client["pages"]["update"]>[0]["properties"],
+      }),
+    );
+  }
+
+  async updateProblem(pageId: string, update: ProblemNotionUpdate): Promise<void> {
+    const properties: Record<string, unknown> = {};
+
+    if (update.status != null) {
+      properties.Status = { select: { name: update.status } };
+    }
+    if (update.attempts != null) {
+      properties.Attempts = { number: update.attempts };
+    }
+    if (update.timeTaken != null) {
+      properties["Time Taken"] = { number: update.timeTaken };
     }
 
     if (Object.keys(properties).length === 0) return;

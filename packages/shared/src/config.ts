@@ -52,6 +52,7 @@ const envSchema = z.object({
   DAILY_PLAN_CRON: z.string().default("0 7 * * *"),
   REVISION_CHECK_CRON: z.string().default("0 21 * * *"),
   NOTION_SYNC_CRON: z.string().default("*/30 * * * *"),
+  WEEKLY_DIGEST_CRON: z.string().default("0 20 * * 0"),
   SCHEDULER_TIMEZONE: z.string().default("UTC"),
 });
 
@@ -89,6 +90,7 @@ export type AppConfig = {
     dailyPlanCron: string;
     revisionCheckCron: string;
     notionSyncCron: string;
+    weeklyDigestCron: string;
     timezone: string;
   };
 };
@@ -143,6 +145,7 @@ export function loadConfig(envPath?: string): AppConfig {
       dailyPlanCron: env.DAILY_PLAN_CRON,
       revisionCheckCron: env.REVISION_CHECK_CRON,
       notionSyncCron: env.NOTION_SYNC_CRON,
+      weeklyDigestCron: env.WEEKLY_DIGEST_CRON,
       timezone: env.SCHEDULER_TIMEZONE,
     },
   };

@@ -79,6 +79,39 @@ export class TopicRepository {
       .where(eq(topics.id, id))
       .run();
   }
+
+  applyPendingFields(
+    id: string,
+    fields: {
+      confidence?: number;
+      revisionCount?: number;
+      lastRevised?: number | null;
+      nextRevisionAt?: number | null;
+      isWeakArea?: number;
+      status?: string;
+      priorityScore?: number | null;
+    },
+  ): void {
+    const now = Date.now();
+    this.db
+      .update(topics)
+      .set({
+        ...(fields.confidence != null ? { confidence: fields.confidence } : {}),
+        ...(fields.revisionCount != null ? { revisionCount: fields.revisionCount } : {}),
+        ...(fields.lastRevised !== undefined ? { lastRevised: fields.lastRevised } : {}),
+        ...(fields.nextRevisionAt !== undefined
+          ? { nextRevisionAt: fields.nextRevisionAt }
+          : {}),
+        ...(fields.isWeakArea != null ? { isWeakArea: fields.isWeakArea } : {}),
+        ...(fields.status != null ? { status: fields.status } : {}),
+        ...(fields.priorityScore !== undefined
+          ? { priorityScore: fields.priorityScore }
+          : {}),
+        updatedAt: now,
+      })
+      .where(eq(topics.id, id))
+      .run();
+  }
 }
 
 function groupBy<T>(items: T[], keyFn: (item: T) => string | null | undefined): Map<string, T[]> {

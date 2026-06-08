@@ -122,4 +122,24 @@ export async function whatsappNotificationRoutes(
       }
     },
   );
+
+  app.post<{ Body: { recipient?: string } }>(
+    "/notifications/weekly-digest",
+    async (request, reply) => {
+      if (!checkNotifySecret(request, secret)) {
+        return reply.status(401).send({ error: "Unauthorized" });
+      }
+      if (!notifications.isConfigured()) {
+        return reply.status(503).send({ error: "WhatsApp notifications not configured" });
+      }
+
+      try {
+        const result = await notifications.sendWeeklyDigest(request.body?.recipient);
+        return reply.send(result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to send";
+        return reply.status(500).send({ error: message });
+      }
+    },
+  );
 }

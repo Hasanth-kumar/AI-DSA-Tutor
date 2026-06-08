@@ -8,7 +8,7 @@ import type {
   TopicState,
 } from "../types.js";
 import type { RevisionEngine } from "../revision-engine/RevisionEngine.js";
-import { computePriorityScore } from "./scoring.js";
+import { computePriorityScore, DEFAULT_WEIGHTS } from "./scoring.js";
 
 export interface ScoredTopic {
   topic: TopicState;
@@ -16,7 +16,14 @@ export interface ScoredTopic {
 }
 
 export class TopicPriorityEngine {
-  constructor(private readonly revisionEngine: RevisionEngine) {}
+  constructor(
+    private readonly revisionEngine: RevisionEngine,
+    private readonly defaultWeights: PriorityWeights = DEFAULT_WEIGHTS,
+  ) {}
+
+  get weights(): PriorityWeights {
+    return this.defaultWeights;
+  }
 
   scoreAll(
     topics: TopicState[],
@@ -45,7 +52,7 @@ export class TopicPriorityEngine {
       )
       .map((t) => ({
         topic: t,
-        score: computePriorityScore(t, allTopicsMap, undefined, now),
+        score: computePriorityScore(t, allTopicsMap, this.defaultWeights, now),
       }))
       .sort((a, b) => b.score.total - a.score.total);
 
@@ -74,6 +81,7 @@ export class TopicPriorityEngine {
     scored: ScoredTopic[],
     difficultyRec: DifficultyRecommendation,
     options: PlanOptions = {},
+    suggestedProblems?: ProblemSuggestion[],
   ): StudyPlan {
     if (scored.length === 0) {
       throw new Error("No scored topics to build a study plan");
@@ -89,15 +97,19 @@ export class TopicPriorityEngine {
     const difficulties = [difficultyRec.primary];
     if (difficultyRec.secondary) difficulties.push(difficultyRec.secondary);
 
+    const problems =
+      suggestedProblems ??
+      difficulties.map((d, i) => ({
+        problemId: `${primary.topic.id}-suggested-${i}`,
+        name: `${primary.topic.name} — ${d} practice`,
+        difficulty: d,
+      }));
+
     return {
       date: new Date(),
       primaryTopic: primary.topic,
       revisionTopics,
-      suggestedProblems: difficulties.map((d, i) => ({
-        problemId: `${primary.topic.id}-suggested-${i}`,
-        name: `${primary.topic.name} — ${d} practice`,
-        difficulty: d,
-      })),
+      suggestedProblems: problems,
       estimatedDuration: this.estimateDuration(primary.topic, revisionTopics),
       reasoning: this.explainPlan(primary, revisionTopics),
     };

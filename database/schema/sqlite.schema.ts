@@ -37,3 +37,8 @@ export const sessions = sqliteTable("sessions", {
   productivityScore: integer("productivity_score"),
   updatedAt: integer("updated_at").notNull(),
 });
+
+export const syncMeta = sqliteTable("sync_meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});

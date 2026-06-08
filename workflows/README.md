@@ -12,6 +12,7 @@ Thin orchestration only — business logic lives in the backend API.
 |------|----------|----------|
 | `daily-plan.workflow.json` | 7 AM daily | `POST /api/notifications/daily-plan` |
 | `revision-check.workflow.json` | 9 PM daily | `POST /api/notifications/revision-check` |
+| `weekly-digest.workflow.json` | Sunday 8 PM | `POST /api/notifications/weekly-digest` |
 
 Incoming messages (`plan`, `done`, `hint`, …) go to **Meta webhook** → `POST /webhooks/whatsapp` (no n8n needed).
 

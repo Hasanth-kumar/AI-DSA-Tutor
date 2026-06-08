@@ -41,6 +41,7 @@ export async function topicsRoutes(
     }
 
     ctx.topicRepo.update(request.params.id, request.body);
+    ctx.notionSync.markTopicDirty(request.params.id);
 
     if (ctx.notionSync.isConfigured()) {
       try {
@@ -54,4 +55,18 @@ export async function topicsRoutes(
     const topic = ctx.topicRepo.findById(request.params.id);
     return reply.send(serializeForJson({ topic }));
   });
+
+  app.get<{ Params: { id: string } }>(
+    "/topics/:id/score/explain",
+    async (request, reply) => {
+      const topic = ctx.topicRepo.findById(request.params.id);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      const allTopics = ctx.topicRepo.findAll();
+      const explanation = ctx.intelligence.explainTopicScore(topic, allTopics);
+      return reply.send(serializeForJson(explanation));
+    },
+  );
 }

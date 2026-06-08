@@ -22,6 +22,7 @@ export type {
 } from "./types.js";
 
 export { DEFAULT_WEIGHTS, computePriorityScore } from "./topic-priority-engine/scoring.js";
+export { explainPriorityScore } from "./topic-priority-engine/explain.js";
 export { TopicPriorityEngine } from "./topic-priority-engine/TopicPriorityEngine.js";
 export { sm2Update, topicToSM2Quality } from "./revision-engine/sm2.js";
 export { RevisionEngine } from "./revision-engine/RevisionEngine.js";
@@ -34,3 +35,21 @@ export {
   createIntelligenceOrchestrator,
   IntelligenceOrchestrator,
 } from "./orchestrator/IntelligenceOrchestrator.js";
+
+export type {
+  AnalyticsProblemInput,
+  AnalyticsReport,
+  AnalyticsSessionInput,
+  AnalyticsTopicInput,
+  DifficultyAnalysis,
+  DifficultyBucket,
+  MasteryVelocityPoint,
+  StreakInfo,
+  TopicDifficultyAlignment,
+  TopicVelocity,
+  WeaknessTrendPoint,
+} from "./analytics/types.js";
+export {
+  AnalyticsEngine,
+  createAnalyticsEngine,
+} from "./analytics/AnalyticsEngine.js";

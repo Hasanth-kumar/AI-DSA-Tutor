@@ -1,5 +1,6 @@
 import {
   createWhatsAppClient,
+  formatProgressForWhatsApp,
   formatRevisionReminder,
   formatStudyPlanForWhatsApp,
   type WhatsAppClient,
@@ -73,6 +74,26 @@ export class WhatsAppNotificationService {
     }
 
     const { messageId } = await this.client.sendText(to, body);
+    return { sent: true, messageId };
+  }
+
+  async sendWeeklyDigest(recipient?: string): Promise<NotifyResult> {
+    const to = this.resolveRecipient(recipient);
+    if (!to || !this.client?.isConfigured()) {
+      return { sent: false, reason: "WhatsApp or default recipient not configured" };
+    }
+
+    const summary = this.ctx.analyticsService.getWeeklySummary();
+    const body = formatProgressForWhatsApp({
+      ...summary,
+      weakTopics: summary.weakTopics.map((w) => ({
+        name: w.name,
+        score: w.score,
+      })),
+    });
+
+    const header = `📬 Weekly Digest\n\n`;
+    const { messageId } = await this.client.sendText(to, header + body);
     return { sent: true, messageId };
   }
 }

@@ -58,6 +58,19 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
           }
           return await ctx.notionSync.pullFromNotion();
         }
+        case "weekly-digest": {
+          let whatsapp: { sent: boolean; reason?: string } = { sent: false };
+          if (whatsappNotify.isConfigured()) {
+            whatsapp = await whatsappNotify.sendWeeklyDigest();
+          }
+          const summary = ctx.analyticsService.getWeeklySummary();
+          return {
+            sessionsCount: summary.sessionsCount,
+            problemsSolved: summary.problemsSolved,
+            currentStreakDays: summary.currentStreakDays,
+            whatsapp,
+          };
+        }
         default:
           throw new Error(`Unknown job: ${job.name}`);
       }
@@ -95,6 +108,15 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
     {
       repeat: { pattern: config.schedulers.notionSyncCron, tz },
       jobId: "notion-sync-repeat",
+    },
+  );
+
+  void queue.add(
+    "weekly-digest",
+    {},
+    {
+      repeat: { pattern: config.schedulers.weeklyDigestCron, tz },
+      jobId: "weekly-digest-repeat",
     },
   );
 

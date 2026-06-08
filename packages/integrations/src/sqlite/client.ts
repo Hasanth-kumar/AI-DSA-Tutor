@@ -18,12 +18,16 @@ export function createSqliteDb(sqlitePath: string): { db: SqliteDb; sqlite: Data
   return { db, sqlite };
 }
 
+const MIGRATIONS = ["0001_initial.sql", "0002_sync_meta.sql"] as const;
+
 export function runMigrations(sqlitePath: string): void {
   const { sqlite } = createSqliteDb(sqlitePath);
-  const migrationSql = readFileSync(
-    resolve(repoRoot, "database/migrations/0001_initial.sql"),
-    "utf-8",
-  );
-  sqlite.exec(migrationSql);
+  for (const file of MIGRATIONS) {
+    const migrationSql = readFileSync(
+      resolve(repoRoot, "database/migrations", file),
+      "utf-8",
+    );
+    sqlite.exec(migrationSql);
+  }
   sqlite.close();
 }

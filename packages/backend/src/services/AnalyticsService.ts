@@ -1,4 +1,18 @@
-import type { IntelligenceOrchestrator } from "@dsa/intelligence";
+import {
+  createAnalyticsEngine,
+  type AnalyticsEngine,
+  type AnalyticsProblemInput,
+  type AnalyticsSessionInput,
+  type AnalyticsTopicInput,
+  type DifficultyAnalysis,
+  type IntelligenceOrchestrator,
+  type MasteryVelocityPoint,
+  type StreakInfo,
+  type TopicState,
+  type TopicVelocity,
+  type WeaknessTrendPoint,
+} from "@dsa/intelligence";
+import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type { SessionRepository } from "../repositories/SessionRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 
@@ -10,20 +24,65 @@ export interface WeeklySummary {
   totalStudyMinutes: number;
   averageProductivity: number;
   currentStreakDays: number;
+  longestStreakDays: number;
   weakTopics: { id: string; name: string; score: number }[];
   masteredTopics: number;
   inProgressTopics: number;
   intelligenceSummary: string;
+  velocityTrend: "up" | "down" | "stable";
+  problemsPerHour: number;
+  weaknessTrendDirection: "improving" | "worsening" | "stable";
+  difficultyInsight: string;
 }
 
 const MS_PER_DAY = 86_400_000;
 
 export class AnalyticsService {
+  private readonly engine: AnalyticsEngine;
+
   constructor(
     private readonly intelligence: IntelligenceOrchestrator,
     private readonly topicRepo: TopicRepository,
     private readonly sessionRepo: SessionRepository,
-  ) {}
+    private readonly problemRepo: ProblemRepository,
+    engine?: AnalyticsEngine,
+  ) {
+    this.engine = engine ?? createAnalyticsEngine();
+  }
+
+  getStreak(now = new Date()): StreakInfo {
+    return this.engine.getStreakInfo(this.loadSessions(), now);
+  }
+
+  getMasteryVelocity(weeks = 8, now = new Date()): {
+    weekly: MasteryVelocityPoint[];
+    topics: TopicVelocity[];
+  } {
+    const sessions = this.loadSessions();
+    const topics = this.loadTopics();
+    return {
+      weekly: this.engine.getMasteryVelocity(sessions, weeks, now),
+      topics: this.engine.getTopicVelocity(sessions, topics, weeks, now),
+    };
+  }
+
+  getWeaknessTrend(weeks = 8, now = new Date()): WeaknessTrendPoint[] {
+    return this.engine.getWeaknessTrend(
+      this.loadTopics(),
+      this.loadProblems(),
+      this.loadSessions(),
+      weeks,
+      now,
+    );
+  }
+
+  getDifficultyAnalysis(): DifficultyAnalysis {
+    return this.engine.getDifficultyAnalysis(
+      this.loadTopics(),
+      this.loadProblems(),
+      this.loadSessions(),
+    );
+  }
 
   getWeeklySummary(now = new Date()): WeeklySummary {
     const weekEnd = new Date(now);
@@ -31,19 +90,23 @@ export class AnalyticsService {
     const weekStart = new Date(weekEnd.getTime() - 6 * MS_PER_DAY);
     weekStart.setHours(0, 0, 0, 0);
 
-    const sessions = this.sessionRepo
-      .findAll(500)
-      .filter((s) => s.date >= weekStart.getTime() && s.date <= weekEnd.getTime());
+    const sessions = this.loadSessions();
+    const weekSessions = sessions.filter(
+      (s) => s.date >= weekStart.getTime() && s.date <= weekEnd.getTime(),
+    );
 
-    const problemsSolved = sessions.reduce((sum, s) => sum + (s.problemsSolved ?? 0), 0);
-    const totalStudyMinutes = sessions.reduce(
+    const problemsSolved = weekSessions.reduce(
+      (sum, s) => sum + (s.problemsSolved ?? 0),
+      0,
+    );
+    const totalStudyMinutes = weekSessions.reduce(
       (sum, s) => sum + (s.studyDuration ?? 0),
       0,
     );
     const averageProductivity =
-      sessions.length > 0
-        ? sessions.reduce((sum, s) => sum + (s.productivityScore ?? 0), 0) /
-          sessions.length
+      weekSessions.length > 0
+        ? weekSessions.reduce((sum, s) => sum + (s.productivityScore ?? 0), 0) /
+          weekSessions.length
         : 0;
 
     const topics = this.topicRepo.findAll();
@@ -53,59 +116,110 @@ export class AnalyticsService {
       return { id: w.topicId, name: topic?.name ?? w.topicId, score: w.score };
     });
 
+    const streak = this.engine.getStreakInfo(sessions, now);
+    const velocity = this.engine.getMasteryVelocity(sessions, 2, now);
+    const weaknessTrend = this.engine.getWeaknessTrend(
+      this.loadTopics(),
+      this.loadProblems(),
+      sessions,
+      2,
+      now,
+    );
+    const difficulty = this.engine.getDifficultyAnalysis(
+      this.loadTopics(),
+      this.loadProblems(),
+      sessions,
+    );
+
+    const currentVelocity = velocity[velocity.length - 1];
+    const previousVelocity = velocity[velocity.length - 2];
+    const velocityTrend = compareTrend(
+      currentVelocity?.problemsPerHour ?? 0,
+      previousVelocity?.problemsPerHour ?? 0,
+    );
+
+    const currentWeak = weaknessTrend[weaknessTrend.length - 1];
+    const previousWeak = weaknessTrend[weaknessTrend.length - 2];
+    const weaknessTrendDirection = compareWeaknessTrend(
+      currentWeak?.weakTopicCount ?? 0,
+      previousWeak?.weakTopicCount ?? 0,
+    );
+
     return {
       weekStart: weekStart.toISOString().slice(0, 10),
       weekEnd: weekEnd.toISOString().slice(0, 10),
-      sessionsCount: sessions.length,
+      sessionsCount: weekSessions.length,
       problemsSolved,
       totalStudyMinutes,
       averageProductivity: Math.round(averageProductivity),
-      currentStreakDays: computeStreak(this.sessionRepo.findAll(365)),
+      currentStreakDays: streak.currentStreakDays,
+      longestStreakDays: streak.longestStreakDays,
       weakTopics,
       masteredTopics: topics.filter((t) => t.status === "Mastered").length,
       inProgressTopics: topics.filter((t) => t.status === "In progress").length,
       intelligenceSummary: snapshot.summary,
+      velocityTrend,
+      problemsPerHour: currentVelocity?.problemsPerHour ?? 0,
+      weaknessTrendDirection,
+      difficultyInsight: difficulty.summary,
     };
+  }
+
+  private loadSessions(limit = 500): AnalyticsSessionInput[] {
+    return this.sessionRepo.findAll(limit).map((s) => ({
+      date: s.date,
+      topicId: s.topicId,
+      problemsSolved: s.problemsSolved ?? 0,
+      studyDuration: s.studyDuration ?? 0,
+      productivityScore: s.productivityScore ?? 0,
+    }));
+  }
+
+  private loadProblems(): AnalyticsProblemInput[] {
+    return this.problemRepo.findAll().map((p) => ({
+      topicId: p.topicId,
+      difficulty: p.difficulty,
+      status: p.status,
+      attempts: p.attempts ?? 0,
+      timeTaken: p.timeTaken,
+    }));
+  }
+
+  private loadTopics(): AnalyticsTopicInput[] {
+    return this.topicRepo.findAll().map(topicToInput);
   }
 }
 
-function computeStreak(sessionRows: { date: number }[]): number {
-  if (sessionRows.length === 0) return 0;
+function topicToInput(topic: TopicState): AnalyticsTopicInput {
+  return {
+    id: topic.id,
+    name: topic.name,
+    difficulty: topic.difficulty,
+    status: topic.status,
+    confidence: topic.confidence,
+    revisionCount: topic.revisionCount,
+    lastRevised: topic.lastRevised?.getTime() ?? null,
+    nextRevisionAt: topic.nextRevisionAt?.getTime() ?? null,
+    isWeakArea: topic.isWeakArea ? 1 : 0,
+    prerequisites:
+      topic.prerequisites.length > 0 ? JSON.stringify(topic.prerequisites) : null,
+  };
+}
 
-  const days = new Set(
-    sessionRows.map((s) => new Date(s.date).toISOString().slice(0, 10)),
-  );
-  const sorted = [...days].sort().reverse();
+function compareTrend(
+  current: number,
+  previous: number,
+): "up" | "down" | "stable" {
+  if (current > previous) return "up";
+  if (current < previous && previous > 0) return "down";
+  return "stable";
+}
 
-  let streak = 0;
-  const today = new Date().toISOString().slice(0, 10);
-  let cursor = today;
-
-  for (const day of sorted) {
-    if (day > cursor) continue;
-    if (day === cursor) {
-      streak += 1;
-      const prev = new Date(cursor);
-      prev.setDate(prev.getDate() - 1);
-      cursor = prev.toISOString().slice(0, 10);
-    } else if (streak === 0 && day === sorted[0]) {
-      // Allow streak starting yesterday if no session today yet
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yKey = yesterday.toISOString().slice(0, 10);
-      if (day === yKey) {
-        streak = 1;
-        cursor = yKey;
-        const prev = new Date(cursor);
-        prev.setDate(prev.getDate() - 1);
-        cursor = prev.toISOString().slice(0, 10);
-      } else {
-        break;
-      }
-    } else {
-      break;
-    }
-  }
-
-  return streak;
+function compareWeaknessTrend(
+  currentWeakCount: number,
+  previousWeakCount: number,
+): "improving" | "worsening" | "stable" {
+  if (currentWeakCount < previousWeakCount) return "improving";
+  if (currentWeakCount > previousWeakCount) return "worsening";
+  return "stable";
 }

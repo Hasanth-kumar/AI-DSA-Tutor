@@ -7,6 +7,7 @@ import type { AppConfig } from "@dsa/shared";
 import { TopicRepository } from "./repositories/TopicRepository.js";
 import { ProblemRepository } from "./repositories/ProblemRepository.js";
 import { SessionRepository } from "./repositories/SessionRepository.js";
+import { SyncMetaRepository } from "./repositories/SyncMetaRepository.js";
 import { AnalyticsService } from "./services/AnalyticsService.js";
 import { CacheService } from "./services/CacheService.js";
 import { NotionSyncService } from "./services/NotionSyncService.js";
@@ -19,6 +20,7 @@ export interface AppContext {
   topicRepo: TopicRepository;
   problemRepo: ProblemRepository;
   sessionRepo: SessionRepository;
+  syncMetaRepo: SyncMetaRepository;
   cache: CacheService;
   planService: PlanService;
   sessionService: SessionService;
@@ -34,15 +36,27 @@ export function createAppContext(config: AppConfig): AppContext {
   const topicRepo = new TopicRepository(db);
   const problemRepo = new ProblemRepository(db);
   const sessionRepo = new SessionRepository(db);
+  const syncMetaRepo = new SyncMetaRepository(db);
   const cache = new CacheService(config.redis.url);
-  const intelligence = createIntelligenceOrchestrator();
-  const notionSync = new NotionSyncService(config, topicRepo);
-  const planService = new PlanService(intelligence, topicRepo, cache);
+  const intelligence = createIntelligenceOrchestrator(config.intelligenceWeights);
+  const notionSync = new NotionSyncService(
+    config,
+    topicRepo,
+    problemRepo,
+    syncMetaRepo,
+  );
+  const planService = new PlanService(
+    intelligence,
+    topicRepo,
+    problemRepo,
+    cache,
+  );
   const sessionService = new SessionService(
     config,
     intelligence,
     sessionRepo,
     topicRepo,
+    problemRepo,
     planService,
     notionSync,
   );
@@ -50,6 +64,7 @@ export function createAppContext(config: AppConfig): AppContext {
     intelligence,
     topicRepo,
     sessionRepo,
+    problemRepo,
   );
 
   return {
@@ -58,6 +73,7 @@ export function createAppContext(config: AppConfig): AppContext {
     topicRepo,
     problemRepo,
     sessionRepo,
+    syncMetaRepo,
     cache,
     planService,
     sessionService,
