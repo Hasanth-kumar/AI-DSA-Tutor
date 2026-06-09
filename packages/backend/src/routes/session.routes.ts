@@ -12,6 +12,13 @@ export async function sessionRoutes(
     return reply.send(serializeForJson({ sessions, count: sessions.length }));
   });
 
+  app.get("/session/activity", async (request, reply) => {
+    const days = Number((request.query as { days?: string }).days ?? 182);
+    const safeDays = Number.isFinite(days) && days > 0 ? Math.min(Math.floor(days), 365) : 182;
+    const dailyCounts = ctx.sessionService.getActivityDailyCounts(safeDays);
+    return reply.send(serializeForJson({ dailyCounts, days: safeDays }));
+  });
+
   app.get<{ Params: { id: string } }>("/session/:id", async (request, reply) => {
     const session = ctx.sessionService.getById(request.params.id);
     if (!session) {

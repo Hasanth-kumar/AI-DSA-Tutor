@@ -8,11 +8,9 @@ import {
 } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
 import type { AppContext } from "../context.js";
-import { HintService } from "./HintService.js";
 
 export class WhatsAppCommandService {
   private readonly client: WhatsAppClient | null;
-  private readonly hintService: HintService;
 
   constructor(
     private readonly config: AppConfig,
@@ -23,7 +21,6 @@ export class WhatsAppCommandService {
       phoneNumberId && accessToken
         ? createWhatsAppClient({ phoneNumberId, accessToken, apiVersion })
         : null;
-    this.hintService = new HintService(config);
   }
 
   isConfigured(): boolean {
@@ -80,6 +77,10 @@ export class WhatsAppCommandService {
         reply = await this.handleHint(command.problemName);
         break;
       }
+      case "debrief": {
+        reply = await this.handleDebrief();
+        break;
+      }
       case "done": {
         reply = await this.handleDone(
           command.problemName,
@@ -110,13 +111,23 @@ export class WhatsAppCommandService {
       return `Topic not found for problem "${problem.name}".`;
     }
 
-    const ctx = this.hintService.buildContextFromTopic(
+    const ctx = this.ctx.hintService.buildContextFromTopic(
       problem.name,
       topic,
       problem.difficulty ?? "Medium",
       problem.attempts ?? 0,
     );
-    return this.hintService.generateHint(ctx);
+    return this.ctx.hintService.generateHint(ctx);
+  }
+
+  private async handleDebrief(): Promise<string> {
+    try {
+      const result = await this.ctx.debriefService.generateLatest();
+      return result.debrief;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Debrief failed";
+      return `📝 ${message}`;
+    }
   }
 
   private async handleDone(
@@ -138,6 +149,18 @@ export class WhatsAppCommandService {
       pushToNotion: true,
     });
 
-    return `✅ Session logged for ${problem.name}!\n${result.summary}\nConfidence: ${result.confidence}/100`;
+    let reply = `✅ Session logged for ${problem.name}!\n${result.summary}\nConfidence: ${result.confidence}/100`;
+
+    try {
+      const debrief = await this.ctx.debriefService.generateForSession(
+        result.session.id,
+        { problemName: problem.name },
+      );
+      reply += `\n\n${debrief.debrief}`;
+    } catch {
+      // debrief is optional when Ollama is unavailable
+    }
+
+    return reply;
   }
 }

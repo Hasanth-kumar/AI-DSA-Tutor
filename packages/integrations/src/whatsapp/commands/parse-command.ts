@@ -2,6 +2,7 @@ export type WhatsAppCommand =
   | { type: "plan" }
   | { type: "progress" }
   | { type: "hint"; problemName: string }
+  | { type: "debrief" }
   | {
       type: "done";
       problemName: string;
@@ -31,6 +32,10 @@ export function parseWhatsAppCommand(text: string): WhatsAppCommand {
 
   if (lower === "help" || lower === "start") {
     return { type: "help" };
+  }
+
+  if (lower === "debrief" || lower === "review") {
+    return { type: "debrief" };
   }
 
   const hintMatch = raw.match(/^(?:\/)?hint\s+(.+)$/i);
@@ -79,5 +84,6 @@ done <problem> <minutes> <score>
   Example: done Coin Change 45 80
 hint <problem name>
   Example: hint Coin Change
+debrief — LLM session debrief for your latest session
 
 Reply with any command (no slash required).`;

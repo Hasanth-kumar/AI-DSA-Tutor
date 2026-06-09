@@ -21,6 +21,7 @@ export const problems = sqliteTable("problems", {
   topicId: text("topic_id").references(() => topics.id),
   difficulty: text("difficulty"),
   leetcodeLink: text("leetcode_link"),
+  githubUrl: text("github_url"),
   status: text("status").default("Unsolved"),
   attempts: integer("attempts").default(0),
   timeTaken: integer("time_taken"),
@@ -41,4 +42,20 @@ export const sessions = sqliteTable("sessions", {
 export const syncMeta = sqliteTable("sync_meta", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+});
+
+export const chatThreads = sqliteTable("chat_threads", {
+  id: text("id").primaryKey(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const chatMessages = sqliteTable("chat_messages", {
+  id: text("id").primaryKey(),
+  threadId: text("thread_id")
+    .notNull()
+    .references(() => chatThreads.id),
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  createdAt: integer("created_at").notNull(),
 });

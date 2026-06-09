@@ -1,5 +1,7 @@
 # DSA Mastery OS
 
+**Personal, single-user system.** This is not a multi-tenant product — it is built for one learner (you), one Notion workspace, one WhatsApp number, and one local SQLite mirror. There is no user accounts layer, auth beyond webhook secrets, or per-user data partitioning by design.
+
 Autonomous learning intelligence over your Notion DSA databases — powered by local AI (Ollama), orchestrated with n8n, delivered via WhatsApp (Meta Cloud API).
 
 ## Project layout
@@ -12,6 +14,7 @@ dsa-mastery-os/
 │   ├── backend/      # Fastify REST API
 │   ├── intelligence/ # Five intelligence engines (pure TS)
 │   ├── integrations/ # Notion, WhatsApp clients
+│   ├── frontend/     # React + Vite dashboard (Phase 6)
 │   └── shared/       # Shared types and utilities
 ├── workflows/        # n8n workflow JSON exports
 └── data/sqlite/      # Local SQLite mirror
@@ -115,3 +118,39 @@ Setup: see [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
 pnpm --filter @dsa/intelligence test
 pnpm --filter @dsa/backend test
 ```
+
+## Phase 5 checklist (Advanced AI + External Sync)
+
+- [x] `LLMService` + `OllamaClient` — shared local LLM layer
+- [x] Adaptive hints — difficulty-calibrated prompts + `DifficultyEngine` recommendation
+- [x] `DebriefService` — LLM session debrief with weakness + streak context
+- [x] `GET /api/coaching/debrief` + `GET /api/coaching/hint`
+- [x] WhatsApp: `debrief` command + auto-debrief after `done`
+- [x] `LeetCodeClient` — public profile stats via GraphQL
+- [x] `GET /api/integrations/leetcode/stats` (cached 1h)
+- [x] `GitHubClient` — scan repo for solution files, match to problems
+- [x] `POST /api/sync/github` — links `github_url` on matched problems
+
+Env: `LEETCODE_USERNAME`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_SOLUTIONS_PATH`
+
+## Phase 6 checklist (Web Dashboard)
+
+- [x] `@dsa/frontend` — React + Vite + TypeScript
+- [x] Overview — stats, today's plan, velocity + weakness charts
+- [x] D3.js knowledge graph — topics as nodes, mastery color, prerequisite edges
+- [x] Calendar heatmap — LeetCode-style activity grid
+- [x] Session tracker — live timer + `POST /api/session` logging
+- [x] Coach chat — free-form DSA Q&A with learning context (`POST /api/coaching/chat`)
+- [x] Vite dev proxy + Fastify CORS for local development
+- [x] `infrastructure/nginx/nginx.conf` for production static + API proxy
+
+```bash
+# One terminal — API + dashboard
+pnpm dev:all
+
+# Or split across two terminals:
+pnpm dev        # API on :3000
+pnpm dev:web    # dashboard at http://localhost:5173
+```
+
+**Important:** Open **http://localhost:5173** (Vite dev server). In dev, the dashboard calls the API at `http://127.0.0.1:3000` directly (`packages/frontend/.env.development`). Do not open `packages/frontend/dist/` with Live Server or `serve -s` — those have no API and you will see HTML-instead-of-JSON errors. For a static build behind nginx, use `infrastructure/nginx/nginx.conf`.

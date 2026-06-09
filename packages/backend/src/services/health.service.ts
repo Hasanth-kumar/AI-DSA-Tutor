@@ -1,10 +1,9 @@
-import {
-  createNotionClient,
-  getMirrorCounts,
-  runMigrations,
-} from "@dsa/integrations";
 import type { AppConfig, HealthResponse, ServiceHealth } from "@dsa/shared";
-import { Redis } from "ioredis";
+import type { AppContext } from "../context.js";
+
+const DEEP_HEALTH_TTL_MS = 30_000;
+
+let cachedDeepHealth: { response: HealthResponse; expiresAt: number } | null = null;
 
 async function timed<T>(fn: () => Promise<T>): Promise<{ result: T; latencyMs: number }> {
   const start = Date.now();
@@ -18,15 +17,44 @@ function aggregateStatus(services: ServiceHealth[]): HealthResponse["status"] {
   return "degraded";
 }
 
-export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
-  const api: ServiceHealth = { status: "ok" };
+/** Process liveness — no external dependency checks. */
+export function checkHealthLive(): Pick<HealthResponse, "status" | "timestamp" | "version"> {
+  return {
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    version: "0.1.0",
+  };
+}
 
-  let sqlite: ServiceHealth = { status: "down", message: "Not initialized" };
+export async function checkHealthFromContext(
+  ctx: AppContext,
+  options: { deep?: boolean } = {},
+): Promise<HealthResponse> {
+  const deep = options.deep !== false;
+  if (deep) {
+    const now = Date.now();
+    if (cachedDeepHealth && cachedDeepHealth.expiresAt > now) {
+      return cachedDeepHealth.response;
+    }
+  }
+
+  const response = await buildDeepHealth(ctx);
+  if (deep) {
+    cachedDeepHealth = {
+      response,
+      expiresAt: Date.now() + DEEP_HEALTH_TTL_MS,
+    };
+  }
+  return response;
+}
+
+async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
+  const api: ServiceHealth = { status: "ok" };
   let counts: HealthResponse["counts"];
 
+  let sqlite: ServiceHealth = { status: "down", message: "Not initialized" };
   try {
-    runMigrations(config.sqlite.path);
-    const mirror = getMirrorCounts(config.sqlite.path);
+    const mirror = ctx.mirrorCache.getCounts();
     counts = mirror;
     sqlite = {
       status: "ok",
@@ -39,63 +67,13 @@ export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
     };
   }
 
-  let redis: ServiceHealth = { status: "down", message: "Not configured" };
-  try {
-    const client = new Redis(config.redis.url, {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-      lazyConnect: true,
-    });
-    const { latencyMs } = await timed(async () => {
-      await client.connect();
-      await client.ping();
-    });
-    await client.quit();
-    redis = { status: "ok", latencyMs };
-  } catch (err) {
-    redis = {
-      status: "down",
-      message: err instanceof Error ? err.message : "Redis unreachable",
-    };
-  }
+  const [redisResult, notionResult, llmHealth] = await Promise.all([
+    checkRedis(ctx),
+    checkNotion(ctx),
+    checkLlmHealth(ctx.config),
+  ]);
 
-  let notion: ServiceHealth = { status: "down", message: "Not configured" };
-  const { token, topicsDbId, problemsDbId, sessionsDbId } = config.notion;
-  if (token && topicsDbId && problemsDbId && sessionsDbId) {
-    try {
-      const client = createNotionClient({
-        token,
-        topicsDbId,
-        problemsDbId,
-        sessionsDbId,
-      });
-      const { latencyMs } = await timed(() => client.ping());
-      notion = { status: "ok", latencyMs };
-    } catch (err) {
-      notion = {
-        status: "down",
-        message: err instanceof Error ? err.message : "Notion unreachable",
-      };
-    }
-  }
-
-  let ollama: ServiceHealth = { status: "down", message: "Not checked" };
-  try {
-    const { latencyMs } = await timed(async () => {
-      const res = await fetch(`${config.ollama.baseUrl}/api/tags`, {
-        signal: AbortSignal.timeout(3000),
-      });
-      if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
-    });
-    ollama = { status: "ok", latencyMs };
-  } catch (err) {
-    ollama = {
-      status: "down",
-      message: err instanceof Error ? err.message : "Ollama unreachable",
-    };
-  }
-
-  const services = { api, sqlite, redis, notion, ollama };
+  const services = { api, sqlite, redis: redisResult, notion: notionResult, ollama: llmHealth };
   const status = aggregateStatus(Object.values(services));
 
   return {
@@ -105,4 +83,84 @@ export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
     services,
     counts,
   };
+}
+
+async function checkRedis(ctx: AppContext): Promise<ServiceHealth> {
+  try {
+    const { latencyMs } = await timed(async () => {
+      const ok = await ctx.cache.ping();
+      if (!ok) throw new Error("Redis ping failed");
+    });
+    return { status: "ok", latencyMs };
+  } catch (err) {
+    return {
+      status: "down",
+      message: err instanceof Error ? err.message : "Redis unreachable",
+    };
+  }
+}
+
+async function checkNotion(ctx: AppContext): Promise<ServiceHealth> {
+  if (!ctx.notionSync.isConfigured()) {
+    return { status: "down", message: "Not configured" };
+  }
+  try {
+    const { latencyMs } = await timed(() => ctx.notionSync.getClient().ping());
+    return { status: "ok", latencyMs };
+  } catch (err) {
+    return {
+      status: "down",
+      message: err instanceof Error ? err.message : "Notion unreachable",
+    };
+  }
+}
+
+/** @deprecated Use checkHealthFromContext — avoids reopening DB/Redis per probe. */
+export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
+  void config;
+  throw new Error("checkHealth(config) requires AppContext — use checkHealthFromContext");
+}
+
+async function checkLlmHealth(config: AppConfig): Promise<ServiceHealth> {
+  if (config.llm.provider === "openrouter") {
+    const apiKey = config.llm.openrouter.apiKey;
+    if (!apiKey) {
+      return { status: "down", message: "OPENROUTER_API_KEY not set" };
+    }
+    try {
+      const baseUrl = config.llm.openrouter.baseUrl.replace(/\/$/, "");
+      const { latencyMs } = await timed(async () => {
+        const res = await fetch(`${baseUrl}/models`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) throw new Error(`OpenRouter returned ${res.status}`);
+      });
+      return {
+        status: "ok",
+        latencyMs,
+        message: `OpenRouter · ${config.llm.model}`,
+      };
+    } catch (err) {
+      return {
+        status: "down",
+        message: err instanceof Error ? err.message : "OpenRouter unreachable",
+      };
+    }
+  }
+
+  try {
+    const { latencyMs } = await timed(async () => {
+      const res = await fetch(`${config.llm.ollama.baseUrl}/api/tags`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+    });
+    return { status: "ok", latencyMs, message: `Ollama · ${config.llm.model}` };
+  } catch (err) {
+    return {
+      status: "down",
+      message: err instanceof Error ? err.message : "Ollama unreachable",
+    };
+  }
 }

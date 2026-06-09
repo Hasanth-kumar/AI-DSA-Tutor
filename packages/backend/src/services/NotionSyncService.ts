@@ -8,6 +8,19 @@ import type { AppConfig } from "@dsa/shared";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type { SyncMetaRepository } from "../repositories/SyncMetaRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
+import type { MirrorCache } from "./MirrorCache.js";
+import type { TopicDifficulty, TopicState, TopicStatus } from "@dsa/intelligence";
+import type { ProblemRow } from "../repositories/ProblemRepository.js";
+
+export interface TopicSyncSnapshot {
+  confidence: number;
+  revisionCount: number;
+  lastRevised: Date | null;
+  nextRevisionAt: Date | null;
+  isWeakArea: boolean;
+  status: TopicStatus;
+  difficulty: TopicDifficulty;
+}
 
 export interface SyncStatus extends SyncResult {
   syncedAt: string;
@@ -24,6 +37,7 @@ export class NotionSyncService {
     private readonly topicRepo: TopicRepository,
     private readonly problemRepo: ProblemRepository,
     private readonly syncMeta: SyncMetaRepository,
+    private readonly mirrorCache: MirrorCache,
   ) {}
 
   isConfigured(): boolean {
@@ -61,28 +75,31 @@ export class NotionSyncService {
     let replayedTopics = 0;
     let replayedProblems = 0;
 
-    for (const pending of pendingTopics) {
-      this.topicRepo.applyPendingFields(pending.id, pending.fields);
-      try {
-        await this.pushTopicToNotion(pending.id);
-        replayedTopics += 1;
-      } catch {
-        // keep in pending queue
-        continue;
+    await this.mirrorCache.batchAsync(async () => {
+      for (const pending of pendingTopics) {
+        this.topicRepo.applyPendingFields(pending.id, pending.fields);
+        try {
+          await this.pushTopicToNotion(pending.id);
+          replayedTopics += 1;
+        } catch {
+          continue;
+        }
+        this.syncMeta.clearTopic(pending.id);
       }
-      this.syncMeta.clearTopic(pending.id);
-    }
 
-    for (const pending of pendingProblems) {
-      this.problemRepo.update(pending.id, pending.fields);
-      try {
-        await this.pushProblemToNotion(pending.id);
-        replayedProblems += 1;
-      } catch {
-        continue;
+      for (const pending of pendingProblems) {
+        this.problemRepo.update(pending.id, pending.fields);
+        try {
+          await this.pushProblemToNotion(pending.id);
+          replayedProblems += 1;
+        } catch {
+          continue;
+        }
+        this.syncMeta.clearProblem(pending.id);
       }
-      this.syncMeta.clearProblem(pending.id);
-    }
+    });
+
+    this.mirrorCache.invalidate();
 
     return {
       ...result,
@@ -94,10 +111,13 @@ export class NotionSyncService {
   }
 
   /** Push a single topic's intelligence fields to Notion after local update. */
-  async pushTopicToNotion(topicId: string): Promise<void> {
+  async pushTopicToNotion(
+    topicId: string,
+    snapshot?: TopicSyncSnapshot | TopicState,
+  ): Promise<void> {
     if (!this.isConfigured()) return;
 
-    const topic = this.topicRepo.findById(topicId);
+    const topic = snapshot ?? this.topicRepo.findById(topicId);
     if (!topic) throw new Error(`Topic not found: ${topicId}`);
 
     await this.getClient().updateTopic(topicId, {
@@ -110,10 +130,13 @@ export class NotionSyncService {
     });
   }
 
-  async pushProblemToNotion(problemId: string): Promise<void> {
+  async pushProblemToNotion(
+    problemId: string,
+    snapshot?: ProblemRow,
+  ): Promise<void> {
     if (!this.isConfigured()) return;
 
-    const problem = this.problemRepo.findById(problemId);
+    const problem = snapshot ?? this.problemRepo.findById(problemId);
     if (!problem) throw new Error(`Problem not found: ${problemId}`);
 
     await this.getClient().updateProblem(problemId, {
@@ -123,8 +146,8 @@ export class NotionSyncService {
     });
   }
 
-  markTopicDirty(topicId: string): void {
-    const topic = this.topicRepo.findById(topicId);
+  markTopicDirty(topicId: string, snapshot?: TopicSyncSnapshot | TopicState): void {
+    const topic = snapshot ?? this.topicRepo.findById(topicId);
     if (!topic) return;
 
     this.syncMeta.markTopicPending(topicId, {
@@ -137,8 +160,8 @@ export class NotionSyncService {
     });
   }
 
-  markProblemDirty(problemId: string): void {
-    const problem = this.problemRepo.findById(problemId);
+  markProblemDirty(problemId: string, snapshot?: ProblemRow): void {
+    const problem = snapshot ?? this.problemRepo.findById(problemId);
     if (!problem) return;
 
     this.syncMeta.markProblemPending(problemId, {

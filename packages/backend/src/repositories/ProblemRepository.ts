@@ -1,7 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { TopicDifficulty } from "@dsa/intelligence";
 import { problems } from "@dsa/database/schema";
 import type { SqliteDb } from "@dsa/integrations";
+import type { MirrorCache } from "../services/MirrorCache.js";
 
 export type ProblemRow = typeof problems.$inferSelect;
 
@@ -10,22 +11,37 @@ export interface ProblemUpdate {
   attempts?: number;
   timeTaken?: number | null;
   notes?: string;
+  githubUrl?: string;
 }
 
-const DIFFICULTIES: TopicDifficulty[] = ["Easy", "Medium", "Hard"];
-
-function asDifficulty(value: string | null | undefined): TopicDifficulty | null {
-  if (value && DIFFICULTIES.includes(value as TopicDifficulty)) {
-    return value as TopicDifficulty;
-  }
-  return null;
+export interface ProblemUpdate {
+  status?: string;
+  attempts?: number;
+  timeTaken?: number | null;
+  notes?: string;
+  githubUrl?: string;
 }
 
 export class ProblemRepository {
-  constructor(private readonly db: SqliteDb) {}
+  constructor(
+    private readonly db: SqliteDb,
+    private readonly mirrorCache: MirrorCache,
+  ) {}
 
   findAll(): ProblemRow[] {
-    return this.db.select().from(problems).all();
+    return this.mirrorCache.getProblemRows();
+  }
+
+  findFiltered(filters: { topicId?: string; status?: string }): ProblemRow[] {
+    const conditions = [];
+    if (filters.topicId) conditions.push(eq(problems.topicId, filters.topicId));
+    if (filters.status) conditions.push(eq(problems.status, filters.status));
+    if (conditions.length === 0) return this.findAll();
+    return this.db
+      .select()
+      .from(problems)
+      .where(and(...conditions))
+      .all();
   }
 
   findByTopicId(topicId: string): ProblemRow[] {
@@ -41,33 +57,23 @@ export class ProblemRepository {
     options: { difficulties?: TopicDifficulty[]; limit?: number } = {},
   ): ProblemRow[] {
     const { difficulties, limit = 3 } = options;
-    const rows = this.db
+    const conditions = [
+      eq(problems.topicId, topicId),
+      eq(problems.status, "Unsolved"),
+    ];
+    if (difficulties && difficulties.length > 0) {
+      conditions.push(inArray(problems.difficulty, difficulties));
+    }
+
+    return this.db
       .select()
       .from(problems)
-      .where(
-        and(
-          eq(problems.topicId, topicId),
-          eq(problems.status, "Unsolved"),
-        ),
+      .where(and(...conditions))
+      .orderBy(
+        sql`CASE ${problems.difficulty} WHEN 'Easy' THEN 0 WHEN 'Medium' THEN 1 WHEN 'Hard' THEN 2 ELSE 1 END`,
       )
+      .limit(limit)
       .all();
-
-    const filtered =
-      difficulties && difficulties.length > 0
-        ? rows.filter((p) => {
-            const d = asDifficulty(p.difficulty);
-            return d != null && difficulties.includes(d);
-          })
-        : rows;
-
-    const difficultyOrder = (d: string | null) => {
-      const idx = DIFFICULTIES.indexOf(asDifficulty(d) ?? "Medium");
-      return idx >= 0 ? idx : 1;
-    };
-
-    return filtered
-      .sort((a, b) => difficultyOrder(a.difficulty) - difficultyOrder(b.difficulty))
-      .slice(0, limit);
   }
 
   update(id: string, patch: ProblemUpdate): void {
@@ -79,37 +85,53 @@ export class ProblemRepository {
         ...(patch.attempts != null ? { attempts: patch.attempts } : {}),
         ...(patch.timeTaken !== undefined ? { timeTaken: patch.timeTaken } : {}),
         ...(patch.notes != null ? { notes: patch.notes } : {}),
+        ...(patch.githubUrl != null ? { githubUrl: patch.githubUrl } : {}),
         updatedAt: now,
       })
       .where(eq(problems.id, id))
       .run();
+    this.mirrorCache.invalidate();
   }
 
   recordSolve(id: string, timeTakenMinutes: number): ProblemRow | null {
     const problem = this.findById(id);
     if (!problem) return null;
 
+    const attempts = (problem.attempts ?? 0) + 1;
     this.update(id, {
       status: "Solved",
-      attempts: (problem.attempts ?? 0) + 1,
+      attempts,
       timeTaken: timeTakenMinutes,
     });
-    return this.findById(id);
+    return {
+      ...problem,
+      status: "Solved",
+      attempts,
+      timeTaken: timeTakenMinutes,
+      updatedAt: Date.now(),
+    };
   }
 
   findByNameFuzzy(name: string): ProblemRow | null {
     const normalized = name.toLowerCase().trim();
     if (!normalized) return null;
 
-    const all = this.findAll();
-    const exact = all.find((p) => p.name.toLowerCase() === normalized);
+    const exact =
+      this.db
+        .select()
+        .from(problems)
+        .where(sql`lower(${problems.name}) = ${normalized}`)
+        .get() ?? null;
     if (exact) return exact;
 
-    const contains = all.filter((p) => p.name.toLowerCase().includes(normalized));
+    const contains = this.db
+      .select()
+      .from(problems)
+      .where(sql`lower(${problems.name}) LIKE ${`%${normalized}%`}`)
+      .all();
     if (contains.length === 1) return contains[0];
     if (contains.length > 1) {
-      const best = contains.sort((a, b) => a.name.length - b.name.length)[0];
-      return best;
+      return contains.sort((a, b) => a.name.length - b.name.length)[0];
     }
 
     return null;

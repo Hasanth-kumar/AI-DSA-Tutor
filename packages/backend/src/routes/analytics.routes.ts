@@ -44,4 +44,16 @@ export async function analyticsRoutes(
     const analysis = ctx.analyticsService.getDifficultyAnalysis();
     return reply.send(serializeForJson(analysis));
   });
+
+  app.get<{ Querystring: { weeks?: string } }>(
+    "/analytics/dashboard",
+    async (request, reply) => {
+      const weeks = parseWeeks(request.query.weeks);
+      const [dashboard, plan] = await Promise.all([
+        Promise.resolve(ctx.analyticsService.getDashboard(weeks)),
+        ctx.planService.generateTodaysPlan(),
+      ]);
+      return reply.send(serializeForJson({ ...dashboard, plan }));
+    },
+  );
 }

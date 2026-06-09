@@ -15,6 +15,7 @@
     "@dsa/integrations": "workspace:*",
     "@dsa/intelligence": "workspace:*",
     "@dsa/shared": "workspace:*",
+    "@fastify/cors": "^11.2.0",
     "bullmq": "^5.40.0",
     "drizzle-orm": "^0.39.3",
     "fastify": "^5.2.1",

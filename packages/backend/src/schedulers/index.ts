@@ -30,7 +30,7 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
           const plan = await ctx.planService.generateTodaysPlan();
           let whatsapp: { sent: boolean; reason?: string } = { sent: false };
           if (whatsappNotify.isConfigured()) {
-            whatsapp = await whatsappNotify.sendDailyPlan();
+            whatsapp = await whatsappNotify.sendDailyPlan(undefined, plan);
           }
           return {
             primaryTopic: plan.primaryTopic.name,
@@ -42,9 +42,14 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
         case "revision-check": {
           const topics = ctx.topicRepo.findAll();
           const revisionQueue = ctx.intelligence.getRevisionQueue(topics);
+          const dueSoon = revisionQueue.filter((t) => {
+            if (!t.nextRevisionAt) return false;
+            const hoursUntil = (t.nextRevisionAt.getTime() - Date.now()) / 3_600_000;
+            return hoursUntil <= 24;
+          });
           let whatsapp: { sent: boolean; reason?: string } = { sent: false };
           if (whatsappNotify.isConfigured()) {
-            whatsapp = await whatsappNotify.sendRevisionCheck();
+            whatsapp = await whatsappNotify.sendRevisionCheck(undefined, dueSoon);
           }
           return {
             dueCount: revisionQueue.length,
@@ -59,11 +64,11 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
           return await ctx.notionSync.pullFromNotion();
         }
         case "weekly-digest": {
+          const summary = ctx.analyticsService.getWeeklySummary();
           let whatsapp: { sent: boolean; reason?: string } = { sent: false };
           if (whatsappNotify.isConfigured()) {
-            whatsapp = await whatsappNotify.sendWeeklyDigest();
+            whatsapp = await whatsappNotify.sendWeeklyDigest(undefined, summary);
           }
-          const summary = ctx.analyticsService.getWeeklySummary();
           return {
             sessionsCount: summary.sessionsCount,
             problemsSolved: summary.problemsSolved,

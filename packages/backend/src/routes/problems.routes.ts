@@ -8,14 +8,10 @@ export async function problemsRoutes(
 ): Promise<void> {
   app.get("/problems", async (request, reply) => {
     const query = request.query as { topicId?: string; status?: string };
-    let rows = ctx.problemRepo.findAll();
-
-    if (query.topicId) {
-      rows = rows.filter((p) => p.topicId === query.topicId);
-    }
-    if (query.status) {
-      rows = rows.filter((p) => p.status === query.status);
-    }
+    const rows = ctx.problemRepo.findFiltered({
+      topicId: query.topicId,
+      status: query.status,
+    });
 
     return reply.send(serializeForJson({ problems: rows, count: rows.length }));
   });

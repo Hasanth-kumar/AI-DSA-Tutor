@@ -18,7 +18,13 @@ export function createSqliteDb(sqlitePath: string): { db: SqliteDb; sqlite: Data
   return { db, sqlite };
 }
 
-const MIGRATIONS = ["0001_initial.sql", "0002_sync_meta.sql"] as const;
+const MIGRATIONS = [
+  "0001_initial.sql",
+  "0002_sync_meta.sql",
+  "0003_github_solutions.sql",
+  "0004_chat.sql",
+  "0005_performance_indexes.sql",
+] as const;
 
 export function runMigrations(sqlitePath: string): void {
   const { sqlite } = createSqliteDb(sqlitePath);
@@ -27,7 +33,14 @@ export function runMigrations(sqlitePath: string): void {
       resolve(repoRoot, "database/migrations", file),
       "utf-8",
     );
-    sqlite.exec(migrationSql);
+    try {
+      sqlite.exec(migrationSql);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!message.includes("duplicate column name")) {
+        throw err;
+      }
+    }
   }
   sqlite.close();
 }

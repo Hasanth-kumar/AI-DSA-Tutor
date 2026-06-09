@@ -73,6 +73,20 @@ export class SyncMetaRepository {
     );
   }
 
+  get(key: string): string | null {
+    const row = this.db.select().from(syncMeta).where(eq(syncMeta.key, key)).get();
+    return row?.value ?? null;
+  }
+
+  set(key: string, value: string): void {
+    const existing = this.db.select().from(syncMeta).where(eq(syncMeta.key, key)).get();
+    if (existing) {
+      this.db.update(syncMeta).set({ value }).where(eq(syncMeta.key, key)).run();
+    } else {
+      this.db.insert(syncMeta).values({ key, value }).run();
+    }
+  }
+
   private readJson<T>(key: string, fallback: T): T {
     const row = this.db.select().from(syncMeta).where(eq(syncMeta.key, key)).get();
     if (!row?.value) return fallback;

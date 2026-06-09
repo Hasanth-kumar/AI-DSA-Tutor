@@ -1,7 +1,10 @@
 # DSA Mastery OS — Comprehensive Implementation Plan
 
 > **Executive Summary**  
-> DSA Mastery OS is not a tracker — it is an autonomous learning intelligence layer over your Notion databases, powered by local AI (Ollama), automated via n8n, and delivered through Telegram. The system's competitive advantage is its **Intelligence Layer**: five engines that work together to understand your learning state, schedule optimally, and adapt in real-time. This plan is organized into six phases spanning roughly 20–24 weeks of active development. The first four weeks are non-negotiable: they lay the intelligence foundation that everything else depends on. Start there. Ship the rest iteratively.
+> DSA Mastery OS is not a tracker — it is an autonomous learning intelligence layer over your Notion databases, powered by local AI (Ollama), automated via n8n, and delivered through WhatsApp. The system's competitive advantage is its **Intelligence Layer**: five engines that work together to understand your learning state, schedule optimally, and adapt in real-time. This plan is organized into six phases spanning roughly 20–24 weeks of active development. The first four weeks are non-negotiable: they lay the intelligence foundation that everything else depends on. Start there. Ship the rest iteratively.
+
+> **Scope: single user (personal use only)**  
+> This system is designed for **one learner** — you. One Notion workspace, one phone number for WhatsApp, one SQLite file on your machine. Do not add multi-user auth, tenant isolation, or horizontal scaling unless requirements change. Optimizations should favor simplicity and maintainability over throughput.
 
 ---
 

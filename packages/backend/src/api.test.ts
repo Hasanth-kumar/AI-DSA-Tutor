@@ -142,6 +142,43 @@ describe("API routes", () => {
     const body = response.json();
     expect(body.primaryTopic.name).toBeTruthy();
     expect(body.suggestedProblems[0].name).toBe("Two Sum");
+    expect(body.curriculum).toMatchObject({
+      topicNames: expect.any(Array),
+      currentIndex: expect.any(Number),
+      items: expect.any(Array),
+    });
+    await app.close();
+  });
+
+  it("GET /api/curriculum returns sequential topic state", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({ method: "GET", url: "/api/curriculum" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      topicNames: expect.arrayContaining(["Binary Search", "Trees", "DP"]),
+      activeTopicId: null,
+      selection: expect.objectContaining({
+        topic: expect.objectContaining({ name: expect.any(String) }),
+        items: expect.any(Array),
+      }),
+    });
+    await app.close();
+  });
+
+  it("PUT /api/curriculum/active switches focused topic", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/curriculum/active",
+      payload: { topicId: "topic-b" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      activeTopicId: "topic-b",
+      selection: expect.objectContaining({
+        topic: expect.objectContaining({ id: "topic-b" }),
+      }),
+    });
     await app.close();
   });
 
@@ -273,6 +310,126 @@ describe("API routes", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().trend).toHaveLength(4);
+    await app.close();
+  });
+
+  it("GET /api/coaching/hint finds problem by name", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/coaching/hint?name=Two%20Sum",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      problemId: "problem-1",
+      hint: expect.any(String),
+    });
+    await app.close();
+  });
+
+  it("POST /api/coaching/chat creates a thread and returns assistant reply", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/coaching/chat",
+      payload: {
+        message: "How do I approach two pointers problems?",
+        includeContext: false,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      threadId: expect.any(String),
+      userMessage: {
+        role: "user",
+        content: "How do I approach two pointers problems?",
+      },
+      assistantMessage: {
+        role: "assistant",
+        content: expect.any(String),
+      },
+    });
+    await app.close();
+  });
+
+  it("GET /api/coaching/debrief returns debrief for latest session", async () => {
+    const app = buildApp(config, ctx);
+    await app.inject({
+      method: "POST",
+      url: "/api/session",
+      payload: {
+        topicId: "topic-a",
+        problemsSolved: 1,
+        studyDuration: 40,
+        productivityScore: 78,
+        pushToNotion: false,
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/coaching/debrief",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      sessionId: expect.any(String),
+      topicName: "Arrays",
+      debrief: expect.any(String),
+    });
+    await app.close();
+  });
+
+  it("GET /api/integrations/leetcode/stats returns 503 when not configured", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/integrations/leetcode/stats",
+    });
+    expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it("GET /api/integrations/leetcode/activity returns 503 when not configured", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/integrations/leetcode/activity",
+    });
+    expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it("POST /api/sync/github returns 503 when not configured", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/sync/github",
+    });
+    expect(response.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it("GET /api/analytics/dashboard returns consolidated analytics", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/analytics/dashboard?weeks=4",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      summary: expect.objectContaining({
+        sessionsCount: expect.any(Number),
+        currentStreakDays: expect.any(Number),
+      }),
+      velocity: expect.objectContaining({
+        weekly: expect.any(Array),
+        topics: expect.any(Array),
+      }),
+      weaknessTrend: expect.any(Array),
+      difficulty: expect.objectContaining({
+        summary: expect.any(String),
+      }),
+    });
     await app.close();
   });
 

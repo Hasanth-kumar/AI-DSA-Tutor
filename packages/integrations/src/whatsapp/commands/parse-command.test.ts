@@ -14,6 +14,11 @@ describe("parseWhatsAppCommand", () => {
     });
   });
 
+  it("parses debrief", () => {
+    expect(parseWhatsAppCommand("debrief")).toEqual({ type: "debrief" });
+    expect(parseWhatsAppCommand("review")).toEqual({ type: "debrief" });
+  });
+
   it("parses done", () => {
     expect(parseWhatsAppCommand("done Coin Change 45 80")).toEqual({
       type: "done",

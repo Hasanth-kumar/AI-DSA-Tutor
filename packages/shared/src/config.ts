@@ -27,8 +27,14 @@ const envSchema = z.object({
   NOTION_PROBLEMS_DB_ID: z.string().optional(),
   NOTION_SESSIONS_DB_ID: z.string().optional(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
+  LLM_PROVIDER: z.enum(["ollama", "openrouter"]).optional(),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
-  OLLAMA_MODEL: z.string().default("llama3.1:8b"),
+  OLLAMA_MODEL: z.string().default("qwen2.5-coder:3b"),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it:free"),
+  OPENROUTER_BASE_URL: z.string().default("https://openrouter.ai/api/v1"),
+  OPENROUTER_SITE_URL: z.string().default("http://localhost:5173"),
+  OPENROUTER_SITE_NAME: z.string().default("DSA Mastery OS"),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
@@ -54,6 +60,10 @@ const envSchema = z.object({
   NOTION_SYNC_CRON: z.string().default("*/30 * * * *"),
   WEEKLY_DIGEST_CRON: z.string().default("0 20 * * 0"),
   SCHEDULER_TIMEZONE: z.string().default("UTC"),
+  LEETCODE_USERNAME: z.string().optional(),
+  GITHUB_TOKEN: z.string().optional(),
+  GITHUB_REPO: z.string().optional(),
+  GITHUB_SOLUTIONS_PATH: z.string().default(""),
 });
 
 export type AppConfig = {
@@ -67,7 +77,17 @@ export type AppConfig = {
     sessionsDbId?: string;
   };
   redis: { url: string };
-  ollama: { baseUrl: string; model: string };
+  llm: {
+    provider: "ollama" | "openrouter";
+    model: string;
+    ollama: { baseUrl: string };
+    openrouter: {
+      apiKey?: string;
+      baseUrl: string;
+      siteUrl: string;
+      siteName: string;
+    };
+  };
   whatsapp: {
     phoneNumberId?: string;
     accessToken?: string;
@@ -92,6 +112,12 @@ export type AppConfig = {
     notionSyncCron: string;
     weeklyDigestCron: string;
     timezone: string;
+  };
+  leetcode: { username?: string };
+  github: {
+    token?: string;
+    repo?: string;
+    solutionsPath: string;
   };
 };
 
@@ -120,7 +146,22 @@ export function loadConfig(envPath?: string): AppConfig {
       sessionsDbId: env.NOTION_SESSIONS_DB_ID,
     },
     redis: { url: env.REDIS_URL },
-    ollama: { baseUrl: env.OLLAMA_BASE_URL, model: env.OLLAMA_MODEL },
+    llm: {
+      provider:
+        env.LLM_PROVIDER ??
+        (env.OPENROUTER_API_KEY ? "openrouter" : "ollama"),
+      model:
+        env.LLM_PROVIDER === "openrouter" || env.OPENROUTER_API_KEY
+          ? env.OPENROUTER_MODEL
+          : env.OLLAMA_MODEL,
+      ollama: { baseUrl: env.OLLAMA_BASE_URL },
+      openrouter: {
+        apiKey: env.OPENROUTER_API_KEY,
+        baseUrl: env.OPENROUTER_BASE_URL,
+        siteUrl: env.OPENROUTER_SITE_URL,
+        siteName: env.OPENROUTER_SITE_NAME,
+      },
+    },
     whatsapp: {
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
       accessToken: env.WHATSAPP_ACCESS_TOKEN,
@@ -147,6 +188,12 @@ export function loadConfig(envPath?: string): AppConfig {
       notionSyncCron: env.NOTION_SYNC_CRON,
       weeklyDigestCron: env.WEEKLY_DIGEST_CRON,
       timezone: env.SCHEDULER_TIMEZONE,
+    },
+    leetcode: { username: env.LEETCODE_USERNAME },
+    github: {
+      token: env.GITHUB_TOKEN,
+      repo: env.GITHUB_REPO,
+      solutionsPath: env.GITHUB_SOLUTIONS_PATH,
     },
   };
 

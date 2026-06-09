@@ -1,13 +1,17 @@
+import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { AppConfig } from "@dsa/shared";
 import type { AppContext } from "./context.js";
 import { healthRoutes } from "./routes/health.routes.js";
+import { curriculumRoutes } from "./routes/curriculum.routes.js";
 import { planRoutes } from "./routes/plan.routes.js";
 import { revisionRoutes } from "./routes/revision.routes.js";
 import { topicsRoutes } from "./routes/topics.routes.js";
 import { sessionRoutes } from "./routes/session.routes.js";
 import { analyticsRoutes } from "./routes/analytics.routes.js";
 import { problemsRoutes } from "./routes/problems.routes.js";
+import { coachingRoutes } from "./routes/coaching.routes.js";
+import { integrationsRoutes } from "./routes/integrations.routes.js";
 import { syncRoutes } from "./routes/sync.routes.js";
 import {
   whatsappNotificationRoutes,
@@ -25,12 +29,23 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
     },
   });
 
+  void app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  });
+
   app.get("/", async () => ({
     name: "DSA Mastery OS API",
     version: "0.2.0",
     health: "/health",
     api: {
       plan: "GET /api/plan/today",
+      curriculum: {
+        get: "GET /api/curriculum",
+        update: "PUT /api/curriculum",
+        active: "PUT /api/curriculum/active",
+        reset: "POST /api/curriculum/reset",
+      },
       revision: "GET /api/revision",
       topics: "GET /api/topics",
       problems: "GET /api/problems",
@@ -41,8 +56,21 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
         masteryVelocity: "GET /api/analytics/mastery-velocity?weeks=8",
         weaknessTrend: "GET /api/analytics/weakness-trend?weeks=8",
         difficulty: "GET /api/analytics/difficulty",
+        dashboard: "GET /api/analytics/dashboard?weeks=8",
       },
       explainScore: "GET /api/topics/:id/score/explain",
+      coaching: {
+        debrief: "GET /api/coaching/debrief",
+        debriefBySession: "GET /api/coaching/debrief/:sessionId",
+        hint: "GET /api/coaching/hint?name=<problem>",
+        chat: "POST /api/coaching/chat",
+        chatThread: "GET /api/coaching/chat/:threadId",
+      },
+      integrations: {
+        leetcodeStats: "GET /api/integrations/leetcode/stats",
+        leetcodeActivity: "GET /api/integrations/leetcode/activity",
+        githubSync: "POST /api/sync/github",
+      },
       sync: "POST /api/sync",
       notifications: {
         dailyPlan: "POST /api/notifications/daily-plan",
@@ -56,17 +84,20 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
   }));
 
   app.register(async (instance) => {
-    await healthRoutes(instance, config);
+    await healthRoutes(instance, ctx);
   });
 
   app.register(
     async (instance) => {
       await planRoutes(instance, ctx);
+      await curriculumRoutes(instance, ctx);
       await revisionRoutes(instance, ctx);
       await topicsRoutes(instance, ctx);
       await problemsRoutes(instance, ctx);
       await sessionRoutes(instance, ctx);
       await analyticsRoutes(instance, ctx);
+      await coachingRoutes(instance, ctx);
+      await integrationsRoutes(instance, ctx);
       await syncRoutes(instance, ctx);
       await whatsappNotificationRoutes(instance, ctx);
     },

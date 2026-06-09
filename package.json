@@ -6,7 +6,9 @@
   "description": "Autonomous DSA learning intelligence layer over Notion, Ollama, n8n, and WhatsApp",
   "scripts": {
     "build": "pnpm --filter @dsa/database build && pnpm -r --filter '!@dsa/database' build",
-    "dev": "pnpm --filter @dsa/backend dev",
+    "dev": "pnpm --filter @dsa/integrations build && pnpm --filter @dsa/integrations dev & pnpm --filter @dsa/backend dev",
+    "dev:web": "pnpm --filter @dsa/frontend dev",
+    "dev:all": "pnpm --filter @dsa/backend --filter @dsa/frontend -r --parallel dev",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "db:seed": "pnpm --filter @dsa/integrations db:seed",

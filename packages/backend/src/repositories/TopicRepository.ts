@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
-import { problems, sessions, topics } from "@dsa/database/schema";
+import { topics } from "@dsa/database/schema";
 import type { TopicState } from "@dsa/intelligence";
 import type { SqliteDb } from "@dsa/integrations";
-import { buildTopicState } from "../lib/topic-mapper.js";
+import type { MirrorCache } from "../services/MirrorCache.js";
 
 export interface TopicUpdate {
   confidence?: number;
@@ -15,41 +15,17 @@ export interface TopicUpdate {
 }
 
 export class TopicRepository {
-  constructor(private readonly db: SqliteDb) {}
+  constructor(
+    private readonly db: SqliteDb,
+    private readonly mirrorCache: MirrorCache,
+  ) {}
 
   findAll(): TopicState[] {
-    const topicRows = this.db.select().from(topics).all();
-    const problemRows = this.db.select().from(problems).all();
-    const sessionRows = this.db.select().from(sessions).all();
-
-    const problemsByTopic = groupBy(problemRows, (p) => p.topicId);
-    const sessionsByTopic = groupBy(sessionRows, (s) => s.topicId);
-
-    return topicRows.map((topic) =>
-      buildTopicState(
-        topic,
-        problemsByTopic.get(topic.id) ?? [],
-        sessionsByTopic.get(topic.id) ?? [],
-      ),
-    );
+    return this.mirrorCache.getTopicStates();
   }
 
   findById(id: string): TopicState | null {
-    const topic = this.db.select().from(topics).where(eq(topics.id, id)).get();
-    if (!topic) return null;
-
-    const topicProblems = this.db
-      .select()
-      .from(problems)
-      .where(eq(problems.topicId, id))
-      .all();
-    const topicSessions = this.db
-      .select()
-      .from(sessions)
-      .where(eq(sessions.topicId, id))
-      .all();
-
-    return buildTopicState(topic, topicProblems, topicSessions);
+    return this.mirrorCache.getTopicById(id);
   }
 
   update(id: string, patch: TopicUpdate): void {
@@ -78,6 +54,7 @@ export class TopicRepository {
       })
       .where(eq(topics.id, id))
       .run();
+    this.mirrorCache.invalidate();
   }
 
   applyPendingFields(
@@ -111,17 +88,6 @@ export class TopicRepository {
       })
       .where(eq(topics.id, id))
       .run();
+    this.mirrorCache.invalidate();
   }
-}
-
-function groupBy<T>(items: T[], keyFn: (item: T) => string | null | undefined): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (!key) continue;
-    const list = map.get(key) ?? [];
-    list.push(item);
-    map.set(key, list);
-  }
-  return map;
 }

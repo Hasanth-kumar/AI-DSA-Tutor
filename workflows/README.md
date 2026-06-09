@@ -1,6 +1,6 @@
 # n8n Workflows
 
-Thin orchestration only — business logic lives in the backend API.
+Personal cron jobs for a single user — thin orchestration only; business logic lives in the backend API.
 
 1. **Trigger** (Cron / Webhook)
 2. **HTTP request** to the backend

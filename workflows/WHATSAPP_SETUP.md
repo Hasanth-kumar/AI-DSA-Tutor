@@ -1,5 +1,7 @@
 # WhatsApp (Meta Cloud API) — Phase 3 setup
 
+Single-user bot: commands and cron notifications go to **your** number only (`WHATSAPP_DEFAULT_RECIPIENT`). No multi-recipient or team routing.
+
 ## 1. Meta Developer Console
 
 1. Create an app at [developers.facebook.com](https://developers.facebook.com) → **Business** type.

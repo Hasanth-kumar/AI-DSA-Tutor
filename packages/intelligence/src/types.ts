@@ -48,6 +48,21 @@ export interface ProblemSuggestion {
   leetcodeLink?: string;
 }
 
+export interface CurriculumItem {
+  name: string;
+  topicId: string | null;
+  status: "complete" | "current" | "upcoming" | "missing";
+  unsolvedCount: number;
+  totalCount: number;
+}
+
+export interface CurriculumProgress {
+  topicNames: string[];
+  currentIndex: number;
+  activeTopicId: string | null;
+  items: CurriculumItem[];
+}
+
 export interface StudyPlan {
   date: Date;
   primaryTopic: TopicState;
@@ -55,6 +70,7 @@ export interface StudyPlan {
   suggestedProblems: ProblemSuggestion[];
   estimatedDuration: number;
   reasoning: string;
+  curriculum?: CurriculumProgress;
 }
 
 export interface PlanOptions {

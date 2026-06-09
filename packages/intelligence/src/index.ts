@@ -19,6 +19,8 @@ export type {
   WeaknessAnalysis,
   WeaknessReport,
   WeaknessSignal,
+  CurriculumItem,
+  CurriculumProgress,
 } from "./types.js";
 
 export { DEFAULT_WEIGHTS, computePriorityScore } from "./topic-priority-engine/scoring.js";
@@ -35,6 +37,20 @@ export {
   createIntelligenceOrchestrator,
   IntelligenceOrchestrator,
 } from "./orchestrator/IntelligenceOrchestrator.js";
+
+export {
+  DEFAULT_CURRICULUM_TOPICS,
+  TOPIC_NAME_ALIASES,
+} from "./curriculum-engine/default-topics.js";
+export {
+  CurriculumEngine,
+  createCurriculumEngine,
+  resolveTopicByLabel,
+  type CurriculumConfig,
+  type CurriculumItemStatus,
+  type CurriculumSelection,
+  type TopicProblemCounts,
+} from "./curriculum-engine/CurriculumEngine.js";
 
 export type {
   AnalyticsProblemInput,

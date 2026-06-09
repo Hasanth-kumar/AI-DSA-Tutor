@@ -1,0 +1,146 @@
+import { desc } from "drizzle-orm";
+import { problems, sessions, topics } from "@dsa/database/schema";
+import type { TopicState } from "@dsa/intelligence";
+import type { SqliteDb } from "@dsa/integrations";
+import { buildTopicState } from "../lib/topic-mapper.js";
+import type { ProblemRow } from "../repositories/ProblemRepository.js";
+import type { SessionRow } from "../repositories/SessionRepository.js";
+
+/** Max sessions loaded into mirror — analytics uses 500; extra headroom for streaks. */
+export const MIRROR_SESSION_LIMIT = 1_000;
+
+interface MirrorSnapshot {
+  topicStates: TopicState[];
+  topicById: Map<string, TopicState>;
+  problemRows: ProblemRow[];
+  sessionRows: SessionRow[];
+  loadedAt: number;
+}
+
+export class MirrorCache {
+  private snapshot: MirrorSnapshot | null = null;
+  private batchDepth = 0;
+  private batchDirty = false;
+
+  constructor(
+    private readonly db: SqliteDb,
+    private readonly ttlMs = 10_000,
+  ) {}
+
+  invalidate(): void {
+    if (this.batchDepth > 0) {
+      this.batchDirty = true;
+      return;
+    }
+    this.snapshot = null;
+  }
+
+  batch<T>(fn: () => T): T {
+    this.batchDepth++;
+    try {
+      return fn();
+    } finally {
+      this.flushBatch();
+    }
+  }
+
+  async batchAsync<T>(fn: () => Promise<T>): Promise<T> {
+    this.batchDepth++;
+    try {
+      return await fn();
+    } finally {
+      this.flushBatch();
+    }
+  }
+
+  private flushBatch(): void {
+    this.batchDepth--;
+    if (this.batchDepth === 0 && this.batchDirty) {
+      this.batchDirty = false;
+      this.snapshot = null;
+    }
+  }
+
+  private isFresh(): boolean {
+    return (
+      this.snapshot !== null &&
+      Date.now() - this.snapshot.loadedAt < this.ttlMs
+    );
+  }
+
+  private load(): MirrorSnapshot {
+    if (this.isFresh()) return this.snapshot!;
+
+    const topicRows = this.db.select().from(topics).all();
+    const problemRows = this.db.select().from(problems).all();
+    const sessionRows = this.db
+      .select()
+      .from(sessions)
+      .orderBy(desc(sessions.date))
+      .limit(MIRROR_SESSION_LIMIT)
+      .all();
+
+    const problemsByTopic = groupBy(problemRows, (p) => p.topicId);
+    const sessionsByTopic = groupBy(sessionRows, (s) => s.topicId);
+
+    const topicStates = topicRows.map((topic) =>
+      buildTopicState(
+        topic,
+        problemsByTopic.get(topic.id) ?? [],
+        sessionsByTopic.get(topic.id) ?? [],
+      ),
+    );
+
+    const topicById = new Map(topicStates.map((t) => [t.id, t]));
+
+    this.snapshot = {
+      topicStates,
+      topicById,
+      problemRows,
+      sessionRows,
+      loadedAt: Date.now(),
+    };
+    return this.snapshot;
+  }
+
+  getTopicStates(): TopicState[] {
+    return this.load().topicStates;
+  }
+
+  getTopicById(id: string): TopicState | null {
+    return this.load().topicById.get(id) ?? null;
+  }
+
+  getProblemRows(): ProblemRow[] {
+    return this.load().problemRows;
+  }
+
+  getSessionRows(limit = 500): SessionRow[] {
+    const rows = this.load().sessionRows;
+    return limit >= rows.length ? rows : rows.slice(0, limit);
+  }
+
+  getCounts(): { topics: number; problems: number; sessions: number } {
+    const s = this.load();
+    return {
+      topics: s.topicStates.length,
+      problems: s.problemRows.length,
+      sessions: s.sessionRows.length,
+    };
+  }
+}
+
+function groupBy<T>(
+  items: T[],
+  keyFn: (item: T) => string | null | undefined,
+): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!key) continue;
+    const list = map.get(key) ?? [];
+    list.push(item);
+    map.set(key, list);
+  }
+  return map;
+}

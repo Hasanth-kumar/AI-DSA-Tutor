@@ -1,13 +1,23 @@
 import type { FastifyInstance } from "fastify";
-import type { AppConfig } from "@dsa/shared";
-import { checkHealth } from "../services/health.service.js";
+import type { AppContext } from "../context.js";
+import { checkHealthFromContext, checkHealthLive } from "../services/health.service.js";
 
 export async function healthRoutes(
   app: FastifyInstance,
-  config: AppConfig,
+  ctx: AppContext,
 ): Promise<void> {
+  app.get("/health/live", async (_request, reply) => {
+    return reply.status(200).send(checkHealthLive());
+  });
+
+  app.get("/health/ready", async (_request, reply) => {
+    const health = await checkHealthFromContext(ctx, { deep: true });
+    const statusCode = health.status === "ok" ? 200 : 503;
+    return reply.status(statusCode).send(health);
+  });
+
   app.get("/health", async (_request, reply) => {
-    const health = await checkHealth(config);
+    const health = await checkHealthFromContext(ctx, { deep: true });
     return reply.status(200).send(health);
   });
 }
