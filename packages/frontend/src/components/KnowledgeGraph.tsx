@@ -16,11 +16,18 @@ interface Props {
   topics: Topic[];
 }
 
+const GRAPH_COLORS = {
+  mastered: "#52c88a",
+  inProgress: "#e8a840",
+  notStarted: "#3a3530",
+  weakArea: "#c94b4b",
+} as const;
+
 function nodeColor(node: GraphNode): string {
-  if (node.isWeakArea) return "#e87070";
-  if (node.status === "Mastered") return "#52c88a";
-  if (node.status === "In progress") return "#d4713e";
-  return "#3a3530";
+  if (node.isWeakArea) return GRAPH_COLORS.weakArea;
+  if (node.status === "Mastered") return GRAPH_COLORS.mastered;
+  if (node.status === "In progress") return GRAPH_COLORS.inProgress;
+  return GRAPH_COLORS.notStarted;
 }
 
 export function KnowledgeGraph({ topics }: Props) {
@@ -162,14 +169,12 @@ export function KnowledgeGraph({ topics }: Props) {
 
   return (
     <div className="graph-container card">
-      <h3>Knowledge graph</h3>
       <svg ref={ref} className="chart-svg" style={{ minHeight: 480 }} />
       <div className="graph-legend">
-        <span><i style={{ background: "#52c88a", borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> Mastered</span>
-        <span><i style={{ background: "#d4713e", borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> In progress</span>
-        <span><i style={{ background: "#3a3530", borderRadius: "50%", width: 9, height: 9, display: "inline-block", border: "1px solid #5c5348" }} /> Not started</span>
-        <span><i style={{ background: "#e87070", borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> Weak area</span>
-        <span className="muted" style={{ marginLeft: "auto" }}>Node size = confidence · Scroll to zoom · Drag nodes or background to pan</span>
+        <span><i style={{ background: GRAPH_COLORS.mastered, borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> Mastered</span>
+        <span><i style={{ background: GRAPH_COLORS.inProgress, borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> In progress</span>
+        <span><i style={{ background: GRAPH_COLORS.notStarted, borderRadius: "50%", width: 9, height: 9, display: "inline-block", border: "1px solid #5c5348" }} /> Not started</span>
+        <span><i style={{ background: GRAPH_COLORS.weakArea, borderRadius: "50%", width: 9, height: 9, display: "inline-block" }} /> Weak area</span>
       </div>
     </div>
   );
