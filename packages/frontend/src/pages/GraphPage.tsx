@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
-import type { Topic } from "../types/api.js";
+import type { Topic, WeaknessEvidence } from "../types/api.js";
 
 const KnowledgeGraph = lazy(() =>
   import("../components/KnowledgeGraph.js").then((m) => ({
@@ -11,6 +11,10 @@ const KnowledgeGraph = lazy(() =>
 export function GraphPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<WeaknessEvidence | null>(null);
+  const [studyMessage, setStudyMessage] = useState<string | null>(null);
+  const [settingFocus, setSettingFocus] = useState(false);
 
   useEffect(() => {
     api
@@ -21,24 +25,138 @@ export function GraphPage() {
       );
   }, []);
 
+  const selected = selectedId ? topics.find((t) => t.id === selectedId) ?? null : null;
+
+  const selectTopic = useCallback((topicId: string) => {
+    setSelectedId(topicId);
+    setStudyMessage(null);
+    setEvidence(null);
+    api
+      .getWeaknessEvidence(topicId)
+      .then(setEvidence)
+      .catch(() => setEvidence(null));
+  }, []);
+
+  /** "Study this now" → pin as the curriculum's active topic. */
+  const studyNow = async () => {
+    if (!selectedId) return;
+    setSettingFocus(true);
+    setStudyMessage(null);
+    try {
+      await api.setCurriculumActiveTopic(selectedId);
+      setStudyMessage(
+        `${selected?.name ?? "Topic"} is now today's focus — head to the Today tab.`,
+      );
+    } catch (err) {
+      setStudyMessage(err instanceof Error ? err.message : "Failed to set focus");
+    } finally {
+      setSettingFocus(false);
+    }
+  };
+
+  const dueLabel = (t: Topic): string => {
+    if (t.status === "Not started") return "not started yet";
+    if (!t.nextRevisionAt) return "never revised — due now";
+    const due = new Date(t.nextRevisionAt);
+    return due.getTime() <= Date.now()
+      ? `overdue since ${due.toLocaleDateString()}`
+      : `due ${due.toLocaleDateString()}`;
+  };
+
   return (
     <div>
       <header className="page-header">
         <div className="page-header-text">
           <h2>Knowledge graph</h2>
-          <p>Topics as nodes — color shows mastery, edges show prerequisites.</p>
+          <p>Topics as nodes — color shows mastery, dashed ring means revision due. Click a node for details.</p>
         </div>
       </header>
       {error && <div className="error-banner">{error}</div>}
-      <Suspense
-        fallback={
-          <div className="card">
-            <p className="muted" style={{ margin: 0 }}>Loading graph…</p>
-          </div>
-        }
-      >
-        <KnowledgeGraph topics={topics} />
-      </Suspense>
+      <div className={`graph-layout${selected ? " graph-layout--panel-open" : ""}`}>
+        <Suspense
+          fallback={
+            <div className="card">
+              <p className="muted" style={{ margin: 0 }}>Loading graph…</p>
+            </div>
+          }
+        >
+          <KnowledgeGraph topics={topics} onNodeClick={selectTopic} />
+        </Suspense>
+
+        {selected && (
+          <aside className="card graph-panel">
+            <div className="graph-panel-header">
+              <h3 style={{ margin: 0 }}>{selected.name}</h3>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setSelectedId(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <dl className="graph-panel-stats">
+              <div>
+                <dt>Status</dt>
+                <dd>{selected.status}</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd>{selected.confidence}/100</dd>
+              </div>
+              <div>
+                <dt>Revision</dt>
+                <dd>{dueLabel(selected)}</dd>
+              </div>
+              <div>
+                <dt>Solved</dt>
+                <dd>
+                  {selected.problemsSolved} problem{selected.problemsSolved === 1 ? "" : "s"}
+                </dd>
+              </div>
+            </dl>
+
+            {evidence && evidence.analysis.signals.length > 0 && (
+              <>
+                <div className="graph-panel-label">Weakness signals</div>
+                <ul className="graph-panel-signals">
+                  {evidence.analysis.signals.map((s) => (
+                    <li key={s.name}>{s.description}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {evidence && Object.keys(evidence.evidence.mistakeTagCounts).length > 0 && (
+              <>
+                <div className="graph-panel-label">Mistake tags</div>
+                <div className="mistake-tag-chips">
+                  {Object.entries(evidence.evidence.mistakeTagCounts).map(([tag, n]) => (
+                    <span key={tag} className="mistake-tag-chip">
+                      {tag} ×{n}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: "100%", justifyContent: "center", marginTop: "0.85rem" }}
+              disabled={settingFocus}
+              onClick={() => void studyNow()}
+            >
+              {settingFocus ? "Setting…" : "▶ Study this now"}
+            </button>
+            {studyMessage && (
+              <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem" }}>
+                {studyMessage}
+              </p>
+            )}
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

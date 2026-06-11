@@ -1,5 +1,6 @@
 import type { IntelligenceOrchestrator, SessionSnapshot } from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
+import type { AttemptRepository } from "../repositories/AttemptRepository.js";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type {
   CreateSessionInput,
@@ -14,16 +15,27 @@ import type { PlanService } from "./PlanService.js";
 export interface CompleteSessionInput extends CreateSessionInput {
   pushToNotion?: boolean;
   problemId?: string;
+  /** One-tap mistake taxonomy tag captured with (or after) the log. */
+  mistakeTag?: string | null;
 }
 
 export interface SessionResult {
   session: SessionRow;
   topicId: string;
   problemId?: string;
+  /** Attempt record id — target for the post-log mistake-capture PATCH. */
+  attemptId?: string;
   nextRevisionAt: string | null;
   confidence: number;
   isWeakArea: boolean;
   summary: string;
+}
+
+export interface RecallResult {
+  topicId: string;
+  quality: number;
+  nextRevisionAt: string | null;
+  intervalDays: number;
 }
 
 export class SessionService {
@@ -35,6 +47,7 @@ export class SessionService {
     private readonly problemRepo: ProblemRepository,
     private readonly planService: PlanService,
     private readonly notionSync: NotionSyncService,
+    private readonly attemptRepo?: AttemptRepository,
   ) {}
 
   list(limit = 50): SessionRow[] {
@@ -101,6 +114,7 @@ export class SessionService {
     this.notionSync.markTopicDirty(input.topicId, topicSnapshot);
 
     let solvedProblem = problem;
+    let attemptId: string | undefined;
     if (input.problemId && problem) {
       solvedProblem = this.problemRepo.recordSolve(
         input.problemId,
@@ -109,8 +123,20 @@ export class SessionService {
       if (solvedProblem) {
         this.notionSync.markProblemDirty(input.problemId, solvedProblem);
       }
+      attemptId = this.attemptRepo?.create({
+        problemId: input.problemId,
+        topicId: input.topicId,
+        sessionId: sessionRow.id,
+        solvedAt: sessionSnapshot.date,
+        timeTaken: input.studyDuration,
+        mistakeTag: input.mistakeTag ?? null,
+      }).id;
     }
 
+    // Notion push is best-effort: the records are already marked dirty above,
+    // so a failed push (offline, schema drift) replays on the next sync rather
+    // than failing the one-tap logging loop.
+    let notionWarning: string | null = null;
     if (input.pushToNotion !== false && this.notionSync.isConfigured()) {
       const pushes: Promise<void>[] = [
         this.notionSync.pushTopicToNotion(input.topicId, topicSnapshot),
@@ -121,7 +147,12 @@ export class SessionService {
         );
       }
       pushes.push(this.pushSessionToNotion(sessionRow));
-      await Promise.all(pushes);
+      try {
+        await Promise.all(pushes);
+      } catch (err) {
+        notionWarning =
+          err instanceof Error ? err.message : "Notion push failed";
+      }
     }
 
     await this.planService.invalidateTodaysPlan();
@@ -130,12 +161,41 @@ export class SessionService {
       session: sessionRow,
       topicId: input.topicId,
       problemId: input.problemId,
+      attemptId,
       nextRevisionAt: topicSnapshot.nextRevisionAt?.toISOString() ?? null,
       confidence: topicSnapshot.confidence,
       isWeakArea: topicSnapshot.isWeakArea,
       summary: `Session logged. Next review: ${
         topicSnapshot.nextRevisionAt?.toISOString().slice(0, 10) ?? "not scheduled"
-      }.`,
+      }.${notionWarning ? ` (Notion push failed — queued for next sync: ${notionWarning})` : ""}`,
+    };
+  }
+
+  /**
+   * Active-recall warm-up grade (3.1): feed an explicit SM-2 quality (0–5)
+   * for a topic — a cleaner scheduling signal than productivity inference.
+   */
+  applyRecallQuality(topicId: string, quality: number): RecallResult {
+    const topic = this.topicRepo.findById(topicId);
+    if (!topic) {
+      throw new Error(`Topic not found: ${topicId}`);
+    }
+    const clamped = Math.max(0, Math.min(5, Math.round(quality)));
+    const sm2 = this.intelligence.applyRecallQuality(topic, clamped);
+    const now = new Date();
+
+    this.topicRepo.update(topicId, {
+      revisionCount: topic.revisionCount + 1,
+      lastRevised: now,
+      nextRevisionAt: sm2.nextRevisionAt,
+    });
+    this.notionSync.markTopicDirty(topicId);
+
+    return {
+      topicId,
+      quality: clamped,
+      nextRevisionAt: sm2.nextRevisionAt.toISOString(),
+      intervalDays: sm2.interval,
     };
   }
 

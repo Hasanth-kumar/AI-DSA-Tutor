@@ -44,6 +44,48 @@ export const syncMeta = sqliteTable("sync_meta", {
   value: text("value").notNull(),
 });
 
+/**
+ * Per-problem attempt log — survives Notion pulls (which wipe/rebuild
+ * topics/problems/sessions). Holds local-only signals like mistake tags.
+ */
+export const problemAttempts = sqliteTable("problem_attempts", {
+  id: text("id").primaryKey(),
+  problemId: text("problem_id").notNull(),
+  topicId: text("topic_id"),
+  sessionId: text("session_id"),
+  solvedAt: integer("solved_at").notNull(),
+  timeTaken: integer("time_taken"),
+  mistakeTag: text("mistake_tag"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** Obsidian note metadata + cached content; the vault is the source of truth. */
+export const notes = sqliteTable("notes", {
+  id: text("id").primaryKey(),
+  path: text("path").notNull().unique(),
+  title: text("title").notNull(),
+  problemId: text("problem_id"),
+  topicId: text("topic_id"),
+  frontmatter: text("frontmatter"),
+  content: text("content"),
+  contentHash: text("content_hash"),
+  matchedBy: text("matched_by"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/** Both versions of a record edited locally and in Notion between syncs. */
+export const syncConflicts = sqliteTable("sync_conflicts", {
+  id: text("id").primaryKey(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  entityName: text("entity_name"),
+  localValue: text("local_value").notNull(),
+  remoteValue: text("remote_value").notNull(),
+  detectedAt: integer("detected_at").notNull(),
+  resolvedAt: integer("resolved_at"),
+  winner: text("winner"),
+});
+
 export const chatThreads = sqliteTable("chat_threads", {
   id: text("id").primaryKey(),
   createdAt: integer("created_at").notNull(),

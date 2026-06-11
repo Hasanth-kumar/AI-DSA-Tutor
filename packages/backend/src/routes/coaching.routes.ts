@@ -2,6 +2,13 @@ import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
 
+function parseHintLevel(raw: string | undefined): 1 | 2 | 3 | 4 | undefined {
+  const level = Number(raw);
+  return level === 1 || level === 2 || level === 3 || level === 4
+    ? level
+    : undefined;
+}
+
 export async function coachingRoutes(
   app: FastifyInstance,
   ctx: AppContext,
@@ -33,7 +40,7 @@ export async function coachingRoutes(
     },
   );
 
-  app.get<{ Params: { problemId: string } }>(
+  app.get<{ Params: { problemId: string }; Querystring: { level?: string } }>(
     "/coaching/hint/:problemId",
     async (request, reply) => {
       const problem = ctx.problemRepo.findById(request.params.problemId);
@@ -51,13 +58,14 @@ export async function coachingRoutes(
         topic,
         problem.difficulty ?? "Medium",
         problem.attempts ?? 0,
+        parseHintLevel(request.query.level),
       );
       const hint = await ctx.hintService.generateHint(hintCtx);
       return reply.send(serializeForJson({ problemId: problem.id, hint }));
     },
   );
 
-  app.get<{ Querystring: { name?: string } }>(
+  app.get<{ Querystring: { name?: string; level?: string } }>(
     "/coaching/hint",
     async (request, reply) => {
       const name = request.query.name?.trim();
@@ -80,6 +88,7 @@ export async function coachingRoutes(
         topic,
         problem.difficulty ?? "Medium",
         problem.attempts ?? 0,
+        parseHintLevel(request.query.level),
       );
       const hint = await ctx.hintService.generateHint(hintCtx);
       return reply.send(serializeForJson({ problemId: problem.id, hint }));

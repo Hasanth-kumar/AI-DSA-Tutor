@@ -1,10 +1,12 @@
-import { desc } from "drizzle-orm";
-import { problems, sessions, topics } from "@dsa/database/schema";
+import { desc, gte, isNotNull, sql } from "drizzle-orm";
+import { notes, problemAttempts, problems, sessions, topics } from "@dsa/database/schema";
 import type { TopicState } from "@dsa/intelligence";
 import type { SqliteDb } from "@dsa/integrations";
 import { buildTopicState } from "../lib/topic-mapper.js";
 import type { ProblemRow } from "../repositories/ProblemRepository.js";
 import type { SessionRow } from "../repositories/SessionRepository.js";
+
+const MISTAKE_WINDOW_DAYS = 90;
 
 /** Max sessions loaded into mirror — analytics uses 500; extra headroom for streaks. */
 export const MIRROR_SESSION_LIMIT = 1_000;
@@ -82,12 +84,18 @@ export class MirrorCache {
 
     const problemsByTopic = groupBy(problemRows, (p) => p.topicId);
     const sessionsByTopic = groupBy(sessionRows, (s) => s.topicId);
+    const mistakeTagsByTopic = this.loadMistakeTagCounts();
+    const notedProblemIds = this.loadNotedProblemIds();
 
     const topicStates = topicRows.map((topic) =>
       buildTopicState(
         topic,
         problemsByTopic.get(topic.id) ?? [],
         sessionsByTopic.get(topic.id) ?? [],
+        {
+          mistakeTagCounts: mistakeTagsByTopic.get(topic.id),
+          notedProblemIds,
+        },
       ),
     );
 
@@ -118,6 +126,38 @@ export class MirrorCache {
   getSessionRows(limit = 500): SessionRow[] {
     const rows = this.load().sessionRows;
     return limit >= rows.length ? rows : rows.slice(0, limit);
+  }
+
+  private loadMistakeTagCounts(): Map<string, Record<string, number>> {
+    const since = Date.now() - MISTAKE_WINDOW_DAYS * 86_400_000;
+    const rows = this.db
+      .select({
+        topicId: problemAttempts.topicId,
+        mistakeTag: problemAttempts.mistakeTag,
+        count: sql<number>`count(*)`,
+      })
+      .from(problemAttempts)
+      .where(gte(problemAttempts.solvedAt, since))
+      .groupBy(problemAttempts.topicId, problemAttempts.mistakeTag)
+      .all();
+
+    const byTopic = new Map<string, Record<string, number>>();
+    for (const row of rows) {
+      if (!row.topicId || !row.mistakeTag) continue;
+      const counts = byTopic.get(row.topicId) ?? {};
+      counts[row.mistakeTag] = row.count;
+      byTopic.set(row.topicId, counts);
+    }
+    return byTopic;
+  }
+
+  private loadNotedProblemIds(): Set<string> {
+    const rows = this.db
+      .select({ problemId: notes.problemId })
+      .from(notes)
+      .where(isNotNull(notes.problemId))
+      .all();
+    return new Set(rows.map((r) => r.problemId!));
   }
 
   getCounts(): { topics: number; problems: number; sessions: number } {

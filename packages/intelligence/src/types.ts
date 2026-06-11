@@ -18,7 +18,32 @@ export interface TopicState {
   averageTimeTaken: number;
   prerequisites: string[];
   recentSessions: SessionSnapshot[];
+  /** Mistake-tag counts from recent problem attempts (e.g. { "off-by-one": 3 }). */
+  mistakeTagCounts?: Record<string, number>;
+  /** Note coverage: solved problems vs solved problems that have an Obsidian note. */
+  noteCoverage?: { solved: number; withNotes: number };
 }
+
+/** One-tap mistake taxonomy captured after logging a problem. */
+export type MistakeTag =
+  | "wrong-approach"
+  | "edge-case"
+  | "off-by-one"
+  | "pattern-recall";
+
+export const MISTAKE_TAGS: MistakeTag[] = [
+  "wrong-approach",
+  "edge-case",
+  "off-by-one",
+  "pattern-recall",
+];
+
+export const MISTAKE_TAG_LABELS: Record<MistakeTag, string> = {
+  "wrong-approach": "Wrong approach",
+  "edge-case": "Edge case",
+  "off-by-one": "Off-by-one",
+  "pattern-recall": "Couldn't recall pattern",
+};
 
 export interface SessionSnapshot {
   date: Date;
@@ -71,6 +96,10 @@ export interface StudyPlan {
   estimatedDuration: number;
   reasoning: string;
   curriculum?: CurriculumProgress;
+  /** Total topics due for revision (before catch-up compression). */
+  revisionTotalDue?: number;
+  /** Topics pushed forward by catch-up compression on this plan. */
+  revisionDeferred?: number;
 }
 
 export interface PlanOptions {

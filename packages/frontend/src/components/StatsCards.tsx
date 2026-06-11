@@ -16,23 +16,21 @@ export const StatsCards = memo(function StatsCards({ summary }: Props) {
 
   return (
     <div className="grid grid-4">
+      {/* Streak is de-emphasized (1.5): months-of-sessions replaces it here. */}
       <div className="card stat-card" style={{ position: "relative" }}>
         <div
           className="stat-icon"
           style={{ background: "rgba(212, 113, 62, 0.12)", color: "var(--accent)" }}
         >
           <svg viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 1l1.8 3.7 4 .6-2.9 2.8.7 4L8 10.1 4.4 12l.7-4L2.2 5.3l4-.6L8 1z" />
+            <path d="M8 1.5a1 1 0 011 1V3h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1h3v-.5a1 1 0 011-1zM4.5 6v6.5h7V6h-7z" />
           </svg>
         </div>
-        <h3>Streak</h3>
+        <h3>This month</h3>
         <div className="stat-value" style={{ color: "var(--accent)" }}>
-          {summary.currentStreakDays}
-          <span style={{ fontSize: "1rem", fontWeight: 500, color: "var(--text-muted)", marginLeft: "2px" }}>d</span>
+          {summary.sessionsThisMonth ?? summary.sessionsCount}
         </div>
-        <div className="stat-label">
-          Best: {summary.longestStreakDays}d
-        </div>
+        <div className="stat-label">sessions logged</div>
       </div>
 
       <div className="card stat-card" style={{ position: "relative" }}>

@@ -52,6 +52,7 @@ export async function topicsRoutes(
     }
 
     await ctx.planService.invalidateTodaysPlan();
+    ctx.events.publish("topic");
     const topic = ctx.topicRepo.findById(request.params.id);
     return reply.send(serializeForJson({ topic }));
   });
@@ -67,6 +68,46 @@ export async function topicsRoutes(
       const allTopics = ctx.topicRepo.findAll();
       const explanation = ctx.intelligence.explainTopicScore(topic, allTopics);
       return reply.send(serializeForJson(explanation));
+    },
+  );
+
+  /** Weakness evidence drill-down (5.4): signals, mistake tags, slow problems. */
+  app.get<{ Params: { id: string } }>(
+    "/topics/:id/weakness",
+    async (request, reply) => {
+      const topic = ctx.topicRepo.findById(request.params.id);
+      if (!topic) {
+        return reply.status(404).send({ error: "Topic not found" });
+      }
+
+      const analysis = ctx.intelligence.analyzeTopicWeakness(topic);
+      const problems = ctx.problemRepo.findByTopicId(request.params.id);
+      const slowProblems = problems
+        .filter((p) => (p.timeTaken ?? 0) > 30)
+        .sort((a, b) => (b.timeTaken ?? 0) - (a.timeTaken ?? 0))
+        .slice(0, 5)
+        .map((p) => ({ id: p.id, name: p.name, timeTaken: p.timeTaken }));
+      const lowProductivitySessions = topic.recentSessions
+        .filter((s) => s.productivityScore < 60)
+        .map((s) => ({
+          date: s.date,
+          productivityScore: s.productivityScore,
+          duration: s.duration,
+        }));
+
+      return reply.send(
+        serializeForJson({
+          topicId: topic.id,
+          topicName: topic.name,
+          analysis,
+          evidence: {
+            mistakeTagCounts: topic.mistakeTagCounts ?? {},
+            noteCoverage: topic.noteCoverage ?? { solved: 0, withNotes: 0 },
+            slowProblems,
+            lowProductivitySessions,
+          },
+        }),
+      );
     },
   );
 }

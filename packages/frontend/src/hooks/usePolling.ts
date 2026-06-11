@@ -67,11 +67,16 @@ export function usePolling<T>(
       document.addEventListener("visibilitychange", onVisibility);
     }
 
+    // SSE push (5.4): refresh immediately when the backend signals a change.
+    const onDataChanged = () => void refresh();
+    window.addEventListener("dsa:data-changed", onDataChanged);
+
     return () => {
       clearInterval(id);
       if (pauseWhenHidden) {
         document.removeEventListener("visibilitychange", onVisibility);
       }
+      window.removeEventListener("dsa:data-changed", onDataChanged);
     };
   }, [refresh, intervalMs, enabled, pauseWhenHidden]);
 

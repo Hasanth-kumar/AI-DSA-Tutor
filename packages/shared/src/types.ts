@@ -6,6 +6,13 @@ export interface ServiceHealth {
   latencyMs?: number;
 }
 
+export interface SyncHealth {
+  lastSyncAt: string | null;
+  pendingTopics: number;
+  pendingProblems: number;
+  unresolvedConflicts: number;
+}
+
 export interface HealthResponse {
   status: HealthStatus;
   timestamp: string;
@@ -22,4 +29,5 @@ export interface HealthResponse {
     problems: number;
     sessions: number;
   };
+  sync?: SyncHealth;
 }

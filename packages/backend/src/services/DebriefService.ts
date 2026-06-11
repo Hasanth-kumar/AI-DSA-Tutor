@@ -1,7 +1,7 @@
 import type { DebriefContext, LLMService } from "@dsa/integrations";
 import type { IntelligenceOrchestrator } from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
-import { createAppLLMService } from "../llm.factory.js";
+import { createCoachLLMService } from "../llm.factory.js";
 import type { AnalyticsService } from "./AnalyticsService.js";
 import type { SessionRepository } from "../repositories/SessionRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
@@ -26,7 +26,7 @@ export class DebriefService {
     private readonly analyticsService: AnalyticsService,
     llm?: LLMService,
   ) {
-    this.llm = llm ?? createAppLLMService(config);
+    this.llm = llm ?? createCoachLLMService(config);
   }
 
   async generateLatest(): Promise<DebriefResult> {

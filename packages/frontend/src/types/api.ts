@@ -82,17 +82,145 @@ export interface StudyPlan {
   estimatedDuration: number;
   reasoning: string;
   curriculum?: CurriculumProgress;
+  revisionTotalDue?: number;
+  revisionDeferred?: number;
+}
+
+export type MistakeTag =
+  | "wrong-approach"
+  | "edge-case"
+  | "off-by-one"
+  | "pattern-recall";
+
+export const MISTAKE_TAG_OPTIONS: { tag: MistakeTag; label: string }[] = [
+  { tag: "wrong-approach", label: "Wrong approach" },
+  { tag: "edge-case", label: "Edge case" },
+  { tag: "off-by-one", label: "Off-by-one" },
+  { tag: "pattern-recall", label: "Couldn't recall pattern" },
+];
+
+export interface ProblemNote {
+  path: string;
+  title: string;
+  content: string;
+  contentPlain: string;
+  matchedBy: "frontmatter" | "filename" | null;
+  updatedAt: string;
+}
+
+export interface WarmupQuestions {
+  topicId: string;
+  topicName: string;
+  questions: string[];
+  source: "notes" | "generic" | "fallback";
+}
+
+export interface RecallGradeResult {
+  topicId: string;
+  quality: number;
+  nextRevisionAt: string | null;
+  intervalDays: number;
+}
+
+export interface ScoreExplanation {
+  topicId: string;
+  topicName: string;
+  total: number;
+  recommendation: string;
+  breakdown: {
+    urgency: number;
+    weakness: number;
+    confidence: number;
+    prerequisiteReady: number;
+    recency: number;
+    difficulty: number;
+  };
+  weights: string;
+  explanation: string[];
+}
+
+export interface WeaknessEvidence {
+  topicId: string;
+  topicName: string;
+  analysis: {
+    score: number;
+    isWeak: boolean;
+    signals: { name: string; weight: number; value: number; description: string }[];
+    recommendation: string;
+  };
+  evidence: {
+    mistakeTagCounts: Record<string, number>;
+    noteCoverage: { solved: number; withNotes: number };
+    slowProblems: { id: string; name: string; timeTaken: number | null }[];
+    lowProductivitySessions: { date: string; productivityScore: number; duration: number }[];
+  };
+}
+
+export interface SyncConflict {
+  id: string;
+  entityType: "topic" | "problem";
+  entityId: string;
+  entityName: string | null;
+  localValue: Record<string, unknown>;
+  remoteValue: Record<string, unknown>;
+  detectedAt: string;
+}
+
+export interface SyncStatusInfo {
+  lastSyncAt: string | null;
+  pendingTopics: number;
+  pendingProblems: number;
+  unresolvedConflicts: number;
+}
+
+export interface ServiceHealth {
+  status: "ok" | "degraded" | "down";
+  message?: string;
+  latencyMs?: number;
+}
+
+export interface DayDetail {
+  date: string;
+  sessions: {
+    id: string;
+    topicId: string | null;
+    topicName: string | null;
+    problemsSolved: number;
+    studyDuration: number | null;
+    productivityScore: number | null;
+  }[];
+  problems: {
+    problemId: string;
+    problemName: string;
+    timeTaken: number | null;
+    mistakeTag: string | null;
+  }[];
+}
+
+export interface HealthInfo {
+  status: "ok" | "degraded" | "down";
+  timestamp: string;
+  services?: {
+    api: ServiceHealth;
+    sqlite: ServiceHealth;
+    redis: ServiceHealth;
+    notion: ServiceHealth;
+    ollama: ServiceHealth;
+  };
+  sync?: SyncStatusInfo;
 }
 
 export interface WeeklySummary {
   weekStart: string;
   weekEnd: string;
   sessionsCount: number;
+  sessionsThisMonth?: number;
   problemsSolved: number;
   totalStudyMinutes: number;
   averageProductivity: number;
   currentStreakDays: number;
   longestStreakDays: number;
+  weakTopics?: { id: string; name: string; score: number }[];
   masteredTopics: number;
   inProgressTopics: number;
   velocityTrend: "up" | "down" | "stable";
@@ -125,6 +253,8 @@ export interface WeaknessTrendPoint {
 export interface SessionResult {
   session: Session;
   topicId: string;
+  problemId?: string;
+  attemptId?: string;
   confidence: number;
   isWeakArea: boolean;
   summary: string;

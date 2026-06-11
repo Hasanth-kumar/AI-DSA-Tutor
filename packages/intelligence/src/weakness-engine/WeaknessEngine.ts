@@ -1,6 +1,9 @@
 import type { TopicState, WeaknessAnalysis, WeaknessReport } from "../types.js";
 import {
   confidenceSignal,
+  MISTAKE_TAG_ADVICE,
+  mistakeTagSignal,
+  noteCoverageSignal,
   revisionFailureSignal,
   retryRateSignal,
   sessionProductivitySignal,
@@ -16,6 +19,8 @@ export class WeaknessEngine {
       timeSignal(topic),
       sessionProductivitySignal(topic),
       revisionFailureSignal(topic),
+      mistakeTagSignal(topic),
+      noteCoverageSignal(topic),
     ];
 
     const score = signals.reduce((acc, s) => acc + s.weight * s.value, 0);
@@ -26,7 +31,7 @@ export class WeaknessEngine {
       score,
       isWeak,
       signals: signals.filter((s) => s.value > 0),
-      recommendation: this.buildRecommendation(signals, isWeak),
+      recommendation: this.buildRecommendation(signals, isWeak, topic),
     };
   }
 
@@ -45,10 +50,17 @@ export class WeaknessEngine {
   private buildRecommendation(
     signals: ReturnType<typeof confidenceSignal>[],
     isWeak: boolean,
+    topic: TopicState,
   ): string {
-    if (!isWeak) return "Continue current pace; no major weakness detected.";
+    const mistakeAdvice = this.mistakeTagRecommendation(topic);
+    if (!isWeak) {
+      return mistakeAdvice ?? "Continue current pace; no major weakness detected.";
+    }
 
     const active = signals.filter((s) => s.value > 0).map((s) => s.name);
+    if (mistakeAdvice && active.includes("repeated_mistakes")) {
+      return mistakeAdvice;
+    }
     if (active.includes("low_confidence")) {
       return "Rebuild fundamentals: review concepts, then solve easy problems.";
     }
@@ -59,6 +71,16 @@ export class WeaknessEngine {
       return "Practice timed easy/medium problems to build speed.";
     }
     return "Schedule extra revision sessions and track productivity per session.";
+  }
+
+  /** Targeted advice when one mistake tag repeats in this topic (e.g. off-by-one ×3). */
+  private mistakeTagRecommendation(topic: TopicState): string | null {
+    const counts = topic.mistakeTagCounts ?? {};
+    const dominant = Object.entries(counts)
+      .filter(([tag, n]) => n >= 2 && MISTAKE_TAG_ADVICE[tag])
+      .sort((a, b) => b[1] - a[1])[0];
+    if (!dominant) return null;
+    return `Repeated "${dominant[0]}" mistakes — ${MISTAKE_TAG_ADVICE[dominant[0]]} in ${topic.name}.`;
   }
 
   private summarize(

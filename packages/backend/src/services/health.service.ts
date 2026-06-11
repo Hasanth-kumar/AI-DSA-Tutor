@@ -76,12 +76,20 @@ async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
   const services = { api, sqlite, redis: redisResult, notion: notionResult, ollama: llmHealth };
   const status = aggregateStatus(Object.values(services));
 
+  let sync: HealthResponse["sync"];
+  try {
+    sync = ctx.notionSync.getSyncHealth();
+  } catch {
+    sync = undefined;
+  }
+
   return {
     status,
     timestamp: new Date().toISOString(),
     version: "0.1.0",
     services,
     counts,
+    sync,
   };
 }
 

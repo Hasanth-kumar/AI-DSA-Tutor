@@ -5,6 +5,8 @@ interface Props {
   dailyCounts: Map<string, number>;
   source: "leetcode" | "sessions";
   leetcodeUsername?: string;
+  /** Heatmap drill-down (5.4): click an active day to see its sessions/problems. */
+  onDayClick?: (dateKey: string) => void;
 }
 
 const WEEKS = 26;
@@ -64,7 +66,7 @@ function formatCellDetail(key: string, count: number): string {
   return `${formatted} · ${count} problem${count !== 1 ? "s" : ""} solved`;
 }
 
-export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername }: Props) {
+export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayClick }: Props) {
   const [hovered, setHovered] = useState<{ key: string; count: number } | null>(null);
 
   const {
@@ -121,6 +123,12 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername }: Props
   const selectCell = (cell: { key: string; count: number }) => {
     if (cell.count <= 0) return;
     setHovered({ key: cell.key, count: cell.count });
+  };
+
+  const clickCell = (cell: { key: string; count: number }) => {
+    if (cell.count <= 0) return;
+    selectCell(cell);
+    onDayClick?.(cell.key);
   };
 
   return (
@@ -184,7 +192,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername }: Props
                   aria-label={isActive ? formatCellDetail(cell.key, cell.count) : undefined}
                   onMouseEnter={isActive ? () => selectCell(cell) : undefined}
                   onMouseLeave={isActive ? () => setHovered(null) : undefined}
-                  onClick={isActive ? () => selectCell(cell) : undefined}
+                  onClick={isActive ? () => clickCell(cell) : undefined}
                 >
                   {isActive && (
                     <span className="heatmap-cell-tooltip" aria-hidden="true">

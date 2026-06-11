@@ -19,7 +19,7 @@ type DatabaseQueryFilter = Parameters<Client["databases"]["query"]>[0]["filter"]
 export class NotionClient {
   private readonly client: Client;
   private readonly requestQueue: PQueue;
-  private readonly titlePropertyByDb = new Map<string, string>();
+  private readonly propertiesByDb = new Map<string, Record<string, { type?: string }>>();
 
   constructor(private readonly config: NotionConfig) {
     this.client = new Client({ auth: config.token });
@@ -104,15 +104,23 @@ export class NotionClient {
   }
 
   async updateProblem(pageId: string, update: ProblemNotionUpdate): Promise<void> {
+    // The user's Problems DB doesn't necessarily match our assumed schema
+    // (e.g. Status may be a `status` property rather than `select`, and
+    // "Attempts" may not exist) — adapt to whatever is actually there and
+    // skip properties the database doesn't have.
+    const schema = await this.getDatabaseProperties(this.config.problemsDbId);
     const properties: Record<string, unknown> = {};
 
-    if (update.status != null) {
-      properties.Status = { select: { name: update.status } };
+    if (update.status != null && schema.Status?.type) {
+      properties.Status =
+        schema.Status.type === "status"
+          ? { status: { name: update.status } }
+          : { select: { name: update.status } };
     }
-    if (update.attempts != null) {
+    if (update.attempts != null && schema.Attempts?.type === "number") {
       properties.Attempts = { number: update.attempts };
     }
-    if (update.timeTaken != null) {
+    if (update.timeTaken != null && schema["Time Taken"]?.type === "number") {
       properties["Time Taken"] = { number: update.timeTaken };
     }
 
@@ -162,23 +170,54 @@ export class NotionClient {
     return response.id;
   }
 
-  private async getTitlePropertyName(databaseId: string): Promise<string> {
-    const cached = this.titlePropertyByDb.get(databaseId);
+  /** Append a quick-capture note as a paragraph block at the end of a topic page. */
+  async appendTopicNote(pageId: string, text: string): Promise<void> {
+    await this.requestQueue.add(() =>
+      this.client.blocks.children.append({
+        block_id: pageId,
+        children: [
+          {
+            object: "block",
+            type: "paragraph",
+            paragraph: {
+              rich_text: [
+                {
+                  type: "text",
+                  text: {
+                    content: `📌 ${new Date().toISOString().slice(0, 10)} — ${text}`,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+  }
+
+  private async getDatabaseProperties(
+    databaseId: string,
+  ): Promise<Record<string, { type?: string }>> {
+    const cached = this.propertiesByDb.get(databaseId);
     if (cached) return cached;
 
     const db = (await this.requestQueue.add(() =>
       this.client.databases.retrieve({ database_id: databaseId }),
     )) as { properties?: Record<string, { type?: string }> };
-    const entry = Object.entries(db.properties ?? {}).find(
+    const properties = db.properties ?? {};
+    this.propertiesByDb.set(databaseId, properties);
+    return properties;
+  }
+
+  private async getTitlePropertyName(databaseId: string): Promise<string> {
+    const properties = await this.getDatabaseProperties(databaseId);
+    const entry = Object.entries(properties).find(
       ([, prop]) => prop?.type === "title",
     );
     if (!entry) {
       throw new Error(`No title property found in Notion database ${databaseId}`);
     }
-
-    const [name] = entry;
-    this.titlePropertyByDb.set(databaseId, name);
-    return name;
+    return entry[0];
   }
 }
 

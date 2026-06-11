@@ -12,6 +12,8 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "db:seed": "pnpm --filter @dsa/integrations db:seed",
+    "study": "bash infrastructure/scripts/study.sh",
+    "study:stop": "bash infrastructure/scripts/study-stop.sh",
     "docker:up": "docker compose -f infrastructure/docker-compose.yml up -d",
     "docker:down": "docker compose -f infrastructure/docker-compose.yml down",
     "setup": "bash infrastructure/scripts/setup.sh"

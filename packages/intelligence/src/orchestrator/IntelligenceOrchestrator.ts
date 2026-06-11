@@ -83,8 +83,26 @@ export class IntelligenceOrchestrator {
     return this.revision.getRevisionQueue(topics);
   }
 
+  /** Catch-up compression for the revision backlog (see RevisionEngine.compressQueue). */
+  compressRevisionQueue(
+    queue: TopicState[],
+    options?: { maxPerDay?: number; overdueTolerance?: number },
+    now?: Date,
+  ): ReturnType<RevisionEngine["compressQueue"]> {
+    return this.revision.compressQueue(queue, options, now);
+  }
+
+  /** Apply an explicit SM-2 quality (0–5) from a recall warm-up grade. */
+  applyRecallQuality(topic: TopicState, quality: number) {
+    return this.revision.applyQuality(topic, quality);
+  }
+
   getWeaknessReport(topics: TopicState[]) {
     return this.weakness.detectAllWeaknesses(topics);
+  }
+
+  analyzeTopicWeakness(topic: TopicState) {
+    return this.weakness.analyzeWeakness(topic);
   }
 
   getDifficultyRecommendation(topic: TopicState) {

@@ -28,6 +28,10 @@ const envSchema = z.object({
   NOTION_SESSIONS_DB_ID: z.string().optional(),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   LLM_PROVIDER: z.enum(["ollama", "openrouter"]).optional(),
+  /** Provider override for coaching/hint/debrief paths (defaults to LLM_PROVIDER). */
+  COACH_LLM_PROVIDER: z.enum(["ollama", "openrouter"]).optional(),
+  /** Model override for the coach provider (defaults to that provider's model). */
+  COACH_LLM_MODEL: z.string().optional(),
   OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
   OLLAMA_MODEL: z.string().default("qwen2.5-coder:3b"),
   OPENROUTER_API_KEY: z.string().optional(),
@@ -45,7 +49,13 @@ const envSchema = z.object({
   WHATSAPP_ALLOWED_RECIPIENTS: z.string().optional(),
   /** Optional shared secret for POST /api/notifications/* (n8n cron) */
   WHATSAPP_NOTIFY_SECRET: z.string().optional(),
+  /** Meta app secret — enables X-Hub-Signature-256 verification on webhook POSTs */
+  WHATSAPP_APP_SECRET: z.string().optional(),
   SQLITE_PATH: z.string().default("./data/sqlite/dsa.db"),
+  /** Absolute or repo-relative path to the DSA folder of an Obsidian vault */
+  OBSIDIAN_VAULT_PATH: z.string().optional(),
+  BACKUP_DIR: z.string().default("./data/backups"),
+  BACKUP_KEEP: z.coerce.number().default(14),
   WEIGHT_URGENCY: z.coerce.number().default(0.3),
   WEIGHT_WEAKNESS: z.coerce.number().default(0.25),
   WEIGHT_CONFIDENCE: z.coerce.number().default(0.2),
@@ -55,9 +65,6 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .default("true")
     .transform((v) => v === "true"),
-  DAILY_PLAN_CRON: z.string().default("0 7 * * *"),
-  REVISION_CHECK_CRON: z.string().default("0 21 * * *"),
-  NOTION_SYNC_CRON: z.string().default("*/30 * * * *"),
   WEEKLY_DIGEST_CRON: z.string().default("0 20 * * 0"),
   SCHEDULER_TIMEZONE: z.string().default("UTC"),
   LEETCODE_USERNAME: z.string().optional(),
@@ -88,6 +95,11 @@ export type AppConfig = {
       siteName: string;
     };
   };
+  /** Coaching/hint/debrief LLM — may differ from the general provider (3.3). */
+  coachLlm: {
+    provider: "ollama" | "openrouter";
+    model: string;
+  };
   whatsapp: {
     phoneNumberId?: string;
     accessToken?: string;
@@ -96,8 +108,11 @@ export type AppConfig = {
     defaultRecipient?: string;
     allowedRecipients: string[];
     notifySecret?: string;
+    appSecret?: string;
   };
   sqlite: { path: string };
+  obsidian: { vaultPath?: string };
+  backup: { dir: string; keep: number };
   intelligenceWeights: {
     urgency: number;
     weakness: number;
@@ -107,9 +122,6 @@ export type AppConfig = {
   };
   schedulers: {
     enabled: boolean;
-    dailyPlanCron: string;
-    revisionCheckCron: string;
-    notionSyncCron: string;
     weeklyDigestCron: string;
     timezone: string;
   };
@@ -162,6 +174,7 @@ export function loadConfig(envPath?: string): AppConfig {
         siteName: env.OPENROUTER_SITE_NAME,
       },
     },
+    coachLlm: resolveCoachLlm(env),
     whatsapp: {
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
       accessToken: env.WHATSAPP_ACCESS_TOKEN,
@@ -172,8 +185,22 @@ export function loadConfig(envPath?: string): AppConfig {
         ? env.WHATSAPP_ALLOWED_RECIPIENTS.split(",").map((s) => s.trim()).filter(Boolean)
         : [],
       notifySecret: env.WHATSAPP_NOTIFY_SECRET,
+      appSecret: env.WHATSAPP_APP_SECRET,
     },
     sqlite: { path: sqlitePath },
+    obsidian: {
+      vaultPath: env.OBSIDIAN_VAULT_PATH
+        ? isAbsolute(env.OBSIDIAN_VAULT_PATH)
+          ? env.OBSIDIAN_VAULT_PATH
+          : resolve(repoRoot, env.OBSIDIAN_VAULT_PATH)
+        : undefined,
+    },
+    backup: {
+      dir: isAbsolute(env.BACKUP_DIR)
+        ? env.BACKUP_DIR
+        : resolve(repoRoot, env.BACKUP_DIR),
+      keep: env.BACKUP_KEEP,
+    },
     intelligenceWeights: {
       urgency: env.WEIGHT_URGENCY,
       weakness: env.WEIGHT_WEAKNESS,
@@ -183,9 +210,6 @@ export function loadConfig(envPath?: string): AppConfig {
     },
     schedulers: {
       enabled: env.ENABLE_SCHEDULERS,
-      dailyPlanCron: env.DAILY_PLAN_CRON,
-      revisionCheckCron: env.REVISION_CHECK_CRON,
-      notionSyncCron: env.NOTION_SYNC_CRON,
       weeklyDigestCron: env.WEEKLY_DIGEST_CRON,
       timezone: env.SCHEDULER_TIMEZONE,
     },
@@ -198,6 +222,23 @@ export function loadConfig(envPath?: string): AppConfig {
   };
 
   return cached;
+}
+
+type ParsedEnv = z.infer<typeof envSchema>;
+
+/**
+ * The coach can use a stronger (cloud) model than the general LLM:
+ * COACH_LLM_PROVIDER / COACH_LLM_MODEL override, falling back to the
+ * general provider selection.
+ */
+function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
+  const generalProvider =
+    env.LLM_PROVIDER ?? (env.OPENROUTER_API_KEY ? "openrouter" : "ollama");
+  const provider = env.COACH_LLM_PROVIDER ?? generalProvider;
+  const model =
+    env.COACH_LLM_MODEL ??
+    (provider === "openrouter" ? env.OPENROUTER_MODEL : env.OLLAMA_MODEL);
+  return { provider, model };
 }
 
 export function resetConfigCache(): void {

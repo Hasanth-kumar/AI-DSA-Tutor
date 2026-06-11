@@ -1,8 +1,15 @@
-import type { ChatHistoryMessage, ChatLearningContext, LLMService } from "@dsa/integrations";
+import {
+  stripWikiLinks,
+  type ChatHistoryMessage,
+  type ChatLearningContext,
+  type LLMService,
+} from "@dsa/integrations";
 import type { IntelligenceOrchestrator } from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
-import { createAppLLMService } from "../llm.factory.js";
+import { createCoachLLMService } from "../llm.factory.js";
+import type { AttemptRepository } from "../repositories/AttemptRepository.js";
 import type { ChatRepository } from "../repositories/ChatRepository.js";
+import type { NoteRepository } from "../repositories/NoteRepository.js";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 import type { AnalyticsService } from "./AnalyticsService.js";
@@ -52,8 +59,10 @@ export class ChatService {
     private readonly topicRepo: TopicRepository,
     private readonly problemRepo: ProblemRepository,
     llm?: LLMService,
+    private readonly attemptRepo?: AttemptRepository,
+    private readonly noteRepo?: NoteRepository,
   ) {
-    this.llm = llm ?? createAppLLMService(config);
+    this.llm = llm ?? createCoachLLMService(config);
   }
 
   getThread(threadId: string): ChatThreadDto | null {
@@ -106,7 +115,7 @@ export class ChatService {
       learningContext,
       history,
       message,
-      { directMode: input.directMode },
+      { directMode: input.directMode, anchored: Boolean(input.problemId) },
     );
 
     const userMessage = this.chatRepo.addMessage(activeThread.id, "user", message);
@@ -183,6 +192,24 @@ export class ChatService {
     const topic = this.topicRepo.findById(problem.topicId);
     if (!topic) return null;
 
+    const solveHistory = this.attemptRepo
+      ?.findByProblemId(problemId, 5)
+      .map((a) => ({
+        solvedAt: new Date(a.solvedAt).toISOString(),
+        timeTakenMinutes: a.timeTaken,
+        mistakeTag: a.mistakeTag,
+      }));
+
+    const weakness = this.intelligence.analyzeTopicWeakness(topic);
+    const weaknessSignals = weakness.signals
+      .filter((s) => s.value > 0)
+      .map((s) => s.description);
+
+    const noteRow = this.noteRepo?.findByProblemId(problemId);
+    const note = noteRow?.content
+      ? stripWikiLinks(noteRow.content).trim().slice(0, 4000)
+      : undefined;
+
     return {
       problem: {
         name: problem.name,
@@ -191,6 +218,10 @@ export class ChatService {
         attempts: problem.attempts ?? 0,
         status: problem.status ?? "Unsolved",
         confidence: topic.confidence,
+        solveHistory: solveHistory && solveHistory.length > 0 ? solveHistory : undefined,
+        topicMistakeTags: topic.mistakeTagCounts,
+        weaknessSignals: weaknessSignals.length > 0 ? weaknessSignals : undefined,
+        note: note || undefined,
       },
     };
   }

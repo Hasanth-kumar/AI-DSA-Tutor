@@ -5,6 +5,14 @@ import { WhatsAppNotificationService } from "../services/WhatsAppNotificationSer
 
 const QUEUE_NAME = "dsa-scheduler";
 
+/**
+ * Usage is on-demand, so unsolicited pushes were cut (4.1): the 7 AM daily
+ * plan, 9 PM revision check, and 30-minute Notion sync jobs are gone. The
+ * Sunday weekly digest is the one push that fits intermittent use. Notion now
+ * syncs on `pnpm study` startup, after each log, and via POST /api/sync.
+ */
+const REMOVED_JOBS = ["daily-plan", "revision-check", "notion-sync"];
+
 export interface SchedulerHandles {
   close: () => Promise<void>;
 }
@@ -26,43 +34,6 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
     QUEUE_NAME,
     async (job) => {
       switch (job.name) {
-        case "daily-plan": {
-          const plan = await ctx.planService.generateTodaysPlan();
-          let whatsapp: { sent: boolean; reason?: string } = { sent: false };
-          if (whatsappNotify.isConfigured()) {
-            whatsapp = await whatsappNotify.sendDailyPlan(undefined, plan);
-          }
-          return {
-            primaryTopic: plan.primaryTopic.name,
-            revisionCount: plan.revisionTopics.length,
-            estimatedDuration: plan.estimatedDuration,
-            whatsapp,
-          };
-        }
-        case "revision-check": {
-          const topics = ctx.topicRepo.findAll();
-          const revisionQueue = ctx.intelligence.getRevisionQueue(topics);
-          const dueSoon = revisionQueue.filter((t) => {
-            if (!t.nextRevisionAt) return false;
-            const hoursUntil = (t.nextRevisionAt.getTime() - Date.now()) / 3_600_000;
-            return hoursUntil <= 24;
-          });
-          let whatsapp: { sent: boolean; reason?: string } = { sent: false };
-          if (whatsappNotify.isConfigured()) {
-            whatsapp = await whatsappNotify.sendRevisionCheck(undefined, dueSoon);
-          }
-          return {
-            dueCount: revisionQueue.length,
-            topics: revisionQueue.map((t) => t.name),
-            whatsapp,
-          };
-        }
-        case "notion-sync": {
-          if (!ctx.notionSync.isConfigured()) {
-            return { skipped: true, reason: "Notion not configured" };
-          }
-          return await ctx.notionSync.pullFromNotion();
-        }
         case "weekly-digest": {
           const summary = ctx.analyticsService.getWeeklySummary();
           let whatsapp: { sent: boolean; reason?: string } = { sent: false };
@@ -72,7 +43,6 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
           return {
             sessionsCount: summary.sessionsCount,
             problemsSolved: summary.problemsSolved,
-            currentStreakDays: summary.currentStreakDays,
             whatsapp,
           };
         }
@@ -90,33 +60,6 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
   const tz = config.schedulers.timezone;
 
   void queue.add(
-    "daily-plan",
-    {},
-    {
-      repeat: { pattern: config.schedulers.dailyPlanCron, tz },
-      jobId: "daily-plan-repeat",
-    },
-  );
-
-  void queue.add(
-    "revision-check",
-    {},
-    {
-      repeat: { pattern: config.schedulers.revisionCheckCron, tz },
-      jobId: "revision-check-repeat",
-    },
-  );
-
-  void queue.add(
-    "notion-sync",
-    {},
-    {
-      repeat: { pattern: config.schedulers.notionSyncCron, tz },
-      jobId: "notion-sync-repeat",
-    },
-  );
-
-  void queue.add(
     "weekly-digest",
     {},
     {
@@ -124,6 +67,20 @@ export function startSchedulers(ctx: AppContext): SchedulerHandles {
       jobId: "weekly-digest-repeat",
     },
   );
+
+  // Drop repeatable jobs left behind by earlier versions.
+  void (async () => {
+    try {
+      const repeatables = await queue.getRepeatableJobs();
+      for (const job of repeatables) {
+        if (job.name && REMOVED_JOBS.includes(job.name)) {
+          await queue.removeRepeatableByKey(job.key);
+        }
+      }
+    } catch {
+      // Redis may be down — nothing to clean.
+    }
+  })();
 
   return {
     async close() {

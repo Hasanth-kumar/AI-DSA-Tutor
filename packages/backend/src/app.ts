@@ -13,6 +13,10 @@ import { problemsRoutes } from "./routes/problems.routes.js";
 import { coachingRoutes } from "./routes/coaching.routes.js";
 import { integrationsRoutes } from "./routes/integrations.routes.js";
 import { syncRoutes } from "./routes/sync.routes.js";
+import { notesRoutes } from "./routes/notes.routes.js";
+import { warmupRoutes } from "./routes/warmup.routes.js";
+import { exportRoutes } from "./routes/export.routes.js";
+import { eventsRoutes } from "./routes/events.routes.js";
 import {
   whatsappNotificationRoutes,
   whatsappWebhookRoutes,
@@ -59,13 +63,29 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
         dashboard: "GET /api/analytics/dashboard?weeks=8",
       },
       explainScore: "GET /api/topics/:id/score/explain",
+      weaknessEvidence: "GET /api/topics/:id/weakness",
       coaching: {
         debrief: "GET /api/coaching/debrief",
         debriefBySession: "GET /api/coaching/debrief/:sessionId",
-        hint: "GET /api/coaching/hint?name=<problem>",
+        hint: "GET /api/coaching/hint?name=<problem>&level=<1-4>",
         chat: "POST /api/coaching/chat",
         chatThread: "GET /api/coaching/chat/:threadId",
       },
+      notes: {
+        problemNote: "GET /api/problems/:id/note",
+        template: "POST /api/problems/:id/note/template",
+        scan: "POST /api/notes/scan",
+      },
+      warmup: {
+        questions: "GET /api/warmup?topicId=<id>",
+        grade: "POST /api/warmup/grade",
+      },
+      attempts: "PATCH /api/attempts/:id/mistake",
+      export: "GET /api/export",
+      backup: "POST /api/backup",
+      events: "GET /api/events (SSE)",
+      syncStatus: "GET /api/sync/status",
+      syncConflicts: "GET /api/sync/conflicts",
       integrations: {
         leetcodeStats: "GET /api/integrations/leetcode/stats",
         leetcodeActivity: "GET /api/integrations/leetcode/activity",
@@ -99,6 +119,10 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       await coachingRoutes(instance, ctx);
       await integrationsRoutes(instance, ctx);
       await syncRoutes(instance, ctx);
+      await notesRoutes(instance, ctx);
+      await warmupRoutes(instance, ctx);
+      await exportRoutes(instance, ctx);
+      await eventsRoutes(instance, ctx);
       await whatsappNotificationRoutes(instance, ctx);
     },
     { prefix: "/api" },

@@ -7,6 +7,8 @@ import { CurriculumPanel } from "../components/CurriculumPanel.js";
 import { TodayPlan } from "../components/TodayPlan.js";
 import { VelocityChart } from "../components/VelocityChart.js";
 import { WeaknessChart } from "../components/WeaknessChart.js";
+import { SyncConflictsPanel } from "../components/SyncConflictsPanel.js";
+import { WeaknessDrilldown } from "../components/WeaknessDrilldown.js";
 import { usePolling } from "../hooks/usePolling.js";
 import type {
   DifficultyAnalysis,
@@ -82,6 +84,8 @@ export function OverviewPage() {
       <div className="grid" style={{ gap: "1.25rem" }}>
         <StatsCards summary={summary} />
 
+        <SyncConflictsPanel />
+
         <div className="grid grid-2">
           <TodayPlan plan={plan} />
           <CurriculumPanel onChanged={refreshPlanAndDashboard} />
@@ -90,6 +94,7 @@ export function OverviewPage() {
         <div className="card">
           <h3>Weakness trend</h3>
           <WeaknessChart data={weakness} />
+          <WeaknessDrilldown weakTopics={summary?.weakTopics ?? []} />
         </div>
 
         <div className="grid grid-2">

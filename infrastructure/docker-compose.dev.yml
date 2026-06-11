@@ -13,5 +13,7 @@ services:
       - "11434:11434"
 
   n8n:
+    profiles:
+      - n8n
     ports:
       - "5678:5678"

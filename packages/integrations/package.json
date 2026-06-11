@@ -19,11 +19,12 @@
     "db:seed": "tsx src/scripts/from-notion.ts"
   },
   "dependencies": {
-    "@notionhq/client": "^2.2.15",
     "@dsa/database": "workspace:*",
     "@dsa/intelligence": "workspace:*",
     "@dsa/shared": "workspace:*",
+    "@notionhq/client": "^2.2.15",
     "better-sqlite3": "^11.8.1",
+    "chokidar": "^4.0.3",
     "drizzle-orm": "^0.39.3",
     "p-queue": "^8.1.0"
   },

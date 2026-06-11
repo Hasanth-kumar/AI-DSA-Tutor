@@ -9,6 +9,7 @@ export type WhatsAppCommand =
       studyDuration: number;
       productivityScore: number;
     }
+  | { type: "note"; text: string }
   | { type: "help" }
   | { type: "unknown"; raw: string };
 
@@ -41,6 +42,11 @@ export function parseWhatsAppCommand(text: string): WhatsAppCommand {
   const hintMatch = raw.match(/^(?:\/)?hint\s+(.+)$/i);
   if (hintMatch) {
     return { type: "hint", problemName: hintMatch[1].trim() };
+  }
+
+  const noteMatch = raw.match(/^(?:\/)?note\s+([\s\S]+)$/i);
+  if (noteMatch) {
+    return { type: "note", text: noteMatch[1].trim() };
   }
 
   const doneMatch = raw.match(
@@ -84,6 +90,8 @@ done <problem> <minutes> <score>
   Example: done Coin Change 45 80
 hint <problem name>
   Example: hint Coin Change
+note <text> — quick-capture an insight to your current topic
+  Example: note two-pointer needs sorted input
 debrief — LLM session debrief for your latest session
 
 Reply with any command (no slash required).`;

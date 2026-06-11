@@ -2,18 +2,27 @@ import type {
   AnalyticsDashboard,
   ChatThread,
   CurriculumState,
+  DayDetail,
   DifficultyAnalysis,
+  HealthInfo,
   LeetCodeUserStats,
   LeetCodeActivity,
   MasteryVelocityPoint,
   PriorityScore,
   Problem,
+  ProblemNote,
+  RecallGradeResult,
+  ScoreExplanation,
   SendChatResult,
   Session,
   SessionResult,
   StreakInfo,
   StudyPlan,
+  SyncConflict,
+  SyncStatusInfo,
   Topic,
+  WarmupQuestions,
+  WeaknessEvidence,
   WeaknessTrendPoint,
   WeeklySummary,
 } from "../types/api.js";
@@ -58,6 +67,9 @@ function resolveApiBase(): string {
 
 const BASE = resolveApiBase();
 
+/** Absolute API origin — used by the SSE EventSource connection. */
+export const API_BASE = BASE;
+
 function htmlInsteadOfJsonMessage(path: string): string {
   const target = `${BASE}${path}`;
   return (
@@ -83,7 +95,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
+      // Fastify rejects an empty body when Content-Type: application/json is
+      // set, so only declare JSON when something is actually sent.
+      ...(init?.body != null ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
     ...init,
@@ -169,6 +183,9 @@ export const api = {
       request<{ sessions: Session[]; count: number }>(`/api/session?limit=${limit}`),
     ),
 
+  getDayDetail: (date: string) =>
+    request<DayDetail>(`/api/session/day/${date}`),
+
   getSessionActivity: (days = 182) =>
     cachedFetch(`activity:${days}`, CACHE_TTL.activity, () =>
       request<{ dailyCounts: Record<string, number>; days: number }>(
@@ -179,10 +196,11 @@ export const api = {
   logSession: (body: {
     topicId: string;
     problemId?: string;
-    problemsSolved: number;
+    problemsSolved?: number;
     studyDuration: number;
-    productivityScore: number;
+    productivityScore?: number;
     pushToNotion?: boolean;
+    mistakeTag?: string | null;
   }) =>
     request<SessionResult>("/api/session", {
       method: "POST",
@@ -196,6 +214,86 @@ export const api = {
       invalidateCache("dashboard");
       return result;
     }),
+
+  setMistakeTag: (attemptId: string, mistakeTag: string | null) =>
+    request<{ attempt: { id: string; mistakeTag: string | null } }>(
+      `/api/attempts/${attemptId}/mistake`,
+      { method: "PATCH", body: JSON.stringify({ mistakeTag }) },
+    ).then((result) => {
+      invalidateCache("topics");
+      invalidateCache("dashboard");
+      return result;
+    }),
+
+  /** Returns null when no note matched this problem (404). */
+  async getProblemNote(problemId: string): Promise<ProblemNote | null> {
+    const path = `/api/problems/${problemId}/note`;
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `Request failed: ${res.status}`);
+    }
+    const data = await parseJsonBody<{ note: ProblemNote }>(res, path);
+    return data.note;
+  },
+
+  createNoteTemplate: (problemId: string) =>
+    request<{ created: boolean; path?: string }>(
+      `/api/problems/${problemId}/note/template`,
+      { method: "POST" },
+    ),
+
+  getWarmupQuestions: (topicId: string) =>
+    request<WarmupQuestions>(`/api/warmup?topicId=${encodeURIComponent(topicId)}`),
+
+  gradeWarmup: (topicId: string, quality: number) =>
+    request<RecallGradeResult>("/api/warmup/grade", {
+      method: "POST",
+      body: JSON.stringify({ topicId, quality }),
+    }).then((result) => {
+      invalidateCache("topics");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      return result;
+    }),
+
+  getScoreExplanation: (topicId: string) =>
+    request<ScoreExplanation>(`/api/topics/${topicId}/score/explain`),
+
+  getWeaknessEvidence: (topicId: string) =>
+    request<WeaknessEvidence>(`/api/topics/${topicId}/weakness`),
+
+  getRevisionQueue: () =>
+    request<{ queue: Topic[]; count: number }>("/api/revision"),
+
+  triggerSync: () =>
+    request<{ topics: number; problems: number; sessions: number; syncedAt: string }>(
+      "/api/sync",
+      { method: "POST" },
+    ).then((result) => {
+      invalidateCache();
+      return result;
+    }),
+
+  getSyncStatus: () => request<SyncStatusInfo>("/api/sync/status"),
+
+  getSyncConflicts: () =>
+    request<{ conflicts: SyncConflict[]; count: number }>("/api/sync/conflicts"),
+
+  resolveSyncConflict: (id: string, winner: "local" | "remote") =>
+    request<{ resolved: boolean; winner: string }>(
+      `/api/sync/conflicts/${id}/resolve`,
+      { method: "POST", body: JSON.stringify({ winner }) },
+    ).then((result) => {
+      invalidateCache();
+      return result;
+    }),
+
+  getFullHealth: () =>
+    cachedFetch("health:full", 20_000, () => request<HealthInfo>("/health")),
 
   getDashboard: (weeks = 8) =>
     cachedFetch(`dashboard:${weeks}`, 25_000, () =>

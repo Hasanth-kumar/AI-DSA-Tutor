@@ -50,6 +50,7 @@ export async function problemsRoutes(
     }
 
     await ctx.planService.invalidateTodaysPlan();
+    ctx.events.publish("problem");
     const problem = ctx.problemRepo.findById(request.params.id);
     return reply.send(serializeForJson({ problem }));
   });

@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { WhatsAppWebhookPayload } from "@dsa/integrations";
 import type { AppContext } from "../context.js";
@@ -13,11 +14,39 @@ function checkNotifySecret(
   return header === secret;
 }
 
+/** Verify Meta's X-Hub-Signature-256 HMAC over the raw body (5.3). */
+function verifyMetaSignature(
+  rawBody: Buffer,
+  signatureHeader: string | undefined,
+  appSecret: string,
+): boolean {
+  if (!signatureHeader?.startsWith("sha256=")) return false;
+  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  const received = signatureHeader.slice("sha256=".length);
+  if (received.length !== expected.length) return false;
+  return timingSafeEqual(Buffer.from(received, "hex"), Buffer.from(expected, "hex"));
+}
+
 export async function whatsappWebhookRoutes(
   app: FastifyInstance,
   ctx: AppContext,
 ): Promise<void> {
   const commands = new WhatsAppCommandService(ctx.config, ctx);
+
+  // Scoped parser: keep the raw body so the HMAC can be checked before parsing.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (request, body, done) => {
+      (request as FastifyRequest & { rawBodyBuffer?: Buffer }).rawBodyBuffer =
+        body as Buffer;
+      try {
+        done(null, JSON.parse((body as Buffer).toString("utf-8")));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
 
   app.get("/whatsapp", async (request, reply) => {
     const query = request.query as {
@@ -39,6 +68,19 @@ export async function whatsappWebhookRoutes(
   });
 
   app.post("/whatsapp", async (request, reply) => {
+    const appSecret = ctx.config.whatsapp.appSecret;
+    if (appSecret) {
+      const rawBody = (request as FastifyRequest & { rawBodyBuffer?: Buffer })
+        .rawBodyBuffer;
+      const signature = request.headers["x-hub-signature-256"] as
+        | string
+        | undefined;
+      if (!rawBody || !verifyMetaSignature(rawBody, signature, appSecret)) {
+        request.log.warn("WhatsApp webhook signature verification failed");
+        return reply.status(401).send({ error: "Invalid signature" });
+      }
+    }
+
     const payload = request.body as WhatsAppWebhookPayload;
     if (payload.object !== "whatsapp_business_account") {
       return reply.status(200).send({ status: "ignored" });

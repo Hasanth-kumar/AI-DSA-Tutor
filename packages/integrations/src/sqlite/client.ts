@@ -24,6 +24,8 @@ const MIGRATIONS = [
   "0003_github_solutions.sql",
   "0004_chat.sql",
   "0005_performance_indexes.sql",
+  "0006_query_indexes.sql",
+  "0007_attempts_notes_conflicts.sql",
 ] as const;
 
 export function runMigrations(sqlitePath: string): void {

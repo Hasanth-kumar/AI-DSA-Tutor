@@ -1,11 +1,13 @@
 import type { TopicState, WeaknessSignal } from "../types.js";
 
 const SIGNAL_WEIGHTS = {
-  confidence: 0.3,
-  retryRate: 0.25,
+  confidence: 0.25,
+  retryRate: 0.2,
   slowTime: 0.15,
-  sessionProductivity: 0.15,
-  revisionFailure: 0.15,
+  sessionProductivity: 0.125,
+  revisionFailure: 0.125,
+  mistakeTags: 0.1,
+  noteCoverage: 0.05,
 } as const;
 
 export function confidenceSignal(topic: TopicState): WeaknessSignal {
@@ -98,6 +100,58 @@ export function revisionFailureSignal(topic: TopicState): WeaknessSignal {
       value > 0
         ? `${failures} recent low-productivity sessions`
         : "Revision performance is stable",
+  };
+}
+
+/** Human-readable practice advice per repeated mistake tag. */
+export const MISTAKE_TAG_ADVICE: Record<string, string> = {
+  "off-by-one": "practice boundary conditions and loop invariants",
+  "edge-case": "enumerate edge cases (empty, single element, duplicates) before coding",
+  "wrong-approach": "slow down on approach selection; name the pattern before coding",
+  "pattern-recall": "drill pattern recognition with flashcard-style review",
+};
+
+export function mistakeTagSignal(topic: TopicState): WeaknessSignal {
+  const counts = topic.mistakeTagCounts ?? {};
+  const entries = Object.entries(counts).filter(([, n]) => n > 0);
+  const total = entries.reduce((acc, [, n]) => acc + n, 0);
+  const dominant = entries.sort((a, b) => b[1] - a[1])[0];
+
+  const value = total >= 4 ? 1 : total >= 2 ? 0.5 : 0;
+
+  return {
+    name: "repeated_mistakes",
+    weight: SIGNAL_WEIGHTS.mistakeTags,
+    value,
+    description:
+      value > 0 && dominant
+        ? `${total} recent mistake tags (mostly "${dominant[0]}")`
+        : "No repeated mistake pattern",
+  };
+}
+
+export function noteCoverageSignal(topic: TopicState): WeaknessSignal {
+  const coverage = topic.noteCoverage;
+  if (!coverage || coverage.solved < 3) {
+    return {
+      name: "low_note_coverage",
+      weight: SIGNAL_WEIGHTS.noteCoverage,
+      value: 0,
+      description: "Not enough solved problems to judge note coverage",
+    };
+  }
+
+  const ratio = coverage.withNotes / coverage.solved;
+  const value = ratio < 0.2 ? 1 : ratio < 0.5 ? 0.5 : 0;
+
+  return {
+    name: "low_note_coverage",
+    weight: SIGNAL_WEIGHTS.noteCoverage,
+    value,
+    description:
+      value > 0
+        ? `Only ${coverage.withNotes}/${coverage.solved} solved problems have notes (possible rushing)`
+        : "Note coverage is healthy",
   };
 }
 

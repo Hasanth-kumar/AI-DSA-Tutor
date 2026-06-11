@@ -19,6 +19,51 @@ export async function sessionRoutes(
     return reply.send(serializeForJson({ dailyCounts, days: safeDays }));
   });
 
+  /** Everything that happened on one day — heatmap drill-down (5.4). */
+  app.get<{ Params: { date: string } }>(
+    "/session/day/:date",
+    async (request, reply) => {
+      const date = request.params.date;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return reply.status(400).send({ error: "date must be YYYY-MM-DD" });
+      }
+      const dayStart = new Date(`${date}T00:00:00Z`).getTime();
+      const dayEnd = dayStart + 86_400_000;
+
+      const sessions = ctx.sessionService
+        .list(500)
+        .filter((s) => s.date >= dayStart && s.date < dayEnd);
+      const topics = ctx.topicRepo.findAll();
+      const topicName = (id: string | null) =>
+        topics.find((t) => t.id === id)?.name ?? null;
+
+      const attempts = ctx.attemptRepo
+        .findRecent(1000)
+        .filter((a) => a.solvedAt >= dayStart && a.solvedAt < dayEnd)
+        .map((a) => ({
+          problemId: a.problemId,
+          problemName: ctx.problemRepo.findById(a.problemId)?.name ?? a.problemId,
+          timeTaken: a.timeTaken,
+          mistakeTag: a.mistakeTag,
+        }));
+
+      return reply.send(
+        serializeForJson({
+          date,
+          sessions: sessions.map((s) => ({
+            id: s.id,
+            topicId: s.topicId,
+            topicName: topicName(s.topicId),
+            problemsSolved: s.problemsSolved,
+            studyDuration: s.studyDuration,
+            productivityScore: s.productivityScore,
+          })),
+          problems: attempts,
+        }),
+      );
+    },
+  );
+
   app.get<{ Params: { id: string } }>("/session/:id", async (request, reply) => {
     const session = ctx.sessionService.getById(request.params.id);
     if (!session) {
@@ -30,12 +75,13 @@ export async function sessionRoutes(
   app.post<{
     Body: {
       topicId: string;
-      problemsSolved: number;
+      problemsSolved?: number;
       studyDuration: number;
-      productivityScore: number;
+      productivityScore?: number;
       date?: string;
       pushToNotion?: boolean;
       problemId?: string;
+      mistakeTag?: string | null;
     };
   }>("/session", async (request, reply) => {
     const {
@@ -46,30 +92,51 @@ export async function sessionRoutes(
       date,
       pushToNotion,
       problemId,
+      mistakeTag,
     } = request.body;
 
-    if (!topicId || problemsSolved == null || studyDuration == null || productivityScore == null) {
+    if (!topicId || studyDuration == null) {
       return reply.status(400).send({
-        error: "topicId, problemsSolved, studyDuration, and productivityScore are required",
+        error: "topicId and studyDuration are required",
       });
     }
 
     try {
+      // One-tap logging (1.3): when a problem is attached, everything except
+      // the timer defaults sensibly — no multi-field form needed.
       const result = await ctx.sessionService.completeSession({
         topicId,
-        problemsSolved,
+        problemsSolved: problemsSolved ?? (problemId ? 1 : 1),
         studyDuration,
-        productivityScore,
+        productivityScore: productivityScore ?? 75,
         date: date ? new Date(date) : undefined,
         pushToNotion,
         problemId,
+        mistakeTag,
       });
+      ctx.events.publish("session");
       return reply.status(201).send(serializeForJson(result));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to log session";
       const status = message.includes("not found") ? 404 : 500;
       return reply.status(status).send({ error: message });
     }
+  });
+
+  // One-tap mistake capture (1.4) — PATCHes the attempt created by POST /session.
+  app.patch<{
+    Params: { id: string };
+    Body: { mistakeTag: string | null };
+  }>("/attempts/:id/mistake", async (request, reply) => {
+    const attempt = ctx.attemptRepo.setMistakeTag(
+      request.params.id,
+      request.body.mistakeTag ?? null,
+    );
+    if (!attempt) {
+      return reply.status(404).send({ error: "Attempt not found" });
+    }
+    ctx.events.publish("attempt");
+    return reply.send(serializeForJson({ attempt }));
   });
 
   app.patch<{

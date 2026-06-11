@@ -43,10 +43,24 @@ export type {
   ChatLearningContext,
   DebriefContext,
   HintContext,
+  WarmupQuestionContext,
 } from "./prompts/types.js";
 export { buildHintPrompt } from "./prompts/hint.prompt.js";
 export { buildDebriefPrompt } from "./prompts/debrief.prompt.js";
 export { buildChatSystemPrompt } from "./prompts/chat.prompt.js";
+export {
+  buildWarmupPrompt,
+  fallbackWarmupQuestions,
+} from "./prompts/warmup.prompt.js";
+export {
+  ObsidianVault,
+  createObsidianVault,
+  isConflictFile,
+  parseFrontmatter,
+  stripWikiLinks,
+  type ObsidianNoteFile,
+  type VaultWatchHandlers,
+} from "./obsidian/ObsidianVault.js";
 export type { ChatHistoryMessage } from "./llm/LLMService.js";
 export {
   LeetCodeClient,

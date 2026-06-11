@@ -21,7 +21,11 @@ export type {
   WeaknessSignal,
   CurriculumItem,
   CurriculumProgress,
+  MistakeTag,
 } from "./types.js";
+
+export { MISTAKE_TAGS, MISTAKE_TAG_LABELS } from "./types.js";
+export { MISTAKE_TAG_ADVICE } from "./weakness-engine/signals.js";
 
 export { DEFAULT_WEIGHTS, computePriorityScore } from "./topic-priority-engine/scoring.js";
 export { explainPriorityScore } from "./topic-priority-engine/explain.js";

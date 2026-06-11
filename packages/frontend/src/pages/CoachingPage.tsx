@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../api/client.js";
-import type { ChatMessage, Problem } from "../types/api.js";
+import type { ChatMessage, HealthInfo, Problem } from "../types/api.js";
 
 const THREAD_STORAGE_KEY = "dsa-coach-thread-id";
+
+interface Props {
+  /** Pre-anchor the chat to a problem (1.2) — set when arriving from Today. */
+  anchorProblemId?: string | null;
+}
 
 const STARTER_PROMPTS = [
   "Why is BFS better than DFS for shortest path in an unweighted graph?",
@@ -36,7 +41,7 @@ function UserAvatar() {
   );
 }
 
-export function CoachingPage() {
+export function CoachingPage({ anchorProblemId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -47,8 +52,35 @@ export function CoachingPage() {
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [llmDown, setLlmDown] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Anchor handed in from the Today view (1.2).
+  useEffect(() => {
+    if (anchorProblemId) setProblemId(anchorProblemId);
+  }, [anchorProblemId]);
+
+  // Graceful degradation (5.4): disable the coach with a clear message when
+  // the LLM is unreachable instead of failing on send.
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getFullHealth()
+      .then((health: HealthInfo) => {
+        if (!cancelled) setLlmDown(health.services?.ollama.status === "down");
+      })
+      .catch(() => {
+        /* health probe is best-effort */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const anchoredProblem = problemId
+    ? problems.find((p) => p.id === problemId) ?? null
+    : null;
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -181,6 +213,27 @@ export function CoachingPage() {
         </button>
       </div>
 
+      {/* ── Anchored-problem chip (1.2) ── */}
+      {anchoredProblem && (
+        <div className="coach-anchor-bar">
+          <span className="coach-anchor-chip">
+            anchored to: <strong>{anchoredProblem.name}</strong>
+            <button
+              type="button"
+              aria-label="Detach problem"
+              title="Detach problem"
+              onClick={() => setProblemId("")}
+            >
+              ✕
+            </button>
+          </span>
+          <span className="muted" style={{ fontSize: "0.75rem" }}>
+            Coach sees this problem&apos;s history, your mistakes and notes — hints
+            escalate only when you ask.
+          </span>
+        </div>
+      )}
+
       {/* ── Thread ── */}
       <div className="coach-thread">
         <div className="coach-thread-inner">
@@ -252,6 +305,12 @@ export function CoachingPage() {
 
       {/* ── Composer ── */}
       <div className="coach-composer-wrap">
+        {llmDown && (
+          <div className="error-banner coach-error">
+            Coach is disabled — the LLM is unreachable. Start it with{" "}
+            <code>pnpm study</code> (Ollama) or check your OpenRouter key, then reload.
+          </div>
+        )}
         {error && (
           <div className="error-banner coach-error">{error}</div>
         )}
@@ -262,14 +321,14 @@ export function CoachingPage() {
             rows={1}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Ask a DSA question…"
-            disabled={loading || bootstrapping}
+            placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask a DSA question…"}
+            disabled={loading || bootstrapping || llmDown}
           />
           <button
             type="button"
             className="coach-send-btn"
             onClick={() => void handleSend()}
-            disabled={loading || bootstrapping || !input.trim()}
+            disabled={loading || bootstrapping || llmDown || !input.trim()}
             title="Send (Enter)"
           >
             <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

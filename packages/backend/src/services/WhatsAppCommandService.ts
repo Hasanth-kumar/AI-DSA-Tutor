@@ -89,6 +89,10 @@ export class WhatsAppCommandService {
         );
         break;
       }
+      case "note": {
+        reply = await this.handleNote(command.text);
+        break;
+      }
       case "help":
         reply = WHATSAPP_HELP_TEXT;
         break;
@@ -128,6 +132,41 @@ export class WhatsAppCommandService {
       const message = err instanceof Error ? err.message : "Debrief failed";
       return `📝 ${message}`;
     }
+  }
+
+  /**
+   * Quick capture from the phone (5.5): append the text to the active/most
+   * recent topic's Notion page; fall back to SQLite (sync_meta) when Notion
+   * is unreachable so nothing is lost.
+   */
+  private async handleNote(text: string): Promise<string> {
+    const recentSession = this.ctx.sessionRepo.findAll(1)[0];
+    const topicId = recentSession?.topicId ?? null;
+    const topic = topicId ? this.ctx.topicRepo.findById(topicId) : null;
+
+    if (topic && this.ctx.notionSync.isConfigured()) {
+      try {
+        await this.ctx.notionSync.getClient().appendTopicNote(topic.id, text);
+        return `📌 Noted on *${topic.name}* in Notion.`;
+      } catch {
+        // fall through to local capture
+      }
+    }
+
+    const key = "quick_notes";
+    const existing = this.ctx.syncMetaRepo.get(key);
+    const list = existing ? (JSON.parse(existing) as unknown[]) : [];
+    list.push({
+      text,
+      topicId,
+      topicName: topic?.name ?? null,
+      capturedAt: new Date().toISOString(),
+    });
+    this.ctx.syncMetaRepo.set(key, JSON.stringify(list));
+
+    return topic
+      ? `📌 Saved locally for *${topic.name}* (Notion unreachable — will stay in SQLite).`
+      : "📌 Saved locally (no recent topic to attach it to).";
   }
 
   private async handleDone(

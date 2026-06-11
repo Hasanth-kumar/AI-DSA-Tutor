@@ -7,7 +7,12 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { StatusStrip } from "./components/StatusStrip.js";
+import { useLiveEvents } from "./hooks/useLiveEvents.js";
 
+const TodayPage = lazy(() =>
+  import("./pages/TodayPage.js").then((m) => ({ default: m.TodayPage })),
+);
 const OverviewPage = lazy(() =>
   import("./pages/OverviewPage.js").then((m) => ({ default: m.OverviewPage })),
 );
@@ -24,9 +29,21 @@ const SessionPage = lazy(() =>
   import("./pages/SessionPage.js").then((m) => ({ default: m.SessionPage })),
 );
 
-type Tab = "overview" | "graph" | "activity" | "session" | "coach";
+type Tab = "today" | "overview" | "graph" | "activity" | "session" | "coach";
+type Theme = "dark" | "light";
+
+const THEME_STORAGE_KEY = "dsa-theme";
 
 const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
+  {
+    id: "today",
+    label: "Today",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="currentColor">
+        <path d="M8 1.5a1 1 0 011 1V3h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1h3v-.5a1 1 0 011-1zM4.5 6v6.5h7V6h-7zm2 2h3v3h-3V8z" />
+      </svg>
+    ),
+  },
   {
     id: "overview",
     label: "Overview",
@@ -85,6 +102,13 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
   },
 ];
 
+const SHORTCUTS: { key: string; action: string }[] = [
+  { key: "s", action: "Start session (Today)" },
+  { key: "l", action: "Log / mark done (Today)" },
+  { key: "c", action: "Focus coach chat" },
+  { key: "?", action: "Toggle this help" },
+];
+
 function useIsMobile(breakpoint = 960) {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== "undefined" && window.matchMedia(`(max-width: ${breakpoint}px)`).matches,
@@ -100,10 +124,39 @@ function useIsMobile(breakpoint = 960) {
   return isMobile;
 }
 
+/** System-preference default + manual toggle, persisted (5.4). */
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  const toggle = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  return [theme, toggle];
+}
+
 export function App() {
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>("today");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [coachAnchorId, setCoachAnchorId] = useState<string | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [theme, toggleTheme] = useTheme();
   const isMobile = useIsMobile();
+  const { connected: sseConnected } = useLiveEvents();
 
   const selectTab = useCallback(
     (id: Tab) => {
@@ -112,6 +165,48 @@ export function App() {
     },
     [isMobile],
   );
+
+  /** One click from a Today problem card into an anchored coach chat (1.2). */
+  const openCoach = useCallback(
+    (problemId: string) => {
+      setCoachAnchorId(problemId || null);
+      selectTab("coach");
+    },
+    [selectTab],
+  );
+
+  // Keyboard shortcuts (5.4): skip when typing or holding modifiers.
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable) {
+        return;
+      }
+
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+      } else if (e.key === "Escape") {
+        setShowShortcuts(false);
+      } else if (e.key === "s") {
+        e.preventDefault();
+        selectTab("today");
+        window.dispatchEvent(new CustomEvent("dsa:start-session"));
+      } else if (e.key === "l") {
+        e.preventDefault();
+        selectTab("today");
+        window.dispatchEvent(new CustomEvent("dsa:focus-done"));
+      } else if (e.key === "c") {
+        e.preventDefault();
+        selectTab("coach");
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectTab]);
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((prev) => !prev);
@@ -189,22 +284,52 @@ export function App() {
         </nav>
 
         <div className="sidebar-footer">
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? "☀" : "☾"}
+            <span className="nav-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
           <div className="sidebar-status">
-            <div className="status-dot" />
-            <span>Live · auto-refresh 30s</span>
+            <div className={`status-dot${sseConnected ? "" : " status-dot--idle"}`} />
+            <span>{sseConnected ? "Live · push updates" : "Polling fallback"}</span>
           </div>
         </div>
       </aside>
 
       <main className="main">
+        <StatusStrip />
         <Suspense fallback={<div className="card"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>}>
+          {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
           {tab === "overview" && <OverviewPage />}
-          {tab === "coach" && <CoachingPage />}
+          {tab === "coach" && <CoachingPage anchorProblemId={coachAnchorId} />}
           {tab === "graph" && <GraphPage />}
           {tab === "activity" && <ActivityPage />}
           {tab === "session" && <SessionPage />}
         </Suspense>
       </main>
+
+      {showShortcuts && (
+        <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
+          <div className="shortcuts-modal card" onClick={(e) => e.stopPropagation()}>
+            <h3>Keyboard shortcuts</h3>
+            <ul>
+              {SHORTCUTS.map((s) => (
+                <li key={s.key}>
+                  <kbd>{s.key}</kbd>
+                  <span>{s.action}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+              Press <kbd>Esc</kbd> or click outside to close.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

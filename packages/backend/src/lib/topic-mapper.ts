@@ -37,10 +37,18 @@ function parsePrerequisites(raw: string | null): string[] {
   }
 }
 
+export interface TopicSignalExtras {
+  /** Mistake-tag counts from recent problem attempts for this topic. */
+  mistakeTagCounts?: Record<string, number>;
+  /** Problem ids that have a matched Obsidian note. */
+  notedProblemIds?: Set<string>;
+}
+
 export function buildTopicState(
   topic: TopicRow,
   topicProblems: ProblemRow[],
   topicSessions: SessionRow[],
+  extras: TopicSignalExtras = {},
 ): TopicState {
   const solved = topicProblems.filter((p) => p.status === "Solved");
   const totalAttempts = topicProblems.reduce((sum, p) => sum + (p.attempts ?? 0), 0);
@@ -75,5 +83,12 @@ export function buildTopicState(
     averageTimeTaken,
     prerequisites: parsePrerequisites(topic.prerequisites),
     recentSessions,
+    mistakeTagCounts: extras.mistakeTagCounts ?? {},
+    noteCoverage: {
+      solved: solved.length,
+      withNotes: extras.notedProblemIds
+        ? solved.filter((p) => extras.notedProblemIds!.has(p.id)).length
+        : 0,
+    },
   };
 }

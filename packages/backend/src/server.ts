@@ -16,6 +16,24 @@ async function main() {
   const schedulers = startSchedulers(ctx);
   const app = buildApp(config, ctx);
 
+  // Obsidian vault ingestion (Phase 2): full scan + live watcher.
+  if (ctx.obsidianNotes.isConfigured()) {
+    try {
+      const scan = ctx.obsidianNotes.scanVault();
+      app.log.info(
+        `Obsidian vault scanned: ${scan.scanned} notes, ${scan.matched} matched to problems`,
+      );
+    } catch (err) {
+      app.log.warn({ err }, "Obsidian vault scan failed");
+    }
+    ctx.obsidianNotes.startWatching((err) =>
+      app.log.warn({ err }, "Obsidian watcher error"),
+    );
+  }
+
+  // Nightly SQLite backup with rotation (5.1).
+  ctx.backupService.start((err) => app.log.warn({ err }, "SQLite backup failed"));
+
   const shutdown = async () => {
     await schedulers.close();
     await ctx.close();
@@ -29,7 +47,7 @@ async function main() {
     await app.listen({ port: config.port, host: "0.0.0.0" });
     app.log.info(`API listening on http://localhost:${config.port}`);
     if (config.schedulers.enabled) {
-      app.log.info("BullMQ schedulers active (daily plan, revision check, Notion sync)");
+      app.log.info("BullMQ scheduler active (weekly digest only — daily pushes removed)");
     }
   } catch (err) {
     app.log.error(err);

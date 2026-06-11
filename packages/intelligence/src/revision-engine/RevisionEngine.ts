@@ -1,5 +1,5 @@
 import type { SessionSnapshot, TopicState } from "../types.js";
-import { differenceInDays, isBefore } from "../utils/dates.js";
+import { addDays, differenceInDays, isBefore } from "../utils/dates.js";
 import type { SM2State } from "../types.js";
 import { sm2Update, topicToSM2Quality } from "./sm2.js";
 
@@ -24,11 +24,43 @@ export class RevisionEngine {
       });
   }
 
+  /**
+   * Catch-up compression for intermittent use: when more than `overdueTolerance`
+   * topics are due at once, only `maxPerDay` go into today's plan; the rest are
+   * deferred (rescheduled forward) instead of stacking into a guilt-list.
+   */
+  compressQueue(
+    queue: TopicState[],
+    options: { maxPerDay?: number; overdueTolerance?: number } = {},
+    now: Date = new Date(),
+  ): { active: TopicState[]; deferred: { topic: TopicState; nextRevisionAt: Date }[] } {
+    const maxPerDay = options.maxPerDay ?? 2;
+    const overdueTolerance = options.overdueTolerance ?? 3;
+
+    if (queue.length <= overdueTolerance) {
+      return { active: queue, deferred: [] };
+    }
+
+    const active = queue.slice(0, maxPerDay);
+    const deferred = queue.slice(maxPerDay).map((topic, i) => ({
+      topic,
+      // Spread the backlog forward at maxPerDay topics per day, starting tomorrow.
+      nextRevisionAt: addDays(now, Math.floor(i / maxPerDay) + 1),
+    }));
+
+    return { active, deferred };
+  }
+
   updateAfterSession(
     topic: TopicState,
     session: SessionSnapshot,
   ): SM2State {
     const quality = topicToSM2Quality(topic, session);
+    return this.applyQuality(topic, quality);
+  }
+
+  /** Apply an explicit SM-2 quality (0–5), e.g. from a recall warm-up self-grade. */
+  applyQuality(topic: TopicState, quality: number): SM2State {
     const currentState: SM2State = {
       interval: topic.revisionCount > 0 ? topic.revisionCount : 1,
       repetition: topic.revisionCount,

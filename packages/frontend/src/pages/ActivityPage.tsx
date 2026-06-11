@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { ActivityHeatmap } from "../components/ActivityHeatmap.js";
+import type { DayDetail } from "../types/api.js";
 
 export function ActivityPage() {
   const [dailyCounts, setDailyCounts] = useState<Map<string, number>>(new Map());
@@ -9,6 +10,17 @@ export function ActivityPage() {
   const [leetcodeUnconfigured, setLeetcodeUnconfigured] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dayDetail, setDayDetail] = useState<DayDetail | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+
+  const openDay = useCallback((dateKey: string) => {
+    setDayLoading(true);
+    api
+      .getDayDetail(dateKey)
+      .then(setDayDetail)
+      .catch(() => setDayDetail({ date: dateKey, sessions: [], problems: [] }))
+      .finally(() => setDayLoading(false));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +79,72 @@ export function ActivityPage() {
           dailyCounts={dailyCounts}
           source={source}
           leetcodeUsername={leetcodeUsername}
+          onDayClick={openDay}
         />
+      )}
+
+      {(dayDetail || dayLoading) && (
+        <div className="card day-detail" style={{ marginTop: "1rem" }}>
+          <div className="day-detail-header">
+            <h3 style={{ margin: 0 }}>
+              {dayDetail
+                ? new Date(`${dayDetail.date}T12:00:00Z`).toLocaleDateString(undefined, {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                  })
+                : "Loading day…"}
+            </h3>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setDayDetail(null)}
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          {dayDetail && dayDetail.sessions.length === 0 && dayDetail.problems.length === 0 && (
+            <p className="muted" style={{ fontSize: "0.85rem" }}>
+              No locally logged sessions for this day
+              {source === "leetcode" ? " (activity came from LeetCode)" : ""}.
+            </p>
+          )}
+
+          {dayDetail && dayDetail.sessions.length > 0 && (
+            <>
+              <div className="day-detail-label">Sessions</div>
+              <ul className="day-detail-list">
+                {dayDetail.sessions.map((s) => (
+                  <li key={s.id}>
+                    <span>{s.topicName ?? "Unknown topic"}</span>
+                    <span className="muted">
+                      {s.studyDuration ?? 0}m · {s.problemsSolved} solved ·{" "}
+                      {s.productivityScore ?? "—"}/100
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {dayDetail && dayDetail.problems.length > 0 && (
+            <>
+              <div className="day-detail-label">Problems</div>
+              <ul className="day-detail-list">
+                {dayDetail.problems.map((p, i) => (
+                  <li key={`${p.problemId}-${i}`}>
+                    <span>{p.problemName}</span>
+                    <span className="muted">
+                      {p.timeTaken != null ? `${p.timeTaken}m` : ""}
+                      {p.mistakeTag ? ` · ${p.mistakeTag}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

@@ -20,6 +20,8 @@ export interface WeeklySummary {
   weekStart: string;
   weekEnd: string;
   sessionsCount: number;
+  /** De-emphasized-streak replacement metric (1.5). */
+  sessionsThisMonth: number;
   problemsSolved: number;
   totalStudyMinutes: number;
   averageProductivity: number;
@@ -179,10 +181,14 @@ export class AnalyticsService {
       previousWeak?.weakTopicCount ?? 0,
     );
 
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const sessionsThisMonth = sessions.filter((s) => s.date >= monthStart).length;
+
     return {
       weekStart: weekStart.toISOString().slice(0, 10),
       weekEnd: weekEnd.toISOString().slice(0, 10),
       sessionsCount: weekSessions.length,
+      sessionsThisMonth,
       problemsSolved,
       totalStudyMinutes,
       averageProductivity: Math.round(averageProductivity),
