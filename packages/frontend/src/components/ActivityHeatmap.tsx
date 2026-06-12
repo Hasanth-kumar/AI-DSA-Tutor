@@ -33,7 +33,7 @@ function level(count: number): number {
 function computeStreak(counts: Map<string, number>, end: Date): number {
   let streak = 0;
   const today = end.toISOString().slice(0, 10);
-  let streakCursor = new Date(end);
+  const streakCursor = new Date(end);
 
   while (true) {
     const key = streakCursor.toISOString().slice(0, 10);
