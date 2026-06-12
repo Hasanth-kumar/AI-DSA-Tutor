@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { Skeleton } from "../components/Skeleton.js";
 import type { Topic, WeaknessEvidence } from "../types/api.js";
 
 const KnowledgeGraph = lazy(() =>
@@ -75,8 +76,8 @@ export function GraphPage() {
       <div className={`graph-layout${selected ? " graph-layout--panel-open" : ""}`}>
         <Suspense
           fallback={
-            <div className="card">
-              <p className="muted" style={{ margin: 0 }}>Loading graph…</p>
+            <div className="card" aria-busy="true">
+              <Skeleton variant="block" height={440} />
             </div>
           }
         >
@@ -86,7 +87,7 @@ export function GraphPage() {
         {selected && (
           <aside className="card graph-panel">
             <div className="graph-panel-header">
-              <h3 style={{ margin: 0 }}>{selected.name}</h3>
+              <h3 className="card-title m-0">{selected.name}</h3>
               <button
                 type="button"
                 className="btn btn-ghost"
@@ -142,15 +143,14 @@ export function GraphPage() {
 
             <button
               type="button"
-              className="btn btn-primary"
-              style={{ width: "100%", justifyContent: "center", marginTop: "0.85rem" }}
+              className="btn btn-primary w-full mt-3"
               disabled={settingFocus}
               onClick={() => void studyNow()}
             >
               {settingFocus ? "Setting…" : "▶ Study this now"}
             </button>
             {studyMessage && (
-              <p className="muted" style={{ fontSize: "0.78rem", marginTop: "0.5rem" }}>
+              <p className="muted text-xs mt-2 mb-0">
                 {studyMessage}
               </p>
             )}

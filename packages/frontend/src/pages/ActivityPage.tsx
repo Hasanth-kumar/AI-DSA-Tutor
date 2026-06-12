@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { ActivityHeatmap } from "../components/ActivityHeatmap.js";
+import { Skeleton, SkeletonLines } from "../components/Skeleton.js";
 import type { DayDetail } from "../types/api.js";
 
 export function ActivityPage() {
@@ -66,13 +67,19 @@ export function ActivityPage() {
       </header>
       {error && <div className="error-banner">{error}</div>}
       {leetcodeUnconfigured && !error && (
-        <div className="error-banner" style={{ background: "var(--bg-surface)", color: "var(--text-muted)", borderColor: "var(--border)" }}>
+        <div className="info-banner">
           Set <code>LEETCODE_USERNAME</code> in your <code>.env</code> to pull real solve counts from LeetCode.
         </div>
       )}
       {loading ? (
-        <div className="card">
-          <p className="muted" style={{ margin: 0 }}>Loading activity…</p>
+        <div className="card" aria-busy="true">
+          <Skeleton variant="title" width={160} />
+          <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem" }}>
+            <Skeleton variant="stat" />
+            <Skeleton variant="stat" />
+            <Skeleton variant="stat" />
+          </div>
+          <Skeleton variant="block" height={130} />
         </div>
       ) : (
         <ActivityHeatmap
@@ -84,9 +91,9 @@ export function ActivityPage() {
       )}
 
       {(dayDetail || dayLoading) && (
-        <div className="card day-detail" style={{ marginTop: "1rem" }}>
+        <div className="card day-detail mt-4">
           <div className="day-detail-header">
-            <h3 style={{ margin: 0 }}>
+            <h3 className="card-title m-0">
               {dayDetail
                 ? new Date(`${dayDetail.date}T12:00:00Z`).toLocaleDateString(undefined, {
                     weekday: "long",
@@ -104,8 +111,10 @@ export function ActivityPage() {
             </button>
           </div>
 
+          {dayLoading && !dayDetail && <SkeletonLines lines={3} />}
+
           {dayDetail && dayDetail.sessions.length === 0 && dayDetail.problems.length === 0 && (
-            <p className="muted" style={{ fontSize: "0.85rem" }}>
+            <p className="muted text-sm">
               No locally logged sessions for this day
               {source === "leetcode" ? " (activity came from LeetCode)" : ""}.
             </p>

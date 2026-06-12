@@ -99,7 +99,7 @@ export const DifficultyChart = memo(function DifficultyChart({ data }: Props) {
               textAnchor="middle"
               fill="var(--text)"
               fontSize="10"
-              fontFamily="var(--font-mono)"
+              className="chart-mono"
             >
               {b.solveRate}%
             </text>

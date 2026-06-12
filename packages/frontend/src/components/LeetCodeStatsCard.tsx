@@ -1,3 +1,5 @@
+import { EmptyState, PlugIcon } from "./EmptyState.js";
+import { Skeleton, SkeletonLines } from "./Skeleton.js";
 import type { LeetCodeUserStats } from "../types/api.js";
 
 interface Props {
@@ -11,22 +13,22 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
   if (!configured) {
     return (
       <div className="card">
-        <h3>LeetCode profile</h3>
-        <p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-          Set <code>LEETCODE_USERNAME</code> in your <code>.env</code> to pull your
-          public solve stats here.
-        </p>
+        <h3 className="card-section-title">LeetCode profile</h3>
+        <EmptyState
+          icon={<PlugIcon />}
+          title="Not connected"
+          hint="Set LEETCODE_USERNAME in your .env to pull your public solve stats here."
+        />
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="card">
-        <h3>LeetCode profile</h3>
-        <p className="muted" style={{ margin: 0 }}>
-          Loading LeetCode stats…
-        </p>
+      <div className="card" aria-busy="true">
+        <h3 className="card-section-title">LeetCode profile</h3>
+        <Skeleton variant="stat" />
+        <SkeletonLines lines={3} />
       </div>
     );
   }
@@ -39,7 +41,7 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
 
   return (
     <div className="card">
-      <h3>
+      <h3 className="card-section-title">
         LeetCode ·{" "}
         <a href={profileUrl} target="_blank" rel="noreferrer" className="link-muted">
           @{stats.username}
@@ -74,7 +76,7 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
         </div>
       )}
 
-      <p className="muted" style={{ margin: "0.75rem 0 0", fontSize: "0.75rem" }}>
+      <p className="muted text-xs mt-3 mb-0">
         Cached up to 1h · updated {new Date(stats.fetchedAt).toLocaleString()}
       </p>
     </div>

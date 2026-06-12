@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/client.js";
+import { CheckCircleIcon, EmptyState } from "./EmptyState.js";
+import { SkeletonLines } from "./Skeleton.js";
 import type { WeaknessEvidence } from "../types/api.js";
 
 interface Props {
@@ -17,9 +19,12 @@ export function WeaknessDrilldown({ weakTopics }: Props) {
 
   if (weakTopics.length === 0) {
     return (
-      <p className="muted" style={{ fontSize: "0.82rem", margin: "0.5rem 0 0" }}>
-        No weak areas flagged right now.
-      </p>
+      <EmptyState
+        compact
+        icon={<CheckCircleIcon />}
+        title="No weak areas flagged"
+        hint="Keep solving — anything that needs attention will surface here."
+      />
     );
   }
 
@@ -55,10 +60,10 @@ export function WeaknessDrilldown({ weakTopics }: Props) {
 
       {openId && (
         <div className="weakness-evidence">
-          {loading && <p className="muted" style={{ fontSize: "0.8rem" }}>Loading evidence…</p>}
+          {loading && <SkeletonLines lines={2} />}
           {!loading && evidence && (
             <>
-              <p style={{ fontSize: "0.85rem", margin: "0 0 0.5rem" }}>
+              <p className="text-sm mt-0 mb-2">
                 {evidence.analysis.recommendation}
               </p>
               {evidence.analysis.signals.length > 0 && (
@@ -106,7 +111,7 @@ export function WeaknessDrilldown({ weakTopics }: Props) {
                 </>
               )}
               {evidence.evidence.noteCoverage.solved > 0 && (
-                <p className="muted" style={{ fontSize: "0.78rem", margin: "0.5rem 0 0" }}>
+                <p className="muted text-xs mt-2 mb-0">
                   Notes on {evidence.evidence.noteCoverage.withNotes}/
                   {evidence.evidence.noteCoverage.solved} solved problems.
                 </p>
@@ -114,7 +119,7 @@ export function WeaknessDrilldown({ weakTopics }: Props) {
             </>
           )}
           {!loading && !evidence && (
-            <p className="muted" style={{ fontSize: "0.8rem" }}>No evidence available.</p>
+            <p className="muted text-sm m-0">No evidence available.</p>
           )}
         </div>
       )}

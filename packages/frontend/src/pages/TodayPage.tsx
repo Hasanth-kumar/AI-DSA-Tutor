@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client.js";
+import { CheckCircleIcon, EmptyState } from "../components/EmptyState.js";
 import { MistakeCapture } from "../components/MistakeCapture.js";
 import { ProblemNotePanel } from "../components/ProblemNotePanel.js";
 import { ScoreBar } from "../components/ScoreBar.js";
+import { Skeleton, SkeletonLines, SkeletonRows } from "../components/Skeleton.js";
 import { WarmupCard } from "../components/WarmupCard.js";
 import { usePolling } from "../hooks/usePolling.js";
 import type {
@@ -224,8 +226,17 @@ export function TodayPage({ onOpenCoach }: Props) {
             <p>What to study right now — zero decisions needed.</p>
           </div>
         </header>
-        <div className="card">
-          <p className="muted" style={{ margin: 0 }}>Working out your plan…</p>
+        <div className="grid" aria-busy="true">
+          <div className="card">
+            <Skeleton variant="text" width={110} />
+            <Skeleton variant="title" width="45%" height={26} />
+            <SkeletonLines lines={2} />
+            <Skeleton variant="row" height={46} style={{ marginTop: "1rem" }} />
+          </div>
+          <div className="card">
+            <Skeleton variant="title" width={170} />
+            <SkeletonRows rows={3} />
+          </div>
         </div>
       </div>
     );
@@ -262,7 +273,7 @@ export function TodayPage({ onOpenCoach }: Props) {
       )}
 
       {plan && (
-        <div className="grid" style={{ gap: "1.1rem" }}>
+        <div className="grid">
           {/* ── 1. Primary topic ── */}
           <div className="card today-topic-card">
             <div className="today-topic-row">
@@ -286,7 +297,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                 {explain ? (
                   <ScoreBar explanation={explain} />
                 ) : (
-                  <p className="muted" style={{ fontSize: "0.8rem" }}>Loading breakdown…</p>
+                  <SkeletonLines lines={2} />
                 )}
               </div>
             )}
@@ -378,9 +389,9 @@ export function TodayPage({ onOpenCoach }: Props) {
 
           {/* ── 2. Suggested problems (max 3) ── */}
           <div className="card">
-            <h3 style={{ marginBottom: "0.75rem" }}>Suggested problems</h3>
+            <h3 className="card-section-title mb-3">Suggested problems</h3>
             {plan.suggestedProblems.length === 0 && (
-              <p className="muted" style={{ fontSize: "0.85rem" }}>
+              <p className="muted text-sm">
                 No unsolved problems for this topic — add some in Notion or just revise.
               </p>
             )}
@@ -465,17 +476,20 @@ export function TodayPage({ onOpenCoach }: Props) {
 
           {/* ── 3. Revision — one item, never a guilt-list (1.5) ── */}
           <div className="card">
-            <h3 style={{ marginBottom: "0.5rem" }}>Revision</h3>
+            <h3 className="card-section-title mb-2">Revision</h3>
             {dueTotal === 0 && (
-              <p className="muted" style={{ fontSize: "0.85rem", margin: 0 }}>
-                Nothing due — spaced repetition is happy.
-              </p>
+              <EmptyState
+                compact
+                icon={<CheckCircleIcon />}
+                title="Nothing due today"
+                hint="Spaced repetition is happy — revisions will queue up here."
+              />
             )}
             {topRevision && (
               <div className="today-revision">
                 <div>
                   <div className="today-revision-name">{topRevision.name}</div>
-                  <div className="muted" style={{ fontSize: "0.78rem" }}>
+                  <div className="muted text-xs">
                     confidence {topRevision.confidence}/100
                     {topRevision.isWeakArea ? " · weak area" : ""}
                   </div>
@@ -485,15 +499,14 @@ export function TodayPage({ onOpenCoach }: Props) {
             {dueTotal > 1 && (
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ marginTop: "0.5rem" }}
+                className="btn btn-ghost mt-2"
                 onClick={() => void toggleAllRevisions()}
               >
                 {showAllRevisions ? "Show less" : `Show all (${dueTotal})`}
               </button>
             )}
             {(plan.revisionDeferred ?? 0) > 0 && (
-              <p className="muted" style={{ fontSize: "0.75rem", marginTop: "0.5rem" }}>
+              <p className="muted text-xs mt-2 mb-0">
                 {plan.revisionDeferred} overdue topics were rescheduled forward — no
                 backlog wall, they&apos;ll come back over the next days.
               </p>

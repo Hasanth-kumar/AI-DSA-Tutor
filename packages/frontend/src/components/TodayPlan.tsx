@@ -1,3 +1,4 @@
+import { SkeletonLines } from "./Skeleton.js";
 import type { StudyPlan } from "../types/api.js";
 
 interface Props {
@@ -7,16 +8,16 @@ interface Props {
 export function TodayPlan({ plan }: Props) {
   if (!plan) {
     return (
-      <div className="card">
-        <h3>Today&apos;s plan</h3>
-        <p className="muted" style={{ fontSize: "0.875rem" }}>Loading plan…</p>
+      <div className="card" aria-busy="true">
+        <h3 className="card-section-title">Today&apos;s plan</h3>
+        <SkeletonLines lines={3} />
       </div>
     );
   }
 
   return (
     <div className="card">
-      <h3>Today&apos;s plan</h3>
+      <h3 className="card-section-title">Today&apos;s plan</h3>
 
       <div className="plan-topic">
         {plan.primaryTopic.name}
@@ -49,8 +50,8 @@ export function TodayPlan({ plan }: Props) {
 
       {plan.revisionTopics.length > 0 && (
         <p
-          className="muted"
-          style={{ marginTop: "0.85rem", fontSize: "0.8rem", borderTop: "1px solid var(--border-soft)", paddingTop: "0.75rem" }}
+          className="muted text-sm mt-3 mb-0"
+          style={{ borderTop: "1px solid var(--border-soft)", paddingTop: "0.75rem" }}
         >
           Revise: {plan.revisionTopics.map((t) => t.name).join(", ")}
         </p>

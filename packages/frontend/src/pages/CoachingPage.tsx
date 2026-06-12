@@ -15,6 +15,12 @@ const STARTER_PROMPTS = [
   "What am I weak at this week and how should I practice?",
 ];
 
+function visibleStarterPrompts(input: string): string[] {
+  const query = input.trim().toLowerCase();
+  if (!query) return STARTER_PROMPTS;
+  return STARTER_PROMPTS.filter((p) => p.toLowerCase().startsWith(query));
+}
+
 function CoachIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="white" width="28" height="28">
@@ -41,6 +47,44 @@ function UserAvatar() {
   );
 }
 
+function CoachGenerating() {
+  return (
+    <div
+      className="coach-generating"
+      role="status"
+      aria-live="polite"
+      aria-label="Coach is generating a response"
+    >
+      <div className="coach-thinking" aria-hidden>
+        <span /><span /><span />
+      </div>
+      <span className="coach-generating-label">Coach is thinking…</span>
+    </div>
+  );
+}
+
+function SendIcon({ loading }: { loading: boolean }) {
+  if (loading) {
+    return (
+      <svg className="coach-send-spinner" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" strokeOpacity="0.25" />
+        <path
+          d="M14 8a6 6 0 0 0-6-6"
+          stroke="white"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="8" y1="13" x2="8" y2="3" />
+      <polyline points="4,7 8,3 12,7" />
+    </svg>
+  );
+}
+
 export function CoachingPage({ anchorProblemId }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -53,8 +97,13 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [llmDown, setLlmDown] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stickToBottomRef = useRef(true);
 
   // Anchor handed in from the Today view (1.2).
   useEffect(() => {
@@ -82,8 +131,15 @@ export function CoachingPage({ anchorProblemId }: Props) {
     ? problems.find((p) => p.id === problemId) ?? null
     : null;
 
-  const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  const onThreadScroll = useCallback(() => {
+    const el = threadRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 96;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior });
   }, []);
 
   useEffect(() => {
@@ -106,7 +162,10 @@ export function CoachingPage({ anchorProblemId }: Props) {
     })();
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, loading, scrollToBottom]);
+  useEffect(() => {
+    if (!stickToBottomRef.current) return;
+    scrollToBottom(loading ? "auto" : "smooth");
+  }, [messages, loading, scrollToBottom]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -117,6 +176,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
   }, [input]);
 
   const handleNewChat = async () => {
+    if (loading) return;
     if (threadId) {
       try { await api.clearChatThread(threadId); } catch { /* gone */ }
     }
@@ -124,15 +184,30 @@ export function CoachingPage({ anchorProblemId }: Props) {
     setThreadId(null);
     setMessages([]);
     setError(null);
+    setPromptsOpen(false);
     textareaRef.current?.focus();
   };
 
   const handleSend = async (text?: string) => {
     const msg = (text ?? input).trim();
     if (!msg || loading) return;
+
+    const optimisticId = `pending-${Date.now()}`;
+    const optimisticUser: ChatMessage = {
+      id: optimisticId,
+      role: "user",
+      content: msg,
+      createdAt: new Date().toISOString(),
+    };
+
+    stickToBottomRef.current = true;
+    setMessages((prev) => [...prev, optimisticUser]);
     setLoading(true);
     setError(null);
     if (!text) setInput("");
+    setComposerFocused(false);
+    setPromptsOpen(false);
+
     try {
       const result = await api.sendChatMessage({
         threadId: threadId ?? undefined,
@@ -143,8 +218,13 @@ export function CoachingPage({ anchorProblemId }: Props) {
       });
       setThreadId(result.threadId);
       sessionStorage.setItem(THREAD_STORAGE_KEY, result.threadId);
-      setMessages((prev) => [...prev, result.userMessage, result.assistantMessage]);
+      setMessages((prev) => [
+        ...prev.filter((m) => m.id !== optimisticId),
+        result.userMessage,
+        result.assistantMessage,
+      ]);
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       if (!text) setInput(msg);
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
@@ -153,13 +233,110 @@ export function CoachingPage({ anchorProblemId }: Props) {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape" && promptsOpen) {
+      e.preventDefault();
+      setPromptsOpen(false);
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
     }
   };
 
-  const isEmpty = !bootstrapping && messages.length === 0;
+  const isEmpty = !bootstrapping && messages.length === 0 && !loading;
+  const filteredPrompts = visibleStarterPrompts(input);
+  const showPrompts =
+    isEmpty && promptsOpen && !loading && !llmDown && filteredPrompts.length > 0;
+
+  const handleComposerInnerClick = () => {
+    if (loading || bootstrapping || llmDown) return;
+    setPromptsOpen(true);
+    textareaRef.current?.focus();
+  };
+
+  const handleComposerFocus = () => {
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = null;
+    }
+    setComposerFocused(true);
+  };
+
+  const handleComposerBlur = () => {
+    blurTimeoutRef.current = setTimeout(() => {
+      setComposerFocused(false);
+      setPromptsOpen(false);
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
+  }, []);
+
+  const composer = (
+    <div className="coach-composer-wrap">
+      {llmDown && (
+        <div className="error-banner coach-error">
+          Coach is disabled — the LLM is unreachable. Start it with{" "}
+          <code>pnpm study</code> (Ollama) or check your OpenRouter key, then reload.
+        </div>
+      )}
+      {error && (
+        <div className="error-banner coach-error">{error}</div>
+      )}
+      <div
+        className={`coach-composer-inner${loading ? " coach-composer-inner--busy" : ""}${promptsOpen ? " coach-composer-inner--prompts-open" : ""}`}
+        onClick={handleComposerInnerClick}
+      >
+        <textarea
+          ref={textareaRef}
+          value={input}
+          rows={1}
+          onChange={(e) => setInput(e.target.value)}
+          onFocus={handleComposerFocus}
+          onBlur={handleComposerBlur}
+          onKeyDown={onKeyDown}
+          placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask a DSA question…"}
+          disabled={loading || bootstrapping || llmDown}
+        />
+        <button
+          type="button"
+          className={`coach-send-btn${loading ? " coach-send-btn--loading" : ""}`}
+          onClick={() => void handleSend()}
+          disabled={loading || bootstrapping || llmDown || !input.trim()}
+          title={loading ? "Generating response…" : "Send (Enter)"}
+          aria-label={loading ? "Generating response" : "Send message"}
+        >
+          <SendIcon loading={loading} />
+        </button>
+      </div>
+      {showPrompts && (
+        <div className="coach-composer-prompts" role="listbox" aria-label="Suggested questions">
+          {filteredPrompts.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="option"
+              className="coach-prompt-btn"
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={loading}
+              onClick={() => void handleSend(p)}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      {composerFocused && (
+        <div className="coach-composer-hint">
+          Enter to send · Shift+Enter for newline
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="coach-layout">
@@ -227,24 +404,16 @@ export function CoachingPage({ anchorProblemId }: Props) {
               ✕
             </button>
           </span>
-          <span className="muted" style={{ fontSize: "0.75rem" }}>
+          <span className="muted text-xs">
             Coach sees this problem&apos;s history, your mistakes and notes — hints
             escalate only when you ask.
           </span>
         </div>
       )}
 
-      {/* ── Thread ── */}
-      <div className="coach-thread">
-        <div className="coach-thread-inner">
-
-          {bootstrapping && (
-            <div style={{ padding: "3rem 0", textAlign: "center", color: "var(--text-muted)", fontSize: "0.9rem" }}>
-              Loading…
-            </div>
-          )}
-
-          {isEmpty && (
+      {isEmpty ? (
+        <div className="coach-empty-state">
+          <div className="coach-empty-state-inner">
             <div className="coach-welcome">
               <div className="coach-welcome-icon">
                 <CoachIcon />
@@ -253,94 +422,58 @@ export function CoachingPage({ anchorProblemId }: Props) {
               <p className="coach-welcome-sub">
                 Ask about algorithms, get hints on problems, or have your weak areas explained.
               </p>
-              <div className="coach-prompts">
-                {STARTER_PROMPTS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className="coach-prompt-btn"
-                    onClick={() => void handleSend(p)}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
             </div>
-          )}
-
-          {messages.map((msg) =>
-            msg.role === "user" ? (
-              <div key={msg.id} className="coach-msg-row coach-msg-row--user">
-                <UserAvatar />
-                <div className="coach-msg-body">
-                  <div className="coach-user-bubble">{msg.content}</div>
-                </div>
-              </div>
-            ) : (
-              <div key={msg.id} className="coach-msg-row">
-                <AssistantAvatar />
-                <div className="coach-msg-body">
-                  <div className="coach-sender-name">Coach</div>
-                  <div className="coach-assistant-text">{msg.content}</div>
-                </div>
-              </div>
-            )
-          )}
-
-          {loading && (
-            <div className="coach-msg-row">
-              <AssistantAvatar />
-              <div className="coach-msg-body">
-                <div className="coach-sender-name">Coach</div>
-                <div className="coach-thinking">
+            {composer}
+          </div>
+        </div>
+      ) : (
+        <div className={`coach-conversation${loading ? " coach-conversation--generating" : ""}`}>
+          <div
+            className="coach-thread"
+            ref={threadRef}
+            onScroll={onThreadScroll}
+            aria-busy={loading}
+          >
+            <div className="coach-thread-inner">
+              {bootstrapping && (
+                <div className="coach-thinking coach-thinking--centered" aria-label="Loading chat">
                   <span /><span /><span />
                 </div>
-              </div>
+              )}
+
+              {messages.map((msg) =>
+                msg.role === "user" ? (
+                  <div key={msg.id} className="coach-msg-row coach-msg-row--user">
+                    <UserAvatar />
+                    <div className="coach-msg-body">
+                      <div className="coach-user-bubble">{msg.content}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={msg.id} className="coach-msg-row coach-msg-row--assistant">
+                    <AssistantAvatar />
+                    <div className="coach-msg-body">
+                      <div className="coach-assistant-text">{msg.content}</div>
+                    </div>
+                  </div>
+                )
+              )}
+
+              {loading && (
+                <div className="coach-msg-row coach-msg-row--assistant coach-msg-row--generating">
+                  <AssistantAvatar />
+                  <div className="coach-msg-body">
+                    <CoachGenerating />
+                  </div>
+                </div>
+              )}
+
+              <div ref={bottomRef} className="coach-thread-anchor" aria-hidden />
             </div>
-          )}
-
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {/* ── Composer ── */}
-      <div className="coach-composer-wrap">
-        {llmDown && (
-          <div className="error-banner coach-error">
-            Coach is disabled — the LLM is unreachable. Start it with{" "}
-            <code>pnpm study</code> (Ollama) or check your OpenRouter key, then reload.
           </div>
-        )}
-        {error && (
-          <div className="error-banner coach-error">{error}</div>
-        )}
-        <div className="coach-composer-inner">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            rows={1}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask a DSA question…"}
-            disabled={loading || bootstrapping || llmDown}
-          />
-          <button
-            type="button"
-            className="coach-send-btn"
-            onClick={() => void handleSend()}
-            disabled={loading || bootstrapping || llmDown || !input.trim()}
-            title="Send (Enter)"
-          >
-            <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="13" x2="8" y2="3" />
-              <polyline points="4,7 8,3 12,7" />
-            </svg>
-          </button>
+          {composer}
         </div>
-        <div className="coach-composer-hint">
-          Enter to send · Shift+Enter for newline
-        </div>
-      </div>
+      )}
 
     </div>
   );

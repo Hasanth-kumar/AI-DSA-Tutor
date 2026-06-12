@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
+import { SkeletonRows } from "./Skeleton.js";
 import type { CurriculumItem, CurriculumState } from "../types/api.js";
 
 interface Props {
@@ -110,9 +111,9 @@ export function CurriculumPanel({ onChanged }: Props) {
 
   if (!state) {
     return (
-      <div className="card curriculum-panel">
-        <h3>Study curriculum</h3>
-        <p className="muted" style={{ fontSize: "0.875rem" }}>Loading…</p>
+      <div className="card curriculum-panel" aria-busy="true">
+        <h3 className="card-section-title">Study curriculum</h3>
+        <SkeletonRows rows={4} />
       </div>
     );
   }
@@ -122,7 +123,7 @@ export function CurriculumPanel({ onChanged }: Props) {
   return (
     <div className="card curriculum-panel">
       <div className="curriculum-header">
-        <h3>Study curriculum</h3>
+        <h3 className="card-section-title m-0">Study curriculum</h3>
         <div className="curriculum-actions">
           {state.activeTopicId && (
             <button

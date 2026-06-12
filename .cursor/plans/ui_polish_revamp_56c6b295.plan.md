@@ -29,9 +29,30 @@ todos:
 isProject: false
 ---
 
-# UI Polish Revamp (keep current identity)
+# UI Polish Revamp (refined warm identity)
 
-All work is in [packages/frontend/src](packages/frontend/src). The look stays warm charcoal + coral; the goal is consistency, detail, and feel.
+All work is in [packages/frontend/src](packages/frontend/src). The look stays in the warm charcoal + coral family, but the palette is refined to feel cleaner, more professional, and more minimal: lower saturation, tighter contrast steps, calmer accent usage.
+
+## 0. Refined palette — `styles/global.css`
+
+Replace the current token values in `:root` and `:root[data-theme="light"]` (same variable names, no component changes needed beyond what section 1 covers).
+
+Dark theme — pull backgrounds closer to neutral (keep only a hint of warmth), desaturate the accent, soften the cream text:
+
+- Backgrounds: `--bg: #171615`, `--bg-elevated: #1d1c1a`, `--bg-card: #232120`, `--bg-surface: #292725` — evenly spaced ~6 lightness steps instead of today's uneven warm-brown jumps.
+- Borders: `--border: #34312d`, `--border-soft: #2b2926` — hairline feel, less visible warm tint.
+- Text: `--text: #ece9e4` (less cream), `--text-muted: #98918a`, `--text-subtle: #6b655e` — bump muted contrast slightly for readability.
+- Accent: `--accent: #c9744a` (desaturated coral), `--accent-hover: #d68155`, `--accent-soft: rgba(201, 116, 74, 0.12)`, `--accent-ring: rgba(201, 116, 74, 0.32)`. Accent is used more sparingly: active nav, primary buttons, links, focus rings — not large fills.
+- Semantic colors desaturated to sit quietly: `--success: #5bb98c`, `--warning: #d3a04f`, `--danger: #d97b7b`; keep the existing `-soft` pattern at 0.10–0.12 alpha.
+- Shadows: reduce intensity one step (`--shadow-sm: 0 1px 2px rgba(0,0,0,0.3)`, `--shadow: 0 4px 10px rgba(0,0,0,0.35)`) — borders carry hierarchy, shadows stay subtle.
+
+Light theme — whiter, less beige, so it reads professional rather than parchment:
+
+- `--bg: #faf9f7`, `--bg-elevated: #f3f1ee`, `--bg-card: #ffffff`, `--bg-surface: #f0eeea`.
+- `--border: #e0dcd5`, `--border-soft: #e9e6e0`.
+- `--text: #26221e`, `--text-muted: #6f6a62`, `--text-subtle: #a09a91`.
+- Accent: `--accent: #b85c30`, hover `#c96a3c` (slightly deeper for AA contrast on white).
+- Shadows keep the warm-gray tint but drop one intensity step, matching dark.
 
 ## 1. Token system cleanup — `styles/global.css`
 
@@ -84,3 +105,4 @@ The graph is currently the messiest screen: heavy label overlap, labels collidin
 ## Verification
 
 - Visual check of all 6 tabs in both themes via the running dev server (Vite on :5173), desktop and mobile widths, comparing against the screenshots taken during research.
+- Spot-check WCAG AA contrast for the new tokens: `--text-muted` on `--bg-card`, `--accent` on `--bg`/white (buttons, links), and badge text on `-soft` backgrounds.

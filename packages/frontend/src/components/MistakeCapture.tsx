@@ -57,7 +57,7 @@ export function MistakeCapture({ attemptId, problemName, onDone }: Props) {
           Wasn&apos;t hard
         </button>
       </div>
-      {error && <div className="error-banner" style={{ marginTop: "0.5rem" }}>{error}</div>}
+      {error && <div className="error-banner mt-2">{error}</div>}
     </div>
   );
 }

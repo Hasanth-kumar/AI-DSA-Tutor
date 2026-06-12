@@ -48,15 +48,7 @@ export function SessionTimer({ elapsedRef, onReset }: Props) {
           {formatTimer(elapsed)}
         </div>
         {minutesElapsed > 0 && (
-          <div
-            style={{
-              fontSize: "0.78rem",
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)",
-            }}
-          >
-            {minutesElapsed} min elapsed
-          </div>
+          <div className="timer-elapsed-hint">{minutesElapsed} min elapsed</div>
         )}
       </div>
 

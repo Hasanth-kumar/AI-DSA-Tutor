@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CalendarIcon, EmptyState } from "./EmptyState.js";
 import type { Session } from "../types/api.js";
 
 interface Props {
@@ -131,10 +132,27 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
     onDayClick?.(cell.key);
   };
 
+  if (totalProblems === 0) {
+    return (
+      <div className="card">
+        <h3 className="card-section-title">Activity heatmap</h3>
+        <EmptyState
+          icon={<CalendarIcon />}
+          title="No activity in the last 26 weeks"
+          hint={
+            source === "leetcode"
+              ? "Solve a problem on LeetCode and it will show up here."
+              : "Log your first session and it will show up here."
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="card">
-      <h3>Activity heatmap</h3>
-      <p className="muted" style={{ margin: "0 0 0.85rem", fontSize: "0.8rem" }}>
+      <h3 className="card-section-title">Activity heatmap</h3>
+      <p className="muted text-sm mt-0 mb-3">
         {sourceLabel}
       </p>
 
@@ -180,36 +198,44 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
           {weeks.flatMap((week, weekIdx) =>
             week.map((cell, dayIdx) => {
               const isActive = cell.count > 0;
+              const tipProps = {
+                "data-level": level(cell.count),
+                "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
+                "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
+                "data-tip-col": weekIdx >= weeks.length - 2 ? ("end" as const) : undefined,
+              };
 
-              return (
-                <div
+              // Days with activity are real buttons (keyboard + screen-reader
+              // reachable); empty days stay inert divs.
+              return isActive ? (
+                <button
                   key={cell.key}
-                  className={`heatmap-cell${isActive ? " heatmap-cell--interactive" : ""}`}
-                  data-level={level(cell.count)}
-                  data-active={hovered?.key === cell.key ? "true" : undefined}
-                  data-tip-row={dayIdx <= 1 ? "top" : undefined}
-                  data-tip-col={weekIdx >= weeks.length - 2 ? "end" : undefined}
-                  aria-label={isActive ? formatCellDetail(cell.key, cell.count) : undefined}
-                  onMouseEnter={isActive ? () => selectCell(cell) : undefined}
-                  onMouseLeave={isActive ? () => setHovered(null) : undefined}
-                  onClick={isActive ? () => clickCell(cell) : undefined}
+                  type="button"
+                  className="heatmap-cell heatmap-cell--interactive"
+                  aria-label={formatCellDetail(cell.key, cell.count)}
+                  onMouseEnter={() => selectCell(cell)}
+                  onMouseLeave={() => setHovered(null)}
+                  onFocus={() => selectCell(cell)}
+                  onBlur={() => setHovered(null)}
+                  onClick={() => clickCell(cell)}
+                  {...tipProps}
                 >
-                  {isActive && (
-                    <span className="heatmap-cell-tooltip" aria-hidden="true">
-                      {formatCellDetail(cell.key, cell.count)}
-                    </span>
-                  )}
-                </div>
+                  <span className="heatmap-cell-tooltip" aria-hidden="true">
+                    {formatCellDetail(cell.key, cell.count)}
+                  </span>
+                </button>
+              ) : (
+                <div key={cell.key} className="heatmap-cell" {...tipProps} />
               );
             }),
           )}
         </div>
       </div>
 
-      <div className="legend" style={{ marginTop: "0.85rem" }}>
+      <div className="legend mt-3" aria-hidden="true">
         <span className="muted">Less</span>
         {[0, 1, 2, 3, 4].map((n) => (
-          <div key={n} className="heatmap-cell" data-level={n} style={{ width: 12, height: 12 }} />
+          <div key={n} className="heatmap-cell" data-level={n} />
         ))}
         <span className="muted">More</span>
       </div>

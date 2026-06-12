@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { api } from "../api/client.js";
+import { CalendarIcon, EmptyState } from "./EmptyState.js";
 import { SessionTimer } from "./SessionTimer.js";
 import type { Problem, Session, Topic } from "../types/api.js";
 
@@ -75,7 +76,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
             <span className="step-number">1</span>
             What are you studying?
           </div>
-          <div className="form-row" style={{ margin: 0 }}>
+          <div className="form-row m-0">
             <label>
               Topic
               <select
@@ -140,15 +141,15 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
               />
               <span className="productivity-value">{productivity}%</span>
             </div>
-            <div style={{ textAlign: "center", fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
+            <div className="muted text-xs text-center mt-2">
               {productivityLabel(productivity)}
             </div>
           </div>
 
           <button
-            className="btn btn-primary"
+            className="btn btn-primary w-full"
             type="button"
-            style={{ width: "100%", justifyContent: "center", padding: "0.65rem" }}
+            style={{ padding: "0.65rem" }}
             onClick={() => void handleSubmit()}
             disabled={submitting || !topicId}
           >
@@ -157,7 +158,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
         </div>
 
         {message && (
-          <div className={message.ok ? "success-banner" : "error-banner"} style={{ marginTop: "0.5rem" }}>
+          <div className={`${message.ok ? "success-banner" : "error-banner"} mt-2`}>
             {message.text}
           </div>
         )}
@@ -165,21 +166,20 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
 
       {/* Recent sessions */}
       <div className="card">
-        <h3>Recent sessions</h3>
+        <h3 className="card-section-title">Recent sessions</h3>
         {sessions.length === 0 ? (
-          <div style={{ padding: "2rem 0", textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "0.5rem", opacity: 0.3 }}>⏱</div>
-            <p className="muted" style={{ margin: 0, fontSize: "0.875rem" }}>
-              No sessions yet — start your first timer above.
-            </p>
-          </div>
+          <EmptyState
+            icon={<CalendarIcon />}
+            title="No sessions yet"
+            hint="Start your first timer and it will appear here."
+          />
         ) : (
           <ul className="session-list">
             {sessions.slice(0, 8).map((s) => (
               <li key={s.id} className="session-item">
                 <div>
                   <div className="session-item-topic">{topicName(s.topicId)}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                  <div className="muted text-xs">
                     {new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </div>
                 </div>

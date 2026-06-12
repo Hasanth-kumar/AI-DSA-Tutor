@@ -3,10 +3,12 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { SkeletonPage } from "./components/Skeleton.js";
 import { useLiveEvents } from "./hooks/useLiveEvents.js";
 
 const TodayPage = lazy(() =>
@@ -155,7 +157,41 @@ export function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const isMobile = useIsMobile();
+  const shortcutsModalRef = useRef<HTMLDivElement>(null);
+  const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null);
   useLiveEvents();
+
+  // Dialog focus management (6): move focus in on open, restore on close.
+  useEffect(() => {
+    if (showShortcuts) {
+      shortcutsReturnFocusRef.current = document.activeElement as HTMLElement | null;
+      shortcutsModalRef.current?.focus();
+    } else {
+      shortcutsReturnFocusRef.current?.focus();
+      shortcutsReturnFocusRef.current = null;
+    }
+  }, [showShortcuts]);
+
+  const trapShortcutsFocus = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Tab") return;
+    const focusables = shortcutsModalRef.current?.querySelectorAll<HTMLElement>(
+      "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
+    );
+    if (!focusables || focusables.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const onContainer = document.activeElement === shortcutsModalRef.current;
+    if (e.shiftKey && (onContainer || document.activeElement === first)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   const selectTab = useCallback(
     (id: Tab) => {
@@ -263,6 +299,7 @@ export function App() {
               key={t.id}
               type="button"
               className={tab === t.id ? "active" : ""}
+              aria-current={tab === t.id ? "page" : undefined}
               onClick={() => selectTab(t.id)}
             >
               {t.icon}
@@ -277,6 +314,7 @@ export function App() {
             className="theme-toggle"
             onClick={toggleTheme}
             title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
             {theme === "dark" ? "☀" : "☾"}
             <span className="nav-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
@@ -285,7 +323,7 @@ export function App() {
       </aside>
 
       <main className="main">
-        <Suspense fallback={<div className="card"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>}>
+        <Suspense fallback={<SkeletonPage />}>
           {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
           {tab === "overview" && <OverviewPage />}
           {tab === "coach" && <CoachingPage anchorProblemId={coachAnchorId} />}
@@ -297,8 +335,29 @@ export function App() {
 
       {showShortcuts && (
         <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
-          <div className="shortcuts-modal card" onClick={(e) => e.stopPropagation()}>
-            <h3>Keyboard shortcuts</h3>
+          <div
+            ref={shortcutsModalRef}
+            className="shortcuts-modal card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shortcuts-title"
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={trapShortcutsFocus}
+          >
+            <div className="shortcuts-modal-header">
+              <h3 id="shortcuts-title" className="modal-title">
+                Keyboard shortcuts
+              </h3>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                aria-label="Close shortcuts"
+                onClick={() => setShowShortcuts(false)}
+              >
+                ✕
+              </button>
+            </div>
             <ul>
               {SHORTCUTS.map((s) => (
                 <li key={s.key}>
@@ -307,7 +366,7 @@ export function App() {
                 </li>
               ))}
             </ul>
-            <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+            <p className="muted text-xs m-0">
               Press <kbd>Esc</kbd> or click outside to close.
             </p>
           </div>

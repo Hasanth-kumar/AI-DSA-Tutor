@@ -15,7 +15,7 @@ const SEGMENTS: {
   { key: "weakness", label: "Weakness", color: "var(--warning)" },
   { key: "confidence", label: "Confidence gap", color: "var(--accent)" },
   { key: "prerequisiteReady", label: "Prereq bonus", color: "var(--success)" },
-  { key: "recency", label: "Recency", color: "#7a9ec9" },
+  { key: "recency", label: "Recency", color: "var(--info)" },
 ];
 
 /** Horizontal stacked bar showing what drives a topic's priority score (3.2). */

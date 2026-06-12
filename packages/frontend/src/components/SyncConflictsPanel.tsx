@@ -38,8 +38,8 @@ export function SyncConflictsPanel() {
 
   return (
     <div className="card conflict-panel">
-      <h3>Sync conflicts</h3>
-      <p className="muted" style={{ fontSize: "0.8rem", marginTop: 0 }}>
+      <h3 className="card-section-title">Sync conflicts</h3>
+      <p className="muted text-sm mt-0">
         These records changed both locally and in Notion between syncs. Pick which
         version wins.
       </p>

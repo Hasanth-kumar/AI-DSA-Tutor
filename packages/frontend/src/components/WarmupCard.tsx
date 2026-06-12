@@ -95,13 +95,12 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
   if (!data) {
     return (
       <div className="warmup-card card">
-        <p className="muted" style={{ margin: 0 }}>
+        <p className="muted m-0">
           Preparing {topicName} recall questions…
         </p>
         <button
           type="button"
-          className="btn btn-ghost"
-          style={{ marginTop: "0.75rem" }}
+          className="btn btn-ghost mt-3"
           onClick={() => onComplete(false)}
         >
           Skip warm-up
@@ -121,7 +120,7 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
       </div>
 
       <p className="warmup-question">{data.questions[index]}</p>
-      <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 0.75rem" }}>
+      <p className="muted text-xs mt-0 mb-3">
         Answer out loud or in your head, then grade your recall.
       </p>
 
@@ -142,8 +141,7 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
 
       <button
         type="button"
-        className="btn btn-ghost"
-        style={{ marginTop: "0.75rem" }}
+        className="btn btn-ghost mt-3"
         disabled={submitting}
         onClick={() => onComplete(false)}
       >
