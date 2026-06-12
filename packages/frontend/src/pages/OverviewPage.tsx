@@ -65,7 +65,7 @@ export function OverviewPage() {
         <header className="page-header">
           <div className="page-header-text">
             <h2>Overview</h2>
-            <p>Your learning command center — live stats from the intelligence layer.</p>
+            <p>Your learning command center</p>
           </div>
         </header>
         <div className="grid" aria-busy="true">
@@ -85,7 +85,7 @@ export function OverviewPage() {
       <header className="page-header">
         <div className="page-header-text">
           <h2>Overview</h2>
-          <p>Your learning command center — live stats from the intelligence layer.</p>
+          <p>Your learning command center</p>
         </div>
       </header>
 
