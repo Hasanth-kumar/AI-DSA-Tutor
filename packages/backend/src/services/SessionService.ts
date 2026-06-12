@@ -69,7 +69,7 @@ export class SessionService {
       throw new Error(`Topic not found: ${input.topicId}`);
     }
 
-    let problem = input.problemId ? this.problemRepo.findById(input.problemId) : null;
+    const problem = input.problemId ? this.problemRepo.findById(input.problemId) : null;
     if (input.problemId && !problem) {
       throw new Error(`Problem not found: ${input.problemId}`);
     }
