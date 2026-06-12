@@ -7,6 +7,7 @@ import {
 import type { AppConfig } from "@dsa/shared";
 import type { NoteRepository, NoteRow } from "../repositories/NoteRepository.js";
 import type { ProblemRepository, ProblemRow } from "../repositories/ProblemRepository.js";
+import type { TopicRepository } from "../repositories/TopicRepository.js";
 
 export interface NoteScanResult {
   scanned: number;
@@ -34,6 +35,7 @@ export class ObsidianNoteService {
     config: AppConfig,
     private readonly noteRepo: NoteRepository,
     private readonly problemRepo: ProblemRepository,
+    private readonly topicRepo: TopicRepository,
     private readonly onIngest?: () => void,
   ) {
     this.vault = config.obsidian.vaultPath
@@ -122,7 +124,8 @@ export class ObsidianNoteService {
     }
 
     const slug = slugifyProblemName(problem.name);
-    const topicName = problem.topicId ?? "";
+    const topic = problem.topicId ? this.topicRepo.findById(problem.topicId) : null;
+    const topicName = topic?.name ?? "";
     const content = `---
 problem: ${slug}
 topic: ${topicName}
@@ -138,7 +141,8 @@ difficulty: ${(problem.difficulty ?? "medium").toLowerCase()}
 ## Key insight
 `;
 
-    const relativePath = this.vault.createNoteFile(problem.name, content);
+    const topicDir = topicName ? this.vault.resolveTopicDirectory(topicName) : undefined;
+    const relativePath = this.vault.createNoteFile(problem.name, content, topicDir);
     if (!relativePath) {
       return { created: false, reason: "A file with this name already exists in the vault" };
     }

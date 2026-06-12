@@ -85,7 +85,7 @@ export function createAppContext(config: AppConfig): AppContext {
     mirrorCache,
     conflictRepo,
   );
-  const obsidianNotes = new ObsidianNoteService(config, noteRepo, problemRepo, () =>
+  const obsidianNotes = new ObsidianNoteService(config, noteRepo, problemRepo, topicRepo, () =>
     events.publish("note"),
   );
   const curriculumService = new CurriculumService(syncMetaRepo, problemRepo);

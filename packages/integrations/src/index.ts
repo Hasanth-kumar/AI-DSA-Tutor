@@ -57,6 +57,8 @@ export {
   createObsidianVault,
   isConflictFile,
   parseFrontmatter,
+  resolveTopicFolderName,
+  sanitizeFolderName,
   stripWikiLinks,
   type ObsidianNoteFile,
   type VaultWatchHandlers,

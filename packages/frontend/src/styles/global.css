@@ -105,8 +105,7 @@ textarea {
 .app-shell:not(.app-shell--mobile) .sidebar--collapsed .brand-text,
 .app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav-section-label,
 .app-shell:not(.app-shell--mobile) .sidebar--collapsed .sidebar-footer,
-.app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav-label,
-.app-shell:not(.app-shell--mobile) .sidebar--collapsed .sidebar-toggle {
+.app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav-label {
   display: none;
 }
 
@@ -226,33 +225,6 @@ textarea {
   white-space: nowrap;
 }
 
-.sidebar-toggle {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: var(--radius-xs);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--transition), color var(--transition);
-}
-
-.sidebar-toggle svg {
-  width: 14px;
-  height: 14px;
-}
-
-.sidebar-toggle:hover {
-  background: var(--border);
-  color: var(--text);
-}
-
 .nav button:hover {
   background: var(--bg-surface);
   color: var(--text);
@@ -276,23 +248,6 @@ textarea {
   margin-top: auto;
   padding: 0.75rem 0.65rem 0;
   border-top: 1px solid var(--border-soft);
-}
-
-.sidebar-status {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 6px var(--success);
-  flex-shrink: 0;
 }
 
 /* ─── Main content ───────────────────────── */
@@ -1711,8 +1666,7 @@ textarea {
 
   .sidebar--collapsed .brand-text,
   .sidebar--collapsed .nav-section-label,
-  .sidebar--collapsed .sidebar-footer,
-  .sidebar--collapsed .sidebar-toggle {
+  .sidebar--collapsed .sidebar-footer {
     display: none;
   }
 
@@ -1737,11 +1691,6 @@ textarea {
 
   .sidebar--collapsed .nav {
     justify-content: flex-start;
-  }
-
-  .sidebar--collapsed .sidebar-toggle {
-    width: 22px;
-    height: 22px;
   }
 
   .nav {
@@ -1872,52 +1821,6 @@ textarea {
 .theme-toggle:hover {
   background: var(--bg-surface);
   color: var(--text);
-}
-.status-dot--idle {
-  background: var(--text-subtle);
-}
-
-/* ─── Status strip (5.4) ─────────────────── */
-.status-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  padding: 0.4rem 0.75rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  font-size: 0.72rem;
-}
-.status-strip--degraded {
-  border-color: var(--warning);
-  background: var(--warning-soft);
-}
-.status-strip-services {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--text-muted);
-}
-.status-pill i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.status-pill--ok i { background: var(--success); }
-.status-pill--down i { background: var(--danger); }
-.status-pill--info i { background: var(--text-subtle); }
-.status-pill--warn i { background: var(--warning); }
-.status-strip-message {
-  color: var(--text);
-  font-weight: 500;
 }
 
 /* ─── Today view (1.1) ───────────────────── */

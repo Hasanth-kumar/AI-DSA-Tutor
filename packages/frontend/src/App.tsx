@@ -7,7 +7,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { StatusStrip } from "./components/StatusStrip.js";
 import { useLiveEvents } from "./hooks/useLiveEvents.js";
 
 const TodayPage = lazy(() =>
@@ -156,7 +155,7 @@ export function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const isMobile = useIsMobile();
-  const { connected: sseConnected } = useLiveEvents();
+  useLiveEvents();
 
   const selectTab = useCallback(
     (id: Tab) => {
@@ -250,19 +249,8 @@ export function App() {
             {brandIcon}
             <div className="brand-text">
               <strong>DSA Mastery OS</strong>
-              <span>intelligence layer</span>
+              <span>Learning Guide</span>
             </div>
-          <button
-            type="button"
-            className="sidebar-toggle"
-            aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
-            aria-expanded={!sidebarCollapsed}
-            onClick={toggleSidebar}
-          >
-            <svg viewBox="0 0 16 16" fill="currentColor">
-              <path d={sidebarCollapsed ? "M6 4l4 4-4 4" : "M10 4l-4 4 4 4"} />
-            </svg>
-          </button>
           </div>
         )}
 
@@ -293,15 +281,10 @@ export function App() {
             {theme === "dark" ? "☀" : "☾"}
             <span className="nav-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
           </button>
-          <div className="sidebar-status">
-            <div className={`status-dot${sseConnected ? "" : " status-dot--idle"}`} />
-            <span>{sseConnected ? "Live · push updates" : "Polling fallback"}</span>
-          </div>
         </div>
       </aside>
 
       <main className="main">
-        <StatusStrip />
         <Suspense fallback={<div className="card"><p className="muted" style={{ margin: 0 }}>Loading…</p></div>}>
           {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
           {tab === "overview" && <OverviewPage />}

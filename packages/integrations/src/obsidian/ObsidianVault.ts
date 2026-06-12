@@ -1,7 +1,15 @@
 import { watch, type FSWatcher } from "chokidar";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, extname, join, relative } from "node:path";
+import { slugifyProblemName } from "../github/GitHubClient.js";
 
 export interface ObsidianNoteFile {
   /** Path relative to the vault root. */
@@ -73,6 +81,42 @@ export function stripWikiLinks(markdown: string): string {
     .replace(/\[\[([^\]]*)\]\]/g, "$1");
 }
 
+/** Safe folder name for a topic directory inside the vault. */
+export function sanitizeFolderName(name: string): string {
+  return name.replace(/[/\\:*?"<>|]/g, "-").trim();
+}
+
+/**
+ * Pick an existing topic folder under `Topics/` or derive a new folder name.
+ * Matches case-insensitively, by slug, then by unique slug substring overlap.
+ */
+export function resolveTopicFolderName(
+  topicName: string,
+  existingFolderNames: string[],
+): string {
+  const trimmed = topicName.trim();
+  if (!trimmed) return "Topics";
+
+  const exact = existingFolderNames.find(
+    (d) => d.toLowerCase() === trimmed.toLowerCase(),
+  );
+  if (exact) return exact;
+
+  const topicSlug = slugifyProblemName(trimmed);
+  const slugMatches = existingFolderNames.filter(
+    (d) => slugifyProblemName(d) === topicSlug,
+  );
+  if (slugMatches.length === 1) return slugMatches[0]!;
+
+  const fuzzy = existingFolderNames.filter((d) => {
+    const dSlug = slugifyProblemName(d);
+    return dSlug.length > 0 && (topicSlug.includes(dSlug) || dSlug.includes(topicSlug));
+  });
+  if (fuzzy.length === 1) return fuzzy[0]!;
+
+  return sanitizeFolderName(trimmed);
+}
+
 /**
  * Read-only Obsidian vault access. The system never modifies existing notes;
  * the only write path is `createNoteFile`, which refuses to overwrite.
@@ -142,16 +186,65 @@ export class ObsidianVault {
   }
 
   /**
-   * Create a brand-new note file (2.4). Never overwrites: returns null when a
-   * file with that name already exists.
+   * Resolve (and create if needed) the topic folder for a new note.
+   * Returns a path relative to the vault root, e.g. `Topics/BackTracking`.
    */
-  createNoteFile(filename: string, content: string): string | null {
+  resolveTopicDirectory(topicName: string): string {
+    const topicsParentAbs = this.findTopicsParentAbsolute();
+    const existing = this.listTopicFolderNames(topicsParentAbs);
+    const folderName = resolveTopicFolderName(topicName, existing);
+    const dirAbs = join(topicsParentAbs, folderName);
+    mkdirSync(dirAbs, { recursive: true });
+    return relative(this.vaultPath, dirAbs);
+  }
+
+  /**
+   * Create a brand-new note file (2.4). Never overwrites: returns null when a
+   * file with that name already exists. Optional `relativeDir` nests the file
+   * under a subfolder of the vault (e.g. `Topics/Sliding Window`).
+   */
+  createNoteFile(
+    filename: string,
+    content: string,
+    relativeDir?: string,
+  ): string | null {
     if (!this.isConfigured()) return null;
     const safe = filename.replace(/[/\\]/g, "-");
-    const absolute = join(this.vaultPath, safe.endsWith(".md") ? safe : `${safe}.md`);
+    const fileName = safe.endsWith(".md") ? safe : `${safe}.md`;
+    const dirAbs = relativeDir ? join(this.vaultPath, relativeDir) : this.vaultPath;
+    mkdirSync(dirAbs, { recursive: true });
+    const absolute = join(dirAbs, fileName);
     if (existsSync(absolute)) return null;
     writeFileSync(absolute, content, { encoding: "utf-8", flag: "wx" });
     return relative(this.vaultPath, absolute);
+  }
+
+  private findTopicsParentAbsolute(): string {
+    const defaultPath = join(this.vaultPath, "Topics");
+    if (!this.isConfigured()) return defaultPath;
+
+    try {
+      const entries = readdirSync(this.vaultPath, { withFileTypes: true });
+      const topics = entries.find(
+        (e) => e.isDirectory() && e.name.toLowerCase() === "topics",
+      );
+      if (topics) return join(this.vaultPath, topics.name);
+    } catch {
+      // fall through to default
+    }
+
+    return defaultPath;
+  }
+
+  private listTopicFolderNames(topicsParentAbs: string): string[] {
+    if (!existsSync(topicsParentAbs)) return [];
+    try {
+      return readdirSync(topicsParentAbs, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      return [];
+    }
   }
 
   private walk(dir: string, out: ObsidianNoteFile[]): void {
