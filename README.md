@@ -1,156 +1,229 @@
 # DSA Mastery OS
 
-**Personal, single-user system.** This is not a multi-tenant product — it is built for one learner (you), one Notion workspace, one WhatsApp number, and one local SQLite mirror. There is no user accounts layer, auth beyond webhook secrets, or per-user data partitioning by design.
+**Autonomous learning intelligence for data structures and algorithms** — built around your Notion workspace, a local SQLite mirror, and AI-assisted coaching.
 
-Autonomous learning intelligence over your Notion DSA databases — powered by local AI (Ollama), orchestrated with n8n, delivered via WhatsApp (Meta Cloud API).
+DSA Mastery OS turns a personal Notion DSA setup into a study system that plans your day, tracks mastery, surfaces weaknesses, and coaches you through problems. It is designed for **one learner, one workspace, one machine** — not as a multi-tenant SaaS. There are no user accounts, no shared tenancy, and no per-user data partitioning by design.
 
-## Project layout
+---
 
+## What it does
+
+| Capability | Description |
+|------------|-------------|
+| **Daily planning** | Ranks topics with a composite priority engine and suggests concrete problems for today's session |
+| **Session tracking** | Logs study time, outcomes, and mistakes; updates intelligence state and syncs back to Notion |
+| **Spaced repetition** | SM-2 revision queue for topics that need reinforcement |
+| **Weakness detection** | Multi-signal analysis of mistake patterns, stagnation, and confidence gaps |
+| **Adaptive difficulty** | Recommends problem difficulty based on topic mastery and recent performance |
+| **Roadmap enforcement** | DAG-based prerequisite graph with violation detection |
+| **AI coaching** | Hints, session debriefs, and free-form chat via OpenRouter or local Ollama |
+| **Analytics** | Streaks, mastery velocity, weakness trends, and difficulty breakdowns |
+| **Web dashboard** | Today view, overview charts, knowledge graph, activity heatmap, live session timer, and coach chat |
+| **WhatsApp bot** *(optional)* | `plan`, `done`, `hint`, `debrief`, and scheduled digests via Meta Cloud API |
+| **External sync** *(optional)* | LeetCode profile stats and GitHub solution linking |
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph sources [Sources of truth]
+    Notion[(Notion DBs)]
+    LC[LeetCode / GitHub]
+  end
+
+  subgraph core [Core]
+    API[Fastify API]
+    Intel[Intelligence engines]
+    Mirror[(SQLite mirror)]
+    Redis[(Redis)]
+  end
+
+  subgraph clients [Clients]
+    Web[React dashboard]
+    WA[WhatsApp]
+  end
+
+  subgraph ai [AI]
+    OR[OpenRouter]
+    OL[Ollama]
+  end
+
+  Notion <-->|sync| API
+  API --> Intel
+  API --> Mirror
+  API --> Redis
+  LC --> API
+  Web --> API
+  WA --> API
+  API --> OR
+  API --> OL
 ```
-dsa-mastery-os/
-├── infrastructure/   # Docker Compose, setup scripts
-├── database/         # Drizzle schema, migrations, seeds
-├── packages/
-│   ├── backend/      # Fastify REST API
-│   ├── intelligence/ # Five intelligence engines (pure TS)
-│   ├── integrations/ # Notion, WhatsApp clients
-│   ├── frontend/     # React + Vite dashboard (Phase 6)
-│   └── shared/       # Shared types and utilities
-├── workflows/        # n8n workflow JSON exports
-└── data/sqlite/      # Local SQLite mirror
-```
+
+**Data flow:** Notion remains the canonical store for topics, problems, and sessions. The backend mirrors that data locally in SQLite for fast queries and offline intelligence. Session and problem updates flow back to Notion on a bidirectional sync cycle (BullMQ scheduler or manual trigger).
+
+**Intelligence layer:** Five pure TypeScript engines (`@dsa/intelligence`) — topic priority, revision (SM-2), weakness, difficulty, and roadmap — are orchestrated without I/O. The backend feeds them snapshot data and persists the results.
+
+---
+
+## Tech stack
+
+| Layer | Technologies |
+|-------|--------------|
+| Monorepo | pnpm workspaces, TypeScript 5, ESLint, Vitest |
+| API | Fastify, BullMQ, Pino |
+| Database | SQLite + Drizzle ORM |
+| Cache / jobs | Redis |
+| Integrations | Notion API, Meta WhatsApp Cloud API, LeetCode GraphQL |
+| AI | OpenRouter (default) or Ollama |
+| Frontend | React 19, Vite, D3.js |
+| Infrastructure | Docker Compose (Redis, Ollama), optional nginx |
+
+---
+
+## Prerequisites
+
+- **Node.js** ≥ 20 and **pnpm** 9 (`corepack enable`)
+- **Docker** (for Redis and Ollama)
+- A **Notion** integration token and three database IDs (topics, problems, sessions)
+- *(Optional)* OpenRouter API key, Meta WhatsApp app credentials, LeetCode username, GitHub token
+
+---
 
 ## Quick start
 
-1. Run first-time setup (creates `.env`, installs deps, builds packages):
-   ```bash
-   pnpm setup
-   ```
-   Or manually: `cp infrastructure/.env.example .env` then `pnpm install && pnpm build`
+### One command (recommended)
 
-2. Fill in `.env` with your Notion token and database IDs.
-
-3. Start infrastructure (Redis, Ollama, n8n):
-   ```bash
-   pnpm docker:up
-   ```
-
-4. Run the API locally (hot reload):
-   ```bash
-   pnpm dev
-   ```
-
-5. Optional — sync Notion → SQLite mirror:
-   ```bash
-   pnpm db:seed
-   ```
-
-## Health check
-
-`GET http://localhost:3000/health` — returns overall status plus per-service checks (SQLite, Redis, Notion, Ollama).
+From a cold machine to studying:
 
 ```bash
+pnpm setup          # first time only — .env, install, build
+# Edit .env with your Notion credentials, then:
+pnpm study          # Docker + API + dashboard + sync + open browser
+```
+
+Stop study mode with `pnpm study:stop`.
+
+### Manual setup
+
+```bash
+pnpm setup
+# Fill in infrastructure/.env.example values in .env
+
+pnpm docker:up      # Redis + Ollama
+pnpm dev:all        # API on :3000, dashboard on :5173
+pnpm db:seed        # optional — initial Notion → SQLite sync
+```
+
+Open **http://localhost:5173** for the dashboard. In development the frontend talks to the API at `http://127.0.0.1:3000` (see `packages/frontend/.env.development`). Do not serve `packages/frontend/dist/` with a static file server alone — it has no API proxy and will fail with JSON parse errors.
+
+### Health check
+
+```bash
+curl http://localhost:3000/health
+# or
 bash infrastructure/scripts/health-check.sh
 ```
 
-## Phase 0 checklist
+Returns overall status plus per-service checks (SQLite, Redis, Notion, LLM).
 
-- [x] pnpm monorepo with `shared`, `intelligence`, `integrations`, `backend`
-- [x] Docker Compose: Redis, Ollama, n8n (`backend` available with `--profile full`)
-- [x] Drizzle SQLite schema + migration
-- [x] Notion client + one-way sync script
-- [x] `GET /health` endpoint
-- [x] GitHub Actions CI (lint + test)
+---
 
-## Phase 1 checklist
+## Configuration
 
-- [x] `TopicPriorityEngine` — composite scoring + daily plan generation
-- [x] `RevisionEngine` — SM-2 spaced repetition + revision queue
-- [x] `WeaknessEngine` — multi-signal weakness detection
-- [x] `DifficultyEngine` — adaptive problem difficulty
-- [x] `RoadmapEngine` — DAG prerequisites + violation detection
-- [x] `IntelligenceOrchestrator` — wires all engines (`createIntelligenceOrchestrator()`)
-- [x] `buildSnapshot()` — intelligence state summary
-- [x] Configurable scoring weights via `WEIGHT_*` env vars
-- [x] `explainPriorityScore()` + `GET /api/topics/:id/score/explain`
-- [x] Unit tests for all engines (`pnpm --filter @dsa/intelligence test`)
+Copy `infrastructure/.env.example` to `.env` at the repo root (or run `pnpm setup`). Key groups:
 
-```bash
-pnpm --filter @dsa/intelligence test
+| Group | Variables | Purpose |
+|-------|-----------|---------|
+| Notion | `NOTION_TOKEN`, `NOTION_*_DB_ID` | Source databases |
+| LLM | `LLM_PROVIDER`, `OPENROUTER_*`, `OLLAMA_*` | Coaching, hints, debriefs |
+| WhatsApp | `WHATSAPP_*`, `WHATSAPP_NOTIFY_SECRET` | Bot commands and cron notifications |
+| Intelligence | `WEIGHT_*` | Topic priority scoring weights |
+| Schedulers | `ENABLE_SCHEDULERS`, `*_CRON`, `SCHEDULER_TIMEZONE` | BullMQ jobs (plan, sync, digest) |
+| External | `LEETCODE_USERNAME`, `GITHUB_*` | Profile stats and solution linking |
+
+OpenRouter is used when `OPENROUTER_API_KEY` is set unless `LLM_PROVIDER=ollama`. Scheduler-based WhatsApp notifications and n8n workflows overlap — enable one path, not both, unless you want duplicate messages.
+
+WhatsApp setup details: [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
+
+---
+
+## Project structure
+
+```
+dsa-mastery-os/
+├── infrastructure/       # Docker Compose, nginx, setup & study scripts
+├── database/             # Drizzle schema, SQL migrations
+├── packages/
+│   ├── backend/          # Fastify REST API, schedulers, services
+│   ├── intelligence/     # Pure TS engines + orchestrator
+│   ├── integrations/     # Notion, WhatsApp, LeetCode, LLM clients
+│   ├── frontend/         # React + Vite dashboard
+│   └── shared/           # Shared types and utilities
+├── workflows/            # Optional n8n workflow exports
+└── data/sqlite/          # Local SQLite mirror (gitignored)
 ```
 
-## Phase 2 checklist
+---
 
-- [x] `GET /api/plan/today` — daily study plan with real problem suggestions
-- [x] `POST /api/session` — session CRUD + intelligence update
-- [x] `GET /api/topics` + `PATCH /api/topics/:id` — read/update topics
-- [x] `GET /api/problems` + `PATCH /api/problems/:id` — problem catalog
-- [x] `GET /api/revision` — revision queue
-- [x] `GET /api/analytics/summary` — weekly stats
-- [x] Notion sync — pull + pending replay (bidirectional)
-- [x] Session/problem logging updates Notion + marks dirty for sync replay
-- [x] Redis cache for plans + BullMQ schedulers (7 AM, 9 PM, 30 min sync, Sunday digest)
-
-## Phase 3 checklist (WhatsApp)
-
-- [x] Meta Cloud API client (`WhatsAppClient`)
-- [x] Webhook: `GET|POST /webhooks/whatsapp` (verify + incoming commands)
-- [x] Commands: `plan`, `done`, `progress`, `hint`, `help`
-- [x] Ollama hints via `HintService`
-- [x] Cron notifications: `POST /api/notifications/daily-plan`, `revision-check`, `weekly-digest`
-- [x] n8n workflow exports + [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md)
-- [x] BullMQ schedulers optionally push to WhatsApp
-
-Setup: see [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
-
-## Phase 4 checklist (Analytics)
-
-- [x] `AnalyticsEngine` — streak, mastery velocity, weakness trend, difficulty analysis
-- [x] `GET /api/analytics/summary` — weekly digest with trend highlights
-- [x] `GET /api/analytics/streak` — current/longest streak + active days
-- [x] `GET /api/analytics/mastery-velocity` — weekly problems/hr + per-topic velocity
-- [x] `GET /api/analytics/weakness-trend` — weak-area count over time (session replay)
-- [x] `GET /api/analytics/difficulty` — solve rates by difficulty + topic alignment
-- [x] Enhanced WhatsApp weekly digest (`progress` command + Sunday cron)
-- [x] n8n `weekly-digest.workflow.json` + BullMQ `weekly-digest` scheduler
+## Development
 
 ```bash
+pnpm dev              # API only (hot reload)
+pnpm dev:web          # Dashboard only
+pnpm dev:all          # API + dashboard in parallel
+
+pnpm build            # Build all packages
+pnpm test             # Run all Vitest suites
+pnpm lint             # ESLint across packages
+
+# Package-scoped
 pnpm --filter @dsa/intelligence test
 pnpm --filter @dsa/backend test
+pnpm --filter @dsa/integrations db:seed
 ```
 
-## Phase 5 checklist (Advanced AI + External Sync)
-
-- [x] `LLMService` + `OllamaClient` — shared local LLM layer
-- [x] Adaptive hints — difficulty-calibrated prompts + `DifficultyEngine` recommendation
-- [x] `DebriefService` — LLM session debrief with weakness + streak context
-- [x] `GET /api/coaching/debrief` + `GET /api/coaching/hint`
-- [x] WhatsApp: `debrief` command + auto-debrief after `done`
-- [x] `LeetCodeClient` — public profile stats via GraphQL
-- [x] `GET /api/integrations/leetcode/stats` (cached 1h)
-- [x] `GitHubClient` — scan repo for solution files, match to problems
-- [x] `POST /api/sync/github` — links `github_url` on matched problems
-
-Env: `LEETCODE_USERNAME`, `GITHUB_REPO`, `GITHUB_TOKEN`, `GITHUB_SOLUTIONS_PATH`
-
-## Phase 6 checklist (Web Dashboard)
-
-- [x] `@dsa/frontend` — React + Vite + TypeScript
-- [x] Overview — stats, today's plan, velocity + weakness charts
-- [x] D3.js knowledge graph — topics as nodes, mastery color, prerequisite edges
-- [x] Calendar heatmap — LeetCode-style activity grid
-- [x] Session tracker — live timer + `POST /api/session` logging
-- [x] Coach chat — free-form DSA Q&A with learning context (`POST /api/coaching/chat`)
-- [x] Vite dev proxy + Fastify CORS for local development
-- [x] `infrastructure/nginx/nginx.conf` for production static + API proxy
+### Docker profiles
 
 ```bash
-# One terminal — API + dashboard
-pnpm dev:all
-
-# Or split across two terminals:
-pnpm dev        # API on :3000
-pnpm dev:web    # dashboard at http://localhost:5173
+pnpm docker:up                              # Redis + Ollama (default)
+docker compose -f infrastructure/docker-compose.yml --profile n8n up -d   # + n8n
+docker compose -f infrastructure/docker-compose.yml --profile full up -d  # + containerized backend
 ```
 
-**Important:** Open **http://localhost:5173** (Vite dev server). In dev, the dashboard calls the API at `http://127.0.0.1:3000` directly (`packages/frontend/.env.development`). Do not open `packages/frontend/dist/` with Live Server or `serve -s` — those have no API and you will see HTML-instead-of-JSON errors. For a static build behind nginx, use `infrastructure/nginx/nginx.conf`.
+### Production
+
+Build the frontend, serve static assets and proxy `/api` through nginx using `infrastructure/nginx/nginx.conf`. Set `VITE_API_BASE_URL` empty for same-origin requests behind the proxy.
+
+---
+
+## API overview
+
+All routes are prefixed with `/api` unless noted.
+
+| Area | Examples |
+|------|----------|
+| Plan & topics | `GET /api/plan/today`, `GET /api/topics`, `GET /api/topics/:id/score/explain` |
+| Sessions | `POST /api/session`, `GET /api/session/activity` |
+| Problems & revision | `GET /api/problems`, `GET /api/revision` |
+| Coaching | `GET /api/coaching/hint`, `GET /api/coaching/debrief`, `POST /api/coaching/chat` |
+| Analytics | `GET /api/analytics/summary`, `/streak`, `/mastery-velocity`, `/weakness-trend`, `/difficulty` |
+| Sync | `POST /api/sync`, `GET /api/sync/status`, `GET /api/sync/conflicts` |
+| Integrations | `GET /api/integrations/leetcode/stats`, `POST /api/sync/github` |
+| WhatsApp | `GET\|POST /webhooks/whatsapp` |
+| Health | `GET /health`, `/health/live`, `/health/ready` |
+
+Live dashboard updates use `GET /api/events` (SSE).
+
+---
+
+## CI
+
+GitHub Actions runs on push and pull requests to `main` / `master`: install → build → lint → test.
+
+---
+
+## License
+
+Private project — all rights reserved unless otherwise specified by the repository owner.
