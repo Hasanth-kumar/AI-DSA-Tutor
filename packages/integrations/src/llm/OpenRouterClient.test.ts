@@ -60,4 +60,30 @@ describe("OpenRouterClient", () => {
       "OpenRouter error: Invalid API key",
     );
   });
+
+  it("retries on rate limits and eventually succeeds", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { message: "Rate limit exceeded" } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: "Recovered reply" } }],
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = createOpenRouterClient({
+      apiKey: "sk-test",
+      model: "google/gemma-4-31b-it:free",
+    });
+
+    const reply = await client.chat([{ role: "user", content: "Hi" }]);
+    expect(reply).toBe("Recovered reply");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

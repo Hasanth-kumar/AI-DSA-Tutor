@@ -124,6 +124,10 @@ export class LLMService {
     userMessage: string,
     options: ChatCoachOptions = {},
   ): Promise<string> {
+    if (!this.isConfigured()) {
+      return fallbackChatReply(this.provider);
+    }
+
     const systemPrompt = buildChatSystemPrompt(learningContext, options);
     const messages = [
       { role: "system" as const, content: systemPrompt },
@@ -133,12 +137,13 @@ export class LLMService {
 
     try {
       const text = await this.client.chat(messages);
-      if (!text) {
-        return fallbackChatReply(this.provider);
+      if (!text?.trim()) {
+        throw new Error("Coach returned an empty response. Please try again.");
       }
       return text;
-    } catch {
-      return fallbackChatReply(this.provider);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      throw new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
     }
   }
 }
