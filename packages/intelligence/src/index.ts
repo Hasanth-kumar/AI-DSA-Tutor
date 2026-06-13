@@ -34,6 +34,11 @@ export { sm2Update, topicToSM2Quality } from "./revision-engine/sm2.js";
 export { RevisionEngine } from "./revision-engine/RevisionEngine.js";
 export { WeaknessEngine } from "./weakness-engine/WeaknessEngine.js";
 export { DifficultyEngine } from "./difficulty-engine/DifficultyEngine.js";
+export {
+  deriveTopicDifficultyFromConfidence,
+  deriveTopicStatusAfterSession,
+} from "./topic-progression.js";
+export { deriveProductivityFromDuration } from "./session-productivity.js";
 export { TopicDAG } from "./roadmap-engine/dag.js";
 export { DSA_PREREQUISITES } from "./roadmap-engine/dsa-roadmap.js";
 export { RoadmapEngine } from "./roadmap-engine/RoadmapEngine.js";
