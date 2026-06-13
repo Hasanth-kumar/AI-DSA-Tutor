@@ -1,5 +1,7 @@
+import type { ProblemStatus } from "@dsa/database/notion-types";
 import {
   createNotionClient,
+  normalizeProblemStatus,
   syncNotionToSqlite,
   type NotionClient,
   type SyncResult,
@@ -171,7 +173,7 @@ export class NotionSyncService {
       const remote = this.problemRepo.findById(pending.id);
       if (!remote) continue;
       const remoteFields = {
-        status: remote.status ?? "Unsolved",
+        status: normalizeProblemStatus(remote.status),
         attempts: remote.attempts ?? 0,
         timeTaken: remote.timeTaken ?? null,
       };
@@ -257,7 +259,7 @@ export class NotionSyncService {
     if (!problem) throw new Error(`Problem not found: ${problemId}`);
 
     await this.getClient().updateProblem(problemId, {
-      status: (problem.status as "Unsolved" | "Solved" | "Attempted") ?? "Unsolved",
+      status: normalizeProblemStatus(problem.status) as ProblemStatus,
       attempts: problem.attempts ?? 0,
       timeTaken: problem.timeTaken ?? undefined,
     });
@@ -282,7 +284,7 @@ export class NotionSyncService {
     if (!problem) return;
 
     this.syncMeta.markProblemPending(problemId, {
-      status: problem.status ?? "Unsolved",
+      status: normalizeProblemStatus(problem.status),
       attempts: problem.attempts ?? 0,
       timeTaken: problem.timeTaken ?? null,
     });

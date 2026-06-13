@@ -2,7 +2,7 @@
 
 export type TopicDifficulty = "Easy" | "Medium" | "Hard";
 export type TopicStatus = "Not started" | "In progress" | "Mastered";
-export type ProblemStatus = "Unsolved" | "Attempted" | "Solved";
+export type ProblemStatus = "Not started" | "Solved" | "Revision needed";
 
 export interface NotionTopic {
   id: string;

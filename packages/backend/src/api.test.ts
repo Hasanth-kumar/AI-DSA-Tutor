@@ -3,7 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { problems, sessions, topics } from "@dsa/database/schema";
-import { createSqliteDb, runMigrations } from "@dsa/integrations";
+import {
+  createSqliteDb,
+  LLMService,
+  runMigrations,
+  type LLMClient,
+} from "@dsa/integrations";
 import { loadConfig, resetConfigCache } from "@dsa/shared";
 import type { AppConfig } from "@dsa/shared";
 import { buildApp } from "./app.js";
@@ -14,6 +19,19 @@ let config: AppConfig;
 let ctx: AppContext;
 
 const MS_PER_DAY = 86_400_000;
+
+function createTestCoachLLM(): LLMService {
+  const client: LLMClient = {
+    isConfigured: () => true,
+    generate: async () => "Structured coaching response for tests.",
+    chat: async () =>
+      "Try breaking the problem into smaller subproblems and check edge cases.",
+  };
+  return new LLMService(
+    { provider: "ollama", model: "test", ollama: { baseUrl: "http://127.0.0.1:1" } },
+    client,
+  );
+}
 
 function seedTestDb(dbPath: string): void {
   runMigrations(dbPath);
@@ -58,7 +76,7 @@ function seedTestDb(dbPath: string): void {
         name: "Two Sum",
         topicId: "topic-a",
         difficulty: "Easy",
-        status: "Unsolved",
+        status: "Not started",
         attempts: 0,
         updatedAt: now,
       },
@@ -122,7 +140,7 @@ describe("API routes", () => {
     seedTestDb(testDbPath);
     config = loadConfig("/nonexistent/.env");
     config = { ...config, sqlite: { path: testDbPath }, schedulers: { ...config.schedulers, enabled: false } };
-    ctx = createAppContext(config);
+    ctx = createAppContext(config, { coachLlm: createTestCoachLLM() });
   });
 
   afterEach(async () => {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CalendarIcon, EmptyState } from "./EmptyState.js";
+import { EmptyState, HeatmapIllustration } from "./EmptyState.js";
 import type { Session } from "../types/api.js";
 
 interface Props {
@@ -137,7 +137,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
       <div className="card">
         <h3 className="card-section-title">Activity heatmap</h3>
         <EmptyState
-          icon={<CalendarIcon />}
+          illustration={<HeatmapIllustration />}
           title="No activity in the last 26 weeks"
           hint={
             source === "leetcode"

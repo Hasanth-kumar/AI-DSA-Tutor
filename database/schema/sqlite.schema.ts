@@ -22,7 +22,7 @@ export const problems = sqliteTable("problems", {
   difficulty: text("difficulty"),
   leetcodeLink: text("leetcode_link"),
   githubUrl: text("github_url"),
-  status: text("status").default("Unsolved"),
+  status: text("status").default("Not started"),
   attempts: integer("attempts").default(0),
   timeTaken: integer("time_taken"),
   notes: text("notes"),

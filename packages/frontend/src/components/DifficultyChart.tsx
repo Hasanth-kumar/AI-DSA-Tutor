@@ -75,7 +75,8 @@ export const DifficultyChart = memo(function DifficultyChart({ data }: Props) {
                 y={y + 3}
                 textAnchor="end"
                 fill="var(--text-muted)"
-                fontSize="9"
+                fontSize="10"
+                className="chart-mono"
               >
                 {tick}%
               </text>

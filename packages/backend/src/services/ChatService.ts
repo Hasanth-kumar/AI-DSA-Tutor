@@ -216,7 +216,7 @@ export class ChatService {
         topicName: topic.name,
         difficulty: problem.difficulty ?? "Medium",
         attempts: problem.attempts ?? 0,
-        status: problem.status ?? "Unsolved",
+        status: problem.status ?? "Not started",
         confidence: topic.confidence,
         solveHistory: solveHistory && solveHistory.length > 0 ? solveHistory : undefined,
         topicMistakeTags: topic.mistakeTagCounts,

@@ -45,7 +45,8 @@ export const VelocityChart = memo(function VelocityChart({ data }: Props) {
               y={HEIGHT - 6}
               textAnchor="middle"
               fill="var(--text-muted)"
-              fontSize="9"
+              fontSize="10"
+              className="chart-mono"
             >
               {d.weekStart.slice(5)}
             </text>

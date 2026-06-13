@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+} from "react";
 import { api } from "../api/client.js";
 import { CheckCircleIcon, EmptyState } from "../components/EmptyState.js";
 import { MistakeCapture } from "../components/MistakeCapture.js";
@@ -22,6 +29,35 @@ const DEFAULT_MINUTES = 25;
 
 interface Props {
   onOpenCoach: (problemId: string) => void;
+}
+
+/** Session lifecycle shown as a step strip: Warm-up → Focus → Capture → Done. */
+const SESSION_STEPS = ["Warm-up", "Focus", "Capture", "Done"] as const;
+
+function SessionProgress({ step }: { step: number }) {
+  return (
+    <div className="session-progress" role="group" aria-label="Session progress">
+      {SESSION_STEPS.map((label, i) => (
+        <Fragment key={label}>
+          {i > 0 && (
+            <span
+              className={`session-progress-line${i <= step ? " session-progress-line--done" : ""}`}
+              aria-hidden="true"
+            />
+          )}
+          <span
+            className={`session-progress-step${i < step ? " session-progress-step--done" : ""}${
+              i === step ? " session-progress-step--current" : ""
+            }`}
+            aria-current={i === step ? "step" : undefined}
+          >
+            <span className="session-progress-dot" aria-hidden="true" />
+            <span>{label}</span>
+          </span>
+        </Fragment>
+      ))}
+    </div>
+  );
 }
 
 type Flow =
@@ -76,6 +112,16 @@ export function TodayPage({ onOpenCoach }: Props) {
   const [logging, setLogging] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Brief "Done" celebration so the progress strip lands on its final step.
+  const [celebrateAt, setCelebrateAt] = useState<number | null>(null);
+  // Which problem's Done button is mid confirm-pulse.
+  const [pulseId, setPulseId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (celebrateAt == null) return;
+    const id = setTimeout(() => setCelebrateAt(null), 2800);
+    return () => clearTimeout(id);
+  }, [celebrateAt]);
 
   // Keyboard shortcuts from App (5.4): s = start session, l = focus first Done.
   useEffect(() => {
@@ -153,6 +199,7 @@ export function TodayPage({ onOpenCoach }: Props) {
         setFlow({ kind: "mistake", attemptId: result.attemptId, problemId, problemName });
       } else {
         setMessage({ text: `Logged ${problemName} (${minutes} min).`, ok: true });
+        setCelebrateAt(Date.now());
       }
       void refresh();
     } catch (err) {
@@ -217,6 +264,19 @@ export function TodayPage({ onOpenCoach }: Props) {
   const dueTotal = plan?.revisionTotalDue ?? plan?.revisionTopics.length ?? 0;
   const topRevision = plan?.revisionTopics[0] ?? null;
 
+  // Map the current flow onto the Warm-up → Focus → Capture → Done strip.
+  const hasStarts = Object.keys(starts).length > 0;
+  const sessionStep =
+    flow.kind === "warmup"
+      ? 0
+      : flow.kind === "mistake" || flow.kind === "note-offer"
+        ? 2
+        : celebrateAt != null
+          ? 3
+          : hasStarts
+            ? 1
+            : -1;
+
   if (loading && !plan) {
     return (
       <div>
@@ -274,6 +334,8 @@ export function TodayPage({ onOpenCoach }: Props) {
 
       {plan && (
         <div className="grid">
+          {sessionStep >= 0 && <SessionProgress step={sessionStep} />}
+
           {/* ── 1. Primary topic ── */}
           <div className="card today-topic-card">
             <div className="today-topic-row">
@@ -306,7 +368,10 @@ export function TodayPage({ onOpenCoach }: Props) {
               <button
                 type="button"
                 className="btn btn-primary today-start-btn"
-                onClick={() => setFlow({ kind: "warmup" })}
+                onClick={() => {
+                  setCelebrateAt(null);
+                  setFlow({ kind: "warmup" });
+                }}
               >
                 ▶ Start session
               </button>
@@ -328,7 +393,7 @@ export function TodayPage({ onOpenCoach }: Props) {
 
           {/* ── Mistake capture (1.4) ── */}
           {flow.kind === "mistake" && (
-            <div className="card">
+            <div className="card flow-reveal">
               <MistakeCapture
                 attemptId={flow.attemptId}
                 problemName={flow.problemName}
@@ -345,7 +410,7 @@ export function TodayPage({ onOpenCoach }: Props) {
 
           {/* ── Note template offer (2.4) ── */}
           {flow.kind === "note-offer" && (
-            <div className="card note-offer">
+            <div className="card note-offer flow-reveal">
               <span>
                 Capture your insight on <strong>{flow.problemName}</strong> in Obsidian?
               </span>
@@ -356,6 +421,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                   onClick={() => {
                     const problemId = flow.problemId;
                     setFlow({ kind: "idle" });
+                    setCelebrateAt(Date.now());
                     api
                       .createNoteTemplate(problemId)
                       .then((res) =>
@@ -379,7 +445,10 @@ export function TodayPage({ onOpenCoach }: Props) {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={() => setFlow({ kind: "idle" })}
+                  onClick={() => {
+                    setFlow({ kind: "idle" });
+                    setCelebrateAt(Date.now());
+                  }}
                 >
                   Skip
                 </button>
@@ -396,12 +465,16 @@ export function TodayPage({ onOpenCoach }: Props) {
               </p>
             )}
             <ul className="today-problems">
-              {plan.suggestedProblems.slice(0, 3).map((p) => {
+              {plan.suggestedProblems.slice(0, 3).map((p, i) => {
                 const started = starts[p.problemId] != null;
                 const note = notes[p.problemId];
                 const minutes = elapsedMinutes(p.problemId);
                 return (
-                  <li key={p.problemId} className="today-problem">
+                  <li
+                    key={p.problemId}
+                    className="today-problem reveal-stagger"
+                    style={{ "--reveal-i": i } as CSSProperties}
+                  >
                     <div className="today-problem-main">
                       <div className="today-problem-name">
                         {p.leetcodeLink ? (
@@ -430,7 +503,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                         )}
                       </div>
                       {started && (
-                        <span className="today-problem-timer">
+                        <span className="today-problem-timer today-problem-timer--running">
                           ⏱ {minutes ?? 0} min
                         </span>
                       )}
@@ -441,27 +514,42 @@ export function TodayPage({ onOpenCoach }: Props) {
                         <button
                           type="button"
                           className="btn"
-                          onClick={() => startProblem(p.problemId)}
+                          title={
+                            p.leetcodeLink
+                              ? "Open on LeetCode and start the timer"
+                              : "Start the timer"
+                          }
+                          onClick={() => {
+                            // Open within the click gesture so it isn't blocked.
+                            if (p.leetcodeLink) {
+                              window.open(p.leetcodeLink, "_blank", "noopener,noreferrer");
+                            }
+                            startProblem(p.problemId);
+                          }}
                         >
                           Start
                         </button>
                       )}
                       <button
                         type="button"
-                        className="btn btn-primary"
+                        className={`btn btn-primary${pulseId === p.problemId ? " btn--confirm-pulse" : ""}`}
                         data-done-button="true"
                         disabled={logging === p.problemId}
-                        onClick={() => void markDone(p.problemId, p.name)}
+                        onClick={() => {
+                          setPulseId(p.problemId);
+                          void markDone(p.problemId, p.name);
+                        }}
+                        onAnimationEnd={() => setPulseId((id) => (id === p.problemId ? null : id))}
                       >
                         {logging === p.problemId ? "Saving…" : "✓ Done"}
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost"
+                        className="btn btn-ghost today-coach-btn"
                         title="Open coach anchored to this problem"
                         onClick={() => onOpenCoach(p.problemId)}
                       >
-                        💬 Coach
+                        💬 Coach <span className="today-coach-arrow" aria-hidden="true">↗</span>
                       </button>
                     </div>
 

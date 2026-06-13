@@ -16,7 +16,8 @@
     "dev": "tsc -p tsconfig.json --watch",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src",
-    "db:seed": "tsx src/scripts/from-notion.ts"
+    "db:seed": "tsx src/scripts/from-notion.ts",
+    "db:dedupe-problems": "tsx src/scripts/dedupe-notion-problems.ts"
   },
   "dependencies": {
     "@dsa/database": "workspace:*",

@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { TopicDifficulty } from "@dsa/intelligence";
 import { problems } from "@dsa/database/schema";
-import type { SqliteDb } from "@dsa/integrations";
+import type { TopicDifficulty } from "@dsa/intelligence";
+import { normalizeProblemStatus, type SqliteDb } from "@dsa/integrations";
 import type { MirrorCache } from "../services/MirrorCache.js";
 
 export type ProblemRow = typeof problems.$inferSelect;
@@ -59,7 +59,7 @@ export class ProblemRepository {
     const { difficulties, limit = 3 } = options;
     const conditions = [
       eq(problems.topicId, topicId),
-      eq(problems.status, "Unsolved"),
+      eq(problems.status, "Not started"),
     ];
     if (difficulties && difficulties.length > 0) {
       conditions.push(inArray(problems.difficulty, difficulties));
@@ -81,7 +81,9 @@ export class ProblemRepository {
     this.db
       .update(problems)
       .set({
-        ...(patch.status != null ? { status: patch.status } : {}),
+        ...(patch.status != null
+          ? { status: normalizeProblemStatus(patch.status) }
+          : {}),
         ...(patch.attempts != null ? { attempts: patch.attempts } : {}),
         ...(patch.timeTaken !== undefined ? { timeTaken: patch.timeTaken } : {}),
         ...(patch.notes != null ? { notes: patch.notes } : {}),

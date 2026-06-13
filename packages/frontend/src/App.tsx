@@ -324,12 +324,19 @@ export function App() {
 
       <main className="main">
         <Suspense fallback={<SkeletonPage />}>
-          {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
-          {tab === "overview" && <OverviewPage />}
-          {tab === "coach" && <CoachingPage anchorProblemId={coachAnchorId} />}
-          {tab === "graph" && <GraphPage />}
-          {tab === "activity" && <ActivityPage />}
-          {tab === "session" && <SessionPage />}
+          {/* Coach owns the full viewport height, so it stays unwrapped; every
+              other tab gets a keyed wrapper that replays the page transition. */}
+          {tab === "coach" ? (
+            <CoachingPage anchorProblemId={coachAnchorId} />
+          ) : (
+            <div key={tab} className="page-transition">
+              {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
+              {tab === "overview" && <OverviewPage />}
+              {tab === "graph" && <GraphPage />}
+              {tab === "activity" && <ActivityPage />}
+              {tab === "session" && <SessionPage />}
+            </div>
+          )}
         </Suspense>
       </main>
 

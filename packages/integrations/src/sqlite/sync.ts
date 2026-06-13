@@ -1,6 +1,7 @@
 import { problems, sessions, topics } from "@dsa/database/schema";
 import type { NotionClient } from "../notion/NotionClient.js";
 import { isFullPage, mapProblemPage, mapSessionPage, mapTopicPage } from "../notion/mappers.js";
+import { normalizeProblemStatus } from "../notion/problem-fields.js";
 import { createSqliteDb, runMigrations } from "./client.js";
 
 export interface SyncResult {
@@ -58,7 +59,7 @@ export async function syncNotionToSqlite(
           topicId: p.topicId ?? null,
           difficulty: p.difficulty ?? null,
           leetcodeLink: p.leetcodeLink ?? null,
-          status: p.status ?? "Unsolved",
+          status: normalizeProblemStatus(p.status),
           attempts: p.attempts ?? 0,
           timeTaken: p.timeTaken ?? null,
           notes: p.notes ?? null,

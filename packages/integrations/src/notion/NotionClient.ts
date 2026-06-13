@@ -6,6 +6,12 @@ import type {
   SessionNotionCreate,
   TopicNotionUpdate,
 } from "./NotionWriter.js";
+import {
+  formatLocalDate,
+  PROBLEM_PROPERTIES,
+  resolveSchemaPropertyName,
+  toNotionProblemStatus,
+} from "./problem-fields.js";
 
 export interface NotionConfig {
   token: string;
@@ -80,7 +86,7 @@ export class NotionClient {
     }
     if (update.lastRevised != null) {
       properties["Last Revised"] = {
-        date: { start: update.lastRevised.toISOString().slice(0, 10) },
+        date: { start: formatLocalDate(update.lastRevised) },
       };
     }
     if (update.isWeakArea != null) {
@@ -104,24 +110,31 @@ export class NotionClient {
   }
 
   async updateProblem(pageId: string, update: ProblemNotionUpdate): Promise<void> {
-    // The user's Problems DB doesn't necessarily match our assumed schema
-    // (e.g. Status may be a `status` property rather than `select`, and
-    // "Attempts" may not exist) — adapt to whatever is actually there and
-    // skip properties the database doesn't have.
     const schema = await this.getDatabaseProperties(this.config.problemsDbId);
     const properties: Record<string, unknown> = {};
 
-    if (update.status != null && schema.Status?.type) {
-      properties.Status =
-        schema.Status.type === "status"
-          ? { status: { name: update.status } }
-          : { select: { name: update.status } };
+    const statusProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.Status);
+    if (update.status != null && statusProp) {
+      const propType = schema[statusProp]?.type;
+      const notionStatus = toNotionProblemStatus(update.status);
+      properties[statusProp] =
+        propType === "status"
+          ? { status: { name: notionStatus } }
+          : { select: { name: notionStatus } };
     }
-    if (update.attempts != null && schema.Attempts?.type === "number") {
-      properties.Attempts = { number: update.attempts };
+
+    const attemptsProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.Attempts);
+    if (update.attempts != null && attemptsProp && schema[attemptsProp]?.type === "number") {
+      properties[attemptsProp] = { number: update.attempts };
     }
-    if (update.timeTaken != null && schema["Time Taken"]?.type === "number") {
-      properties["Time Taken"] = { number: update.timeTaken };
+
+    const timeTakenProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.TimeTaken);
+    if (
+      update.timeTaken != null &&
+      timeTakenProp &&
+      schema[timeTakenProp]?.type === "number"
+    ) {
+      properties[timeTakenProp] = { number: update.timeTaken };
     }
 
     if (Object.keys(properties).length === 0) return;
@@ -147,13 +160,13 @@ export class NotionClient {
             title: [
               {
                 text: {
-                  content: `Study — ${session.date.toISOString().slice(0, 10)}`,
+                  content: `Study — ${formatLocalDate(session.date)}`,
                 },
               },
             ],
           },
           Date: {
-            date: { start: session.date.toISOString().slice(0, 10) },
+            date: { start: formatLocalDate(session.date) },
           },
           Topic: {
             relation: [{ id: session.topicId }],
@@ -170,6 +183,27 @@ export class NotionClient {
     return response.id;
   }
 
+  async archivePage(pageId: string): Promise<void> {
+    await this.requestQueue.add(() =>
+      this.client.pages.update({ page_id: pageId, archived: true }),
+    );
+  }
+
+  async setProblemTopics(pageId: string, topicIds: string[]): Promise<void> {
+    const schema = await this.getDatabaseProperties(this.config.problemsDbId);
+    if (schema.Topic?.type !== "relation") return;
+
+    const uniqueIds = [...new Set(topicIds)];
+    await this.requestQueue.add(() =>
+      this.client.pages.update({
+        page_id: pageId,
+        properties: {
+          Topic: { relation: uniqueIds.map((id) => ({ id })) },
+        } as Parameters<Client["pages"]["update"]>[0]["properties"],
+      }),
+    );
+  }
+
   /** Append a quick-capture note as a paragraph block at the end of a topic page. */
   async appendTopicNote(pageId: string, text: string): Promise<void> {
     await this.requestQueue.add(() =>
@@ -184,7 +218,7 @@ export class NotionClient {
                 {
                   type: "text",
                   text: {
-                    content: `📌 ${new Date().toISOString().slice(0, 10)} — ${text}`,
+                    content: `📌 ${formatLocalDate(new Date())} — ${text}`,
                   },
                 },
               ],

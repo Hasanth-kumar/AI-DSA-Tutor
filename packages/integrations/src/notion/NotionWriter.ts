@@ -1,5 +1,7 @@
 import type { TopicDifficulty, TopicStatus } from "@dsa/database/notion-types";
 
+import type { ProblemStatus } from "@dsa/database/notion-types";
+
 export interface TopicNotionUpdate {
   confidence?: number;
   revisionCount?: number;
@@ -18,7 +20,7 @@ export interface SessionNotionCreate {
 }
 
 export interface ProblemNotionUpdate {
-  status?: "Unsolved" | "Solved" | "Attempted";
+  status?: ProblemStatus;
   attempts?: number;
   timeTaken?: number;
 }

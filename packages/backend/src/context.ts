@@ -61,7 +61,15 @@ export interface AppContext {
   close: () => Promise<void>;
 }
 
-export function createAppContext(config: AppConfig): AppContext {
+export interface CreateAppContextOptions {
+  /** Inject a mock/stub for coaching routes in tests (avoids real LLM calls). */
+  coachLlm?: LLMService;
+}
+
+export function createAppContext(
+  config: AppConfig,
+  options: CreateAppContextOptions = {},
+): AppContext {
   runMigrations(config.sqlite.path);
   const { db, sqlite } = createSqliteDb(config.sqlite.path);
 
@@ -113,14 +121,16 @@ export function createAppContext(config: AppConfig): AppContext {
     problemRepo,
   );
   // Coaching paths (debrief/hint/chat) build their own LLM from coachLlm config (3.3).
+  const coachLlm = options.coachLlm;
   const debriefService = new DebriefService(
     config,
     intelligence,
     sessionRepo,
     topicRepo,
     analyticsService,
+    coachLlm,
   );
-  const hintService = new HintService(config, intelligence, undefined, cache);
+  const hintService = new HintService(config, intelligence, coachLlm, cache);
   const chatRepo = new ChatRepository(db);
   const chatService = new ChatService(
     config,
@@ -130,7 +140,7 @@ export function createAppContext(config: AppConfig): AppContext {
     intelligence,
     topicRepo,
     problemRepo,
-    undefined,
+    coachLlm,
     attemptRepo,
     noteRepo,
   );
@@ -139,6 +149,7 @@ export function createAppContext(config: AppConfig): AppContext {
     topicRepo,
     sessionService,
     noteRepo,
+    coachLlm,
   );
   const leetcodeService = new LeetCodeService(config, syncMetaRepo);
   const githubSync = new GitHubSyncService(config, problemRepo, mirrorCache);

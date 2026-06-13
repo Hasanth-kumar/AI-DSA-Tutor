@@ -81,7 +81,11 @@ export function GraphPage() {
             </div>
           }
         >
-          <KnowledgeGraph topics={topics} onNodeClick={selectTopic} />
+          <KnowledgeGraph
+            topics={topics}
+            selectedId={selectedId}
+            onNodeClick={selectTopic}
+          />
         </Suspense>
 
         {selected && (

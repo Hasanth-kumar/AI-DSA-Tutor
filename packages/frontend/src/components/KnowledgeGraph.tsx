@@ -1,6 +1,6 @@
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
-import { EmptyState, SparkleIcon } from "./EmptyState.js";
+import { EmptyState, GraphIllustration } from "./EmptyState.js";
 import type { Topic } from "../types/api.js";
 
 interface GraphNode extends d3.SimulationNodeDatum {
@@ -16,6 +16,8 @@ type GraphLink = d3.SimulationLinkDatum<GraphNode>;
 
 interface Props {
   topics: Topic[];
+  /** Currently focused topic — drives the dim/highlight transition (5.4). */
+  selectedId?: string | null;
   /** Node click → side panel with stats and "study this now" (5.4). */
   onNodeClick?: (topicId: string) => void;
 }
@@ -39,9 +41,17 @@ function nodeRadius(node: GraphNode): number {
   return 8 + (node.confidence / 100) * 10;
 }
 
-export function KnowledgeGraph({ topics, onNodeClick }: Props) {
+export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
   const ref = useRef<SVGSVGElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
+  // Latest click handler, read through a ref so changing it never rebuilds the
+  // simulation (which would discard the settled layout).
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  // Apply the focus highlight; defined inside the build effect, called from the
+  // selection effect so the two share one implementation.
+  const applyHighlightRef = useRef<(id: string | null) => void>(() => {});
+  const selectedIdRef = useRef<string | null>(selectedId ?? null);
 
   useEffect(() => {
     if (!ref.current || topics.length === 0) return;
@@ -49,6 +59,13 @@ export function KnowledgeGraph({ topics, onNodeClick }: Props) {
     const width = ref.current.clientWidth || 720;
     const height = 480;
     const now = Date.now();
+
+    // d3 transitions are JS-driven, so the CSS reduced-motion guard can't reach
+    // them — collapse durations to 0 here instead.
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const dur = (ms: number) => (reduceMotion ? 0 : ms);
 
     const nodes: GraphNode[] = topics.map((t) => ({
       id: t.id,
@@ -63,11 +80,18 @@ export function KnowledgeGraph({ topics, onNodeClick }: Props) {
 
     const nodeIds = new Set(nodes.map((n) => n.id));
     const links: GraphLink[] = [];
+    // Adjacency for the focus transition: who lights up when a node is picked.
+    const adjacency = new Map<string, Set<string>>();
+    const connect = (a: string, b: string) => {
+      (adjacency.get(a) ?? adjacency.set(a, new Set()).get(a)!).add(b);
+    };
 
     for (const topic of topics) {
       for (const prereqId of topic.prerequisites) {
         if (nodeIds.has(prereqId)) {
           links.push({ source: prereqId, target: topic.id } as GraphLink);
+          connect(prereqId, topic.id);
+          connect(topic.id, prereqId);
         }
       }
     }
@@ -182,6 +206,7 @@ export function KnowledgeGraph({ topics, onNodeClick }: Props) {
 
     node
       .append("circle")
+      .attr("class", "graph-node-circle")
       .attr("r", (d) => nodeRadius(d))
       .attr("fill", (d) => nodeColor(d))
       .attr("stroke", "var(--bg-card)")
@@ -189,7 +214,28 @@ export function KnowledgeGraph({ topics, onNodeClick }: Props) {
       .style("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
-        onNodeClick?.(d.id);
+        onNodeClickRef.current?.(d.id);
+      });
+
+    // Hover: grow the node and bloom a soft coral ring (not a hard border).
+    node
+      .on("mouseenter", function (_event, d) {
+        d3.select(this)
+          .select<SVGCircleElement>("circle.graph-node-circle")
+          .transition()
+          .duration(dur(160))
+          .attr("r", nodeRadius(d) + 3)
+          .attr("stroke", "var(--accent)")
+          .attr("stroke-width", 3);
+      })
+      .on("mouseleave", function (_event, d) {
+        d3.select(this)
+          .select<SVGCircleElement>("circle.graph-node-circle")
+          .transition()
+          .duration(dur(200))
+          .attr("r", nodeRadius(d))
+          .attr("stroke", "var(--bg-card)")
+          .attr("stroke-width", 2);
       });
 
     node
@@ -217,21 +263,97 @@ export function KnowledgeGraph({ topics, onNodeClick }: Props) {
       node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
-    // First paint is pre-settled (tick warm-up above), so fit immediately.
+    /**
+     * Hero focus transition (5.4): dim everything unrelated, brighten the
+     * focused node's edges, and draw a coral ring around the selection.
+     */
+    const applyHighlight = (id: string | null) => {
+      node.selectAll("circle.graph-focus-ring").remove();
+
+      if (!id) {
+        node.transition().duration(dur(220)).style("opacity", 1);
+        link
+          .transition()
+          .duration(dur(220))
+          .attr("stroke", "var(--border)")
+          .attr("stroke-opacity", 0.9)
+          .attr("stroke-width", 1.5);
+        return;
+      }
+
+      const related = new Set(adjacency.get(id) ?? []);
+      related.add(id);
+
+      node
+        .transition()
+        .duration(dur(220))
+        .style("opacity", (d) => (related.has(d.id) ? 1 : 0.15));
+
+      link
+        .transition()
+        .duration(dur(220))
+        .attr("stroke", (d) =>
+          linkNode(d.source).id === id || linkNode(d.target).id === id
+            ? "var(--accent)"
+            : "var(--border)",
+        )
+        .attr("stroke-opacity", (d) =>
+          linkNode(d.source).id === id || linkNode(d.target).id === id ? 1 : 0.25,
+        )
+        .attr("stroke-width", (d) =>
+          linkNode(d.source).id === id || linkNode(d.target).id === id ? 2.5 : 1.5,
+        );
+
+      // Coral ring that draws itself clockwise around the selected node.
+      const selectedNode = node.filter((d) => d.id === id);
+      const datum = selectedNode.datum();
+      if (datum) {
+        const ringR = nodeRadius(datum) + 7;
+        const circumference = 2 * Math.PI * ringR;
+        selectedNode
+          .append("circle")
+          .attr("class", "graph-focus-ring")
+          .attr("r", ringR)
+          .attr("fill", "none")
+          .attr("stroke", "var(--accent)")
+          .attr("stroke-width", 2.5)
+          .attr("stroke-linecap", "round")
+          .attr("transform", "rotate(-90)")
+          .attr("stroke-dasharray", circumference)
+          .attr("stroke-dashoffset", circumference)
+          .transition()
+          .duration(dur(420))
+          .ease(d3.easeCubicOut)
+          .attr("stroke-dashoffset", 0);
+      }
+    };
+    applyHighlightRef.current = applyHighlight;
+
+    // First paint is pre-settled (tick warm-up above), so fit immediately,
+    // then materialize the graph with a soft fade rather than a hard snap.
     fitView();
+    g.style("opacity", 0).transition().duration(dur(600)).style("opacity", 1);
+    applyHighlight(selectedIdRef.current);
 
     return () => {
       simulation.stop();
       svg.on(".zoom", null);
       fitRef.current = null;
+      applyHighlightRef.current = () => {};
     };
-  }, [topics, onNodeClick]);
+  }, [topics]);
+
+  // React to selection changes without rebuilding the simulation.
+  useEffect(() => {
+    selectedIdRef.current = selectedId ?? null;
+    applyHighlightRef.current(selectedId ?? null);
+  }, [selectedId]);
 
   if (topics.length === 0) {
     return (
       <div className="card">
         <EmptyState
-          icon={<SparkleIcon />}
+          illustration={<GraphIllustration />}
           title="No topics to visualize"
           hint="Topics appear here once they're synced from Notion."
         />

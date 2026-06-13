@@ -46,7 +46,7 @@ const problems: AnalyticsProblemInput[] = [
   {
     topicId: "t1",
     difficulty: "Medium",
-    status: "Unsolved",
+    status: "Not started",
     attempts: 1,
     timeTaken: null,
   },

@@ -26,6 +26,7 @@ const MIGRATIONS = [
   "0005_performance_indexes.sql",
   "0006_query_indexes.sql",
   "0007_attempts_notes_conflicts.sql",
+  "0008_problem_status_notion.sql",
 ] as const;
 
 export function runMigrations(sqlitePath: string): void {

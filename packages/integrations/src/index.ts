@@ -17,6 +17,15 @@ export { formatStudyPlanForWhatsApp } from "./whatsapp/formatters/plan.formatter
 export { formatProgressForWhatsApp } from "./whatsapp/formatters/progress.formatter.js";
 export { formatRevisionReminder } from "./whatsapp/formatters/revision.formatter.js";
 export { NotionClient, createNotionClient, type NotionConfig } from "./notion/NotionClient.js";
+export {
+  normalizeProblemStatus,
+  toNotionProblemStatus,
+  isProblemSolved,
+  isProblemNotStarted,
+  formatLocalDate,
+  PROBLEM_PROPERTIES,
+  PROBLEM_STATUSES,
+} from "./notion/problem-fields.js";
 export type {
   ProblemNotionUpdate,
   SessionNotionCreate,

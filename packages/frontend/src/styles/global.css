@@ -2945,6 +2945,274 @@ button:focus-visible,
   justify-content: center;
 }
 
+/* ═══════════════════════════════════════════
+   Motion & micro-interactions (polish pass)
+   Everything here is disabled by the reduced-
+   motion guard below (it uses !important, which
+   wins regardless of source order).
+   ═══════════════════════════════════════════ */
+
+/* Generic reveal — skeleton→content swaps, flow cards, popovers */
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: ui-fade-in 0.24s ease-out both;
+}
+
+/* Staggered entrance — set --reveal-i per item to cascade the delay */
+@keyframes ui-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-stagger {
+  animation: ui-rise-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--reveal-i, 0) * 60ms);
+  will-change: transform, opacity;
+}
+
+/* Incoming tab/page view slides up + fades */
+@keyframes ui-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: ui-page-in 0.26s ease-out both;
+}
+
+/* Done / confirm pulse on click */
+@keyframes ui-confirm-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.045);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.btn--confirm-pulse {
+  animation: ui-confirm-pulse 0.34s ease-out;
+}
+
+/* Live elapsed timer — gentle breathing so it reads as "running" */
+@keyframes ui-timer-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.today-problem-timer--running {
+  animation: ui-timer-breathe 2.4s ease-in-out infinite;
+}
+
+/* Slide-down for the "Why this?" explanation panel */
+@keyframes ui-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.today-explain {
+  animation: ui-slide-down 0.24s ease-out both;
+  overflow: hidden;
+}
+
+/* Flow cards (mistake capture, note offer) rise in after a beat so the
+   transition out of "Done" feels intentional rather than abrupt. */
+.flow-reveal {
+  animation: ui-fade-in 0.3s ease-out both;
+  animation-delay: 0.15s;
+}
+
+/* Coach composer grows smoothly as the textarea auto-resizes */
+.coach-composer-inner textarea {
+  transition: height 0.12s ease;
+}
+
+/* Active nav rail fades in instead of snapping (orientation-agnostic) */
+@keyframes ui-rail-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.nav button.active::before {
+  animation: ui-rail-in 0.18s ease-out;
+}
+
+/* Per-problem Coach button — arrow rotates on hover to signal a tab jump */
+.today-coach-arrow {
+  display: inline-block;
+  margin-left: 0.1rem;
+  transition: transform 0.2s ease;
+}
+
+.today-coach-btn:hover .today-coach-arrow,
+.today-coach-btn:focus-visible .today-coach-arrow {
+  transform: rotate(90deg);
+}
+
+/* ─── Session progress strip (Today) ─────── */
+.session-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+}
+
+.session-progress-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.session-progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.session-progress-line {
+  flex: 1;
+  height: 1.5px;
+  min-width: 0.5rem;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.25s ease;
+}
+
+.session-progress-step--done {
+  color: var(--text-muted);
+}
+
+.session-progress-step--done .session-progress-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  opacity: 0.45;
+}
+
+.session-progress-line--done {
+  background: var(--accent);
+  opacity: 0.45;
+}
+
+.session-progress-step--current {
+  color: var(--accent);
+}
+
+.session-progress-step--current .session-progress-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+@media (max-width: 520px) {
+  .session-progress-step span {
+    display: none;
+  }
+}
+
+/* ─── Knowledge graph focus transition (hero) ─── */
+@keyframes ui-panel-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.graph-panel {
+  animation: ui-panel-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes ui-panel-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .graph-panel {
+    animation: ui-panel-slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}
+
+/* Node circles ease their hover/focus growth (geometry props, modern browsers) */
+.graph-node-circle {
+  transition: stroke-width 0.18s ease, stroke 0.18s ease;
+}
+
+/* ─── Empty-state illustration ───────────── */
+.empty-state-illustration {
+  color: var(--text-subtle);
+  margin-bottom: 0.35rem;
+  opacity: 0.85;
+}
+
+.empty-state-illustration svg {
+  display: block;
+}
+
 /* ─── Reduced motion ─────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

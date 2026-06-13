@@ -4,6 +4,12 @@ import type {
   NotionSession,
   NotionTopic,
 } from "@dsa/database/notion-types";
+import {
+  findPageProperty,
+  normalizeDifficulty,
+  normalizeProblemStatus,
+  PROBLEM_PROPERTIES,
+} from "./problem-fields.js";
 
 function getTitle(page: PageObjectResponse): string {
   const titleProp = Object.values(page.properties).find((p) => p.type === "title");
@@ -13,16 +19,25 @@ function getTitle(page: PageObjectResponse): string {
   return "Untitled";
 }
 
-function getRichText(page: PageObjectResponse, name: string): string | undefined {
-  const prop = page.properties[name];
+function getRichTextProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): string | undefined {
   if (prop?.type === "rich_text") {
     return prop.rich_text.map((t) => t.plain_text).join("") || undefined;
   }
   return undefined;
 }
 
-function getSelect(page: PageObjectResponse, name: string): string | undefined {
-  const prop = page.properties[name];
+function getUrlProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): string | undefined {
+  if (prop?.type === "url" && prop.url) return prop.url;
+  return undefined;
+}
+
+function getSelectProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): string | undefined {
   if (prop?.type === "select" && prop.select) return prop.select.name;
   return undefined;
 }
@@ -43,8 +58,9 @@ function getMultiSelectFirst(page: PageObjectResponse, name: string): string | u
   return undefined;
 }
 
-function getNumber(page: PageObjectResponse, name: string): number | undefined {
-  const prop = page.properties[name];
+function getNumberProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): number | undefined {
   if (prop?.type === "number" && prop.number != null) return prop.number;
   return undefined;
 }
@@ -63,15 +79,16 @@ function getDate(page: PageObjectResponse, name: string): Date | null {
   return null;
 }
 
-function getRelationIds(page: PageObjectResponse, name: string): string[] {
-  const prop = page.properties[name];
+function getRelationIdsFromProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): string[] {
   if (prop?.type === "relation") {
     return prop.relation.map((r) => r.id);
   }
   return [];
 }
 
-/** Map Notion pages using common property names; adjust names to match your DB. */
+/** Map Notion pages using property names from your DSA databases. */
 export function mapTopicPage(page: PageObjectResponse): NotionTopic {
   const statusMap: Record<string, NotionTopic["status"]> = {
     "Not Started": "Not started",
@@ -86,38 +103,53 @@ export function mapTopicPage(page: PageObjectResponse): NotionTopic {
     name: getTitle(page),
     difficulty: getMultiSelectFirst(page, "Difficulty") as NotionTopic["difficulty"],
     status: statusMap[getStatus(page, "Status") ?? ""] as NotionTopic["status"],
-    revisionCount: getNumber(page, "Revision Count") ?? 0,
+    revisionCount: getNumberProp(page.properties["Revision Count"]) ?? 0,
     lastRevised: getDate(page, "Last Revised"),
-    confidence: getNumber(page, "Confidence") ?? 0,
+    confidence: getNumberProp(page.properties.Confidence) ?? 0,
     isWeakArea: getCheckbox(page, "Weak Area"),
-    prerequisites: getRelationIds(page, "Prerequisites"),
+    prerequisites: getRelationIdsFromProp(
+      findPageProperty(page, ["Prerequisites"]),
+    ),
   };
 }
 
 export function mapProblemPage(page: PageObjectResponse): NotionProblem {
-  const topicIds = getRelationIds(page, "Topic");
+  const difficultyProp = findPageProperty(page, PROBLEM_PROPERTIES.Difficulty);
+  const statusProp = findPageProperty(page, PROBLEM_PROPERTIES.Status);
+  const leetcodeProp = findPageProperty(page, PROBLEM_PROPERTIES.LeetCodeLink);
+  const attemptsProp = findPageProperty(page, PROBLEM_PROPERTIES.Attempts);
+  const timeTakenProp = findPageProperty(page, PROBLEM_PROPERTIES.TimeTaken);
+  const notesProp = findPageProperty(page, PROBLEM_PROPERTIES.Notes);
+  const topicProp = findPageProperty(page, PROBLEM_PROPERTIES.Topic);
+
+  const rawStatus = getSelectProp(statusProp) ?? getStatus(page, "Status");
+  const rawDifficulty = getSelectProp(difficultyProp);
+
   return {
     id: page.id,
     name: getTitle(page),
-    topicId: topicIds[0],
-    difficulty: getSelect(page, "Difficulty") as NotionProblem["difficulty"],
-    leetcodeLink: getRichText(page, "LeetCode Link"),
-    status: getSelect(page, "Status") as NotionProblem["status"],
-    attempts: getNumber(page, "Attempts") ?? 0,
-    timeTaken: getNumber(page, "Time Taken"),
-    notes: getRichText(page, "Notes"),
+    topicId: getRelationIdsFromProp(topicProp)[0],
+    difficulty: normalizeDifficulty(rawDifficulty),
+    leetcodeLink:
+      getUrlProp(leetcodeProp) ??
+      getUrlProp(findPageProperty(page, ["LeetCode Link"])) ??
+      getRichTextProp(leetcodeProp),
+    status: normalizeProblemStatus(rawStatus),
+    attempts: getNumberProp(attemptsProp) ?? 0,
+    timeTaken: getNumberProp(timeTakenProp),
+    notes: getRichTextProp(notesProp),
   };
 }
 
 export function mapSessionPage(page: PageObjectResponse): NotionSession {
-  const topicIds = getRelationIds(page, "Topic");
+  const topicIds = getRelationIdsFromProp(findPageProperty(page, ["Topic"]));
   return {
     id: page.id,
     date: getDate(page, "Date") ?? new Date(),
     topicId: topicIds[0],
-    problemsSolved: getNumber(page, "Problems Solved") ?? 0,
-    studyDuration: getNumber(page, "Study Duration"),
-    productivityScore: getNumber(page, "Productivity Score"),
+    problemsSolved: getNumberProp(page.properties["Problems Solved"]) ?? 0,
+    studyDuration: getNumberProp(page.properties["Study Duration"]),
+    productivityScore: getNumberProp(page.properties["Productivity Score"]),
   };
 }
 

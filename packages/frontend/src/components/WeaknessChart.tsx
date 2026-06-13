@@ -44,7 +44,8 @@ export const WeaknessChart = memo(function WeaknessChart({ data }: Props) {
             y={HEIGHT - 6}
             textAnchor="middle"
             fill="var(--text-muted)"
-            fontSize="9"
+            fontSize="10"
+            className="chart-mono"
           >
             {b.weekStart.slice(5)}
           </text>
