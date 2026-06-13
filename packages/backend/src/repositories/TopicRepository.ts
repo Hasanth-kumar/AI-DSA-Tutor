@@ -11,6 +11,7 @@ export interface TopicUpdate {
   nextRevisionAt?: Date | null;
   isWeakArea?: boolean;
   status?: string;
+  difficulty?: string;
   priorityScore?: number;
 }
 
@@ -49,6 +50,7 @@ export class TopicRepository {
           : {}),
         ...(patch.isWeakArea != null ? { isWeakArea: patch.isWeakArea ? 1 : 0 } : {}),
         ...(patch.status != null ? { status: patch.status } : {}),
+        ...(patch.difficulty != null ? { difficulty: patch.difficulty } : {}),
         ...(patch.priorityScore != null ? { priorityScore: patch.priorityScore } : {}),
         updatedAt: now,
       })
@@ -66,6 +68,7 @@ export class TopicRepository {
       nextRevisionAt?: number | null;
       isWeakArea?: number;
       status?: string;
+      difficulty?: string;
       priorityScore?: number | null;
     },
   ): void {
@@ -81,6 +84,7 @@ export class TopicRepository {
           : {}),
         ...(fields.isWeakArea != null ? { isWeakArea: fields.isWeakArea } : {}),
         ...(fields.status != null ? { status: fields.status } : {}),
+        ...(fields.difficulty != null ? { difficulty: fields.difficulty } : {}),
         ...(fields.priorityScore !== undefined
           ? { priorityScore: fields.priorityScore }
           : {}),

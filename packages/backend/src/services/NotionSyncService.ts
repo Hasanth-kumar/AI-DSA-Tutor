@@ -13,6 +13,10 @@ import type { SyncMetaRepository } from "../repositories/SyncMetaRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 import type { MirrorCache } from "./MirrorCache.js";
 import type { TopicDifficulty, TopicState, TopicStatus } from "@dsa/intelligence";
+import {
+  deriveTopicDifficultyFromConfidence,
+  deriveTopicStatusAfterSession,
+} from "@dsa/intelligence";
 import type { ProblemRow } from "../repositories/ProblemRepository.js";
 
 const LAST_SYNC_KEY = "last_sync_at";
@@ -157,6 +161,7 @@ export class NotionSyncService {
         nextRevisionAt: remote.nextRevisionAt?.getTime() ?? null,
         isWeakArea: remote.isWeakArea ? 1 : 0,
         status: remote.status,
+        difficulty: remote.difficulty,
       };
       if (fieldsDiffer(pending.fields, remoteFields)) {
         this.conflictRepo.log({
@@ -239,13 +244,27 @@ export class NotionSyncService {
     const topic = snapshot ?? this.topicRepo.findById(topicId);
     if (!topic) throw new Error(`Topic not found: ${topicId}`);
 
+    const status = deriveTopicStatusAfterSession(
+      topic.status,
+      topic.confidence,
+      topic.isWeakArea,
+    );
+    const difficulty = deriveTopicDifficultyFromConfidence(topic.confidence);
+
+    if (
+      snapshot == null &&
+      (status !== topic.status || difficulty !== topic.difficulty)
+    ) {
+      this.topicRepo.update(topicId, { status, difficulty });
+    }
+
     await this.getClient().updateTopic(topicId, {
       confidence: topic.confidence,
       revisionCount: topic.revisionCount,
       lastRevised: topic.lastRevised ?? undefined,
       isWeakArea: topic.isWeakArea,
-      status: topic.status,
-      difficulty: topic.difficulty,
+      status,
+      difficulty,
     });
   }
 
@@ -276,6 +295,7 @@ export class NotionSyncService {
       nextRevisionAt: topic.nextRevisionAt?.getTime() ?? null,
       isWeakArea: topic.isWeakArea ? 1 : 0,
       status: topic.status,
+      difficulty: topic.difficulty,
     });
   }
 

@@ -11,7 +11,7 @@ export interface CreateSessionInput {
   date?: Date;
   problemsSolved: number;
   studyDuration: number;
-  productivityScore: number;
+  productivityScore?: number;
 }
 
 export interface UpdateSessionInput {
@@ -77,7 +77,7 @@ export class SessionRepository {
         topicId: input.topicId,
         problemsSolved: input.problemsSolved,
         studyDuration: input.studyDuration,
-        productivityScore: input.productivityScore,
+        productivityScore: input.productivityScore ?? 0,
         updatedAt: now,
       })
       .run();

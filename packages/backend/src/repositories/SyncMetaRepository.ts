@@ -12,6 +12,7 @@ export interface PendingTopicFields {
   nextRevisionAt?: number | null;
   isWeakArea?: number;
   status?: string;
+  difficulty?: string;
   priorityScore?: number | null;
 }
 

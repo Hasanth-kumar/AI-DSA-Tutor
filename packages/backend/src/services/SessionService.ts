@@ -1,4 +1,9 @@
 import type { IntelligenceOrchestrator, SessionSnapshot } from "@dsa/intelligence";
+import {
+  deriveProductivityFromDuration,
+  deriveTopicDifficultyFromConfidence,
+  deriveTopicStatusAfterSession,
+} from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
 import type { AttemptRepository } from "../repositories/AttemptRepository.js";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
@@ -77,7 +82,14 @@ export class SessionService {
       throw new Error(`Problem ${input.problemId} does not belong to topic ${input.topicId}`);
     }
 
-    const sessionRow = this.sessionRepo.create(input);
+    const studyDuration = Math.max(1, Math.round(input.studyDuration));
+    const productivityScore = deriveProductivityFromDuration(studyDuration);
+
+    const sessionRow = this.sessionRepo.create({
+      ...input,
+      studyDuration,
+      productivityScore,
+    });
     const sessionSnapshot: SessionSnapshot = {
       date: new Date(sessionRow.date),
       problemsSolved: sessionRow.problemsSolved ?? 0,
@@ -92,14 +104,21 @@ export class SessionService {
       topic.confidence + Math.round((sessionSnapshot.productivityScore - 50) / 10),
     );
 
+    const nextStatus = deriveTopicStatusAfterSession(
+      topic.status,
+      confidenceBoost,
+      update.weaknessUpdate.isWeak,
+    );
+    const nextDifficulty = deriveTopicDifficultyFromConfidence(confidenceBoost);
+
     const topicSnapshot: TopicSyncSnapshot = {
       confidence: confidenceBoost,
       revisionCount: topic.revisionCount + 1,
       lastRevised: sessionSnapshot.date,
       nextRevisionAt: update.sm2.nextRevisionAt,
       isWeakArea: update.weaknessUpdate.isWeak,
-      status: topic.status,
-      difficulty: topic.difficulty,
+      status: nextStatus,
+      difficulty: nextDifficulty,
     };
 
     this.topicRepo.update(input.topicId, {
@@ -109,6 +128,8 @@ export class SessionService {
       nextRevisionAt: topicSnapshot.nextRevisionAt,
       isWeakArea: topicSnapshot.isWeakArea,
       priorityScore: update.weaknessUpdate.score,
+      status: topicSnapshot.status,
+      difficulty: topicSnapshot.difficulty,
     });
 
     this.notionSync.markTopicDirty(input.topicId, topicSnapshot);
@@ -200,7 +221,15 @@ export class SessionService {
   }
 
   update(id: string, patch: UpdateSessionInput): SessionRow | null {
-    return this.sessionRepo.update(id, patch);
+    const existing = this.sessionRepo.findById(id);
+    if (!existing) return null;
+
+    const studyDuration = patch.studyDuration ?? existing.studyDuration ?? 1;
+    return this.sessionRepo.update(id, {
+      ...patch,
+      studyDuration,
+      productivityScore: deriveProductivityFromDuration(studyDuration),
+    });
   }
 
   delete(id: string): boolean {
