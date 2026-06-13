@@ -15,7 +15,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "paths": {
+      "@dsa/intelligence": ["../intelligence/src/index.ts"]
+    }
   },
   "include": ["src"]
 }

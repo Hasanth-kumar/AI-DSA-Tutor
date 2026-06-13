@@ -13,15 +13,17 @@ function formatTimer(seconds: number): string {
 interface Props {
   elapsedRef: MutableRefObject<number>;
   onReset?: () => void;
+  onElapsedChange?: (seconds: number) => void;
 }
 
-export function SessionTimer({ elapsedRef, onReset }: Props) {
+export function SessionTimer({ elapsedRef, onReset, onElapsedChange }: Props) {
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
     elapsedRef.current = elapsed;
-  }, [elapsed, elapsedRef]);
+    onElapsedChange?.(elapsed);
+  }, [elapsed, elapsedRef, onElapsedChange]);
 
   useEffect(() => {
     if (!running) return;

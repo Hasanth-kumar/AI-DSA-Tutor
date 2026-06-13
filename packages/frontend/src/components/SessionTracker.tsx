@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { deriveProductivityFromDuration } from "@dsa/intelligence";
 import { api } from "../api/client.js";
 import { CalendarIcon, EmptyState } from "./EmptyState.js";
 import { SessionTimer } from "./SessionTimer.js";
@@ -22,7 +23,7 @@ function productivityLabel(value: number): string {
 export function SessionTracker({ topics, problems, sessions, onLogged }: Props) {
   const [topicId, setTopicId] = useState("");
   const [problemId, setProblemId] = useState("");
-  const [productivity, setProductivity] = useState(75);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const elapsedRef = useRef(0);
   const [timerKey, setTimerKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -38,12 +39,19 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
     [topics],
   );
 
+  const minutes = Math.max(1, Math.round(elapsedSeconds / 60) || 1);
+  const productivity = deriveProductivityFromDuration(minutes);
+
+  const handleElapsedChange = useCallback((seconds: number) => {
+    setElapsedSeconds(seconds);
+    elapsedRef.current = seconds;
+  }, []);
+
   const handleSubmit = async () => {
     if (!topicId) {
       setMessage({ text: "Pick a topic before logging.", ok: false });
       return;
     }
-    const minutes = Math.max(1, Math.round(elapsedRef.current / 60) || 1);
 
     setSubmitting(true);
     setMessage(null);
@@ -53,11 +61,14 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
         problemId: problemId || undefined,
         problemsSolved: problemId ? 1 : Math.max(1, Math.round(minutes / 30)),
         studyDuration: minutes,
-        productivityScore: productivity,
         pushToNotion: false,
       });
-      setMessage({ text: `Logged! ${topicName(topicId)} · confidence now ${result.confidence}/100`, ok: true });
+      setMessage({
+        text: `Logged! ${topicName(topicId)} · ${productivity}/100 productivity · confidence now ${result.confidence}/100`,
+        ok: true,
+      });
       elapsedRef.current = 0;
+      setElapsedSeconds(0);
       setTimerKey((key) => key + 1);
       onLogged();
     } catch (err) {
@@ -119,30 +130,27 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
             Track your time
           </div>
 
-          <SessionTimer key={timerKey} elapsedRef={elapsedRef} />
+          <SessionTimer
+            key={timerKey}
+            elapsedRef={elapsedRef}
+            onElapsedChange={handleElapsedChange}
+          />
         </div>
 
-        {/* Step 3 — Rate + Log */}
+        {/* Step 3 — Productivity preview + Log */}
         <div className="step-group">
           <div className="step-group-title">
             <span className="step-number">3</span>
-            How focused were you?
+            Productivity from your session length
           </div>
 
           <div style={{ padding: "0.5rem 0 0.75rem" }}>
             <div className="productivity-row">
               <span>Productivity</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={productivity}
-                onChange={(e) => setProductivity(Number(e.target.value))}
-              />
-              <span className="productivity-value">{productivity}%</span>
+              <span className="productivity-value">{productivity}/100</span>
             </div>
             <div className="muted text-xs text-center mt-2">
-              {productivityLabel(productivity)}
+              {minutes} min · {productivityLabel(productivity)} · shorter sessions score higher
             </div>
           </div>
 
