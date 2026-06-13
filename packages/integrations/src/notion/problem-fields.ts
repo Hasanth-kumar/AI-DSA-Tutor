@@ -70,6 +70,11 @@ export function normalizeDifficulty(
   return DIFFICULTY_ALIASES[raw] ?? DIFFICULTY_ALIASES[raw.toLowerCase()];
 }
 
+/** Canonical select label for Notion topic difficulty (lowercase options). */
+export function toNotionTopicDifficulty(difficulty: TopicDifficulty): string {
+  return difficulty.toLowerCase();
+}
+
 /** Calendar date in local timezone — avoids UTC off-by-one in Notion date fields. */
 export function formatLocalDate(date: Date): string {
   const y = date.getFullYear();

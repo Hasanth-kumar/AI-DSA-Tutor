@@ -101,7 +101,7 @@ export function mapTopicPage(page: PageObjectResponse): NotionTopic {
   return {
     id: page.id,
     name: getTitle(page),
-    difficulty: getMultiSelectFirst(page, "Difficulty") as NotionTopic["difficulty"],
+    difficulty: normalizeDifficulty(getMultiSelectFirst(page, "Difficulty")),
     status: statusMap[getStatus(page, "Status") ?? ""] as NotionTopic["status"],
     revisionCount: getNumberProp(page.properties["Revision Count"]) ?? 0,
     lastRevised: getDate(page, "Last Revised"),

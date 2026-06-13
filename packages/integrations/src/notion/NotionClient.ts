@@ -11,6 +11,7 @@ import {
   PROBLEM_PROPERTIES,
   resolveSchemaPropertyName,
   toNotionProblemStatus,
+  toNotionTopicDifficulty,
 } from "./problem-fields.js";
 
 export interface NotionConfig {
@@ -68,6 +69,7 @@ export class NotionClient {
   }
 
   async updateTopic(pageId: string, update: TopicNotionUpdate): Promise<void> {
+    const schema = await this.getDatabaseProperties(this.config.topicsDbId);
     const properties: Record<string, unknown> = {};
     const statusMap: Record<string, string> = {
       "Not started": "Not Started",
@@ -96,7 +98,15 @@ export class NotionClient {
       properties.Status = { status: { name: statusMap[update.status] ?? update.status } };
     }
     if (update.difficulty != null) {
-      properties.Difficulty = { multi_select: [{ name: update.difficulty }] };
+      const difficultyProp = resolveSchemaPropertyName(schema, ["Difficulty"]);
+      const notionDifficulty = toNotionTopicDifficulty(update.difficulty);
+      if (difficultyProp) {
+        const propType = schema[difficultyProp]?.type;
+        properties[difficultyProp] =
+          propType === "multi_select"
+            ? { multi_select: [{ name: notionDifficulty }] }
+            : { select: { name: notionDifficulty } };
+      }
     }
 
     if (Object.keys(properties).length === 0) return;
