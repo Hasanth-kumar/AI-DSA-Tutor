@@ -290,7 +290,7 @@ export function App() {
           </div>
         )}
 
-        <div className="nav-section-label">Navigation</div>
+        <div className="nav-section-label">Navigate</div>
 
         <nav className="nav">
           {showBrandIconInNav && brandIcon}
