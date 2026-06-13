@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../api/client.js";
+import { CoachMarkdown } from "../components/CoachMarkdown.js";
+import { CopyButton } from "../components/CopyButton.js";
 import type { ChatMessage, HealthInfo, Problem } from "../types/api.js";
 
 const THREAD_STORAGE_KEY = "dsa-coach-thread-id";
@@ -325,7 +327,13 @@ export function CoachingPage({ anchorProblemId }: Props) {
               disabled={loading}
               onClick={() => void handleSend(p)}
             >
-              {p}
+              <span className="coach-prompt-btn__text">{p}</span>
+              <span className="coach-prompt-btn__icon" aria-hidden>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="8" x2="13" y2="8" />
+                  <polyline points="9,4 13,8 9,12" />
+                </svg>
+              </span>
             </button>
           ))}
         </div>
@@ -352,7 +360,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
             checked={includeContext}
             onChange={(e) => setIncludeContext(e.target.checked)}
           />
-          My learning context
+          <span>My learning context</span>
         </label>
 
         <label className="coach-option">
@@ -361,7 +369,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
             checked={directMode}
             onChange={(e) => setDirectMode(e.target.checked)}
           />
-          Direct explanations
+          <span>Direct explanations</span>
         </label>
 
         <div className="coach-setting-sep" />
@@ -446,14 +454,19 @@ export function CoachingPage({ anchorProblemId }: Props) {
                   <div key={msg.id} className="coach-msg-row coach-msg-row--user">
                     <UserAvatar />
                     <div className="coach-msg-body">
-                      <div className="coach-user-bubble">{msg.content}</div>
+                      <div className="coach-user-turn">
+                        <div className="coach-user-bubble">{msg.content}</div>
+                        <div className="coach-msg-actions">
+                          <CopyButton text={msg.content} title="Copy message" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : (
                   <div key={msg.id} className="coach-msg-row coach-msg-row--assistant">
                     <AssistantAvatar />
                     <div className="coach-msg-body">
-                      <div className="coach-assistant-text">{msg.content}</div>
+                      <CoachMarkdown content={msg.content} />
                     </div>
                   </div>
                 )
