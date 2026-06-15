@@ -1,3 +1,4 @@
+import { buildTopicGraphEdges } from "@dsa/intelligence";
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
 import { EmptyState, GraphIllustration } from "./EmptyState.js";
@@ -86,13 +87,11 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
       (adjacency.get(a) ?? adjacency.set(a, new Set()).get(a)!).add(b);
     };
 
-    for (const topic of topics) {
-      for (const prereqId of topic.prerequisites) {
-        if (nodeIds.has(prereqId)) {
-          links.push({ source: prereqId, target: topic.id } as GraphLink);
-          connect(prereqId, topic.id);
-          connect(topic.id, prereqId);
-        }
+    for (const { from, to } of buildTopicGraphEdges(topics)) {
+      if (nodeIds.has(from) && nodeIds.has(to)) {
+        links.push({ source: from, target: to } as GraphLink);
+        connect(from, to);
+        connect(to, from);
       }
     }
 
