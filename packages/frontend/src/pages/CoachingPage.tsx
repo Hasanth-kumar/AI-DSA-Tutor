@@ -1,14 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api } from "../api/client.js";
 import { CoachMarkdown } from "../components/CoachMarkdown.js";
-import { CopyButton } from "../components/CopyButton.js";
+import { CoachMessageActions } from "../components/CoachMessageActions.js";
+import { consumeChatStream, IncompleteChatStreamError } from "../lib/chatStream.js";
 import type { ChatMessage, HealthInfo, Problem } from "../types/api.js";
 
 const THREAD_STORAGE_KEY = "dsa-coach-thread-id";
+const STREAMING_ID = "__streaming__";
 
 interface Props {
   /** Pre-anchor the chat to a problem (1.2) — set when arriving from Today. */
   anchorProblemId?: string | null;
+}
+
+interface CoachRequestOptions {
+  problemId?: string;
+  includeContext: boolean;
+  directMode: boolean;
 }
 
 const STARTER_PROMPTS = [
@@ -31,9 +39,12 @@ function CoachIcon() {
   );
 }
 
-function AssistantAvatar() {
+function AssistantAvatar({ pulsing }: { pulsing?: boolean }) {
   return (
-    <div className="coach-avatar coach-avatar--assistant" aria-hidden>
+    <div
+      className={`coach-avatar coach-avatar--assistant${pulsing ? " coach-avatar--pulsing" : ""}`}
+      aria-hidden
+    >
       <svg viewBox="0 0 16 16" fill="white">
         <path d="M8 1L2 4.5v5L8 13l6-3.5v-5L8 1zm0 2.2l3.8 2.2L8 7.6 4.2 5.4 8 3.2zM3.5 6.8L7 8.7V11L3.5 9V6.8zm5 4.2V8.7l3.5-1.9V9L8.5 11z" />
       </svg>
@@ -65,24 +76,28 @@ function CoachGenerating() {
   );
 }
 
-function SendIcon({ loading }: { loading: boolean }) {
-  if (loading) {
-    return (
-      <svg className="coach-send-spinner" viewBox="0 0 16 16" fill="none" aria-hidden>
-        <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" strokeOpacity="0.25" />
-        <path
-          d="M14 8a6 6 0 0 0-6-6"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="white" aria-hidden>
+      <rect x="4" y="4" width="8" height="8" rx="1.5" />
+    </svg>
+  );
+}
+
+function SendIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <line x1="8" y1="13" x2="8" y2="3" />
       <polyline points="4,7 8,3 12,7" />
+    </svg>
+  );
+}
+
+function ScrollDownIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="8" y1="3" x2="8" y2="13" />
+      <polyline points="4,9 8,13 12,9" />
     </svg>
   );
 }
@@ -101,19 +116,21 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const [llmDown, setLlmDown] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stickToBottomRef = useRef(true);
+  const abortRef = useRef<AbortController | null>(null);
 
-  // Anchor handed in from the Today view (1.2).
   useEffect(() => {
     if (anchorProblemId) setProblemId(anchorProblemId);
   }, [anchorProblemId]);
 
-  // Graceful degradation (5.4): disable the coach with a clear message when
-  // the LLM is unreachable instead of failing on send.
   useEffect(() => {
     let cancelled = false;
     void api
@@ -133,14 +150,23 @@ export function CoachingPage({ anchorProblemId }: Props) {
     ? problems.find((p) => p.id === problemId) ?? null
     : null;
 
+  const coachOptions = (): CoachRequestOptions => ({
+    problemId: problemId || undefined,
+    includeContext,
+    directMode,
+  });
+
   const onThreadScroll = useCallback(() => {
     const el = threadRef.current;
     if (!el) return;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottomRef.current = distanceFromBottom < 96;
+    setShowScrollBtn(distanceFromBottom >= 120);
   }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    stickToBottomRef.current = true;
+    setShowScrollBtn(false);
     bottomRef.current?.scrollIntoView({ behavior });
   }, []);
 
@@ -169,7 +195,6 @@ export function CoachingPage({ anchorProblemId }: Props) {
     scrollToBottom(loading ? "auto" : "smooth");
   }, [messages, loading, scrollToBottom]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -177,16 +202,132 @@ export function CoachingPage({ anchorProblemId }: Props) {
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   }, [input]);
 
+  useEffect(() => {
+    if (!editingId) return;
+    const ta = editTextareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }, [editingId, editDraft]);
+
+  const appendStreamChunk = useCallback((text: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === STREAMING_ID ? { ...m, content: m.content + text } : m,
+      ),
+    );
+  }, []);
+
+  const syncThreadAfterAbort = useCallback(async (activeThreadId: string | null) => {
+    if (!activeThreadId) {
+      setMessages((prev) =>
+        prev.filter((m) => m.id !== STREAMING_ID && !m.id.startsWith("pending-")),
+      );
+      return;
+    }
+    try {
+      const thread = await api.getChatThread(activeThreadId);
+      setMessages(thread.messages);
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== STREAMING_ID));
+    }
+  }, []);
+
+  const runStream = useCallback(
+    async (
+      path: string,
+      body: Record<string, unknown>,
+      setupMessages: () => void,
+    ) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      stickToBottomRef.current = true;
+      setLoading(true);
+      setError(null);
+      setEditingId(null);
+      setupMessages();
+
+      let activeThreadId = threadId;
+
+      try {
+        const result = await consumeChatStream({
+          path,
+          body,
+          signal: controller.signal,
+          onMeta: (tid, userMessage) => {
+            activeThreadId = tid;
+            setThreadId(tid);
+            sessionStorage.setItem(THREAD_STORAGE_KEY, tid);
+            setMessages((prev) => {
+              const withoutPending = prev.filter((m) => !m.id.startsWith("pending-"));
+              const streaming =
+                withoutPending.find((m) => m.id === STREAMING_ID) ??
+                ({
+                  id: STREAMING_ID,
+                  role: "assistant" as const,
+                  content: "",
+                  createdAt: new Date().toISOString(),
+                } satisfies ChatMessage);
+              const base = withoutPending.filter(
+                (m) => m.id !== STREAMING_ID && m.id !== userMessage.id,
+              );
+              return [...base, userMessage, streaming];
+            });
+          },
+          onChunk: appendStreamChunk,
+        });
+
+        setThreadId(result.threadId);
+        sessionStorage.setItem(THREAD_STORAGE_KEY, result.threadId);
+        setMessages((prev) => [
+          ...prev.filter((m) => m.id !== STREAMING_ID),
+          result.assistantMessage,
+        ]);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          await syncThreadAfterAbort(activeThreadId);
+          return;
+        }
+        if (err instanceof IncompleteChatStreamError) {
+          await syncThreadAfterAbort(err.threadId);
+          return;
+        }
+        setMessages((prev) =>
+          prev.filter((m) => m.id !== STREAMING_ID && !m.id.startsWith("pending-")),
+        );
+        throw err;
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+        setLoading(false);
+      }
+    },
+    [appendStreamChunk, syncThreadAfterAbort, threadId],
+  );
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+  };
+
   const handleNewChat = async () => {
     if (loading) return;
+    abortRef.current?.abort();
     if (threadId) {
-      try { await api.clearChatThread(threadId); } catch { /* gone */ }
+      try {
+        await api.clearChatThread(threadId);
+      } catch {
+        /* gone */
+      }
     }
     sessionStorage.removeItem(THREAD_STORAGE_KEY);
     setThreadId(null);
     setMessages([]);
     setError(null);
     setPromptsOpen(false);
+    setEditingId(null);
     textareaRef.current?.focus();
   };
 
@@ -195,42 +336,109 @@ export function CoachingPage({ anchorProblemId }: Props) {
     if (!msg || loading) return;
 
     const optimisticId = `pending-${Date.now()}`;
-    const optimisticUser: ChatMessage = {
-      id: optimisticId,
-      role: "user",
-      content: msg,
-      createdAt: new Date().toISOString(),
-    };
-
-    stickToBottomRef.current = true;
-    setMessages((prev) => [...prev, optimisticUser]);
-    setLoading(true);
-    setError(null);
     if (!text) setInput("");
     setComposerFocused(false);
     setPromptsOpen(false);
 
     try {
-      const result = await api.sendChatMessage({
-        threadId: threadId ?? undefined,
-        message: msg,
-        problemId: problemId || undefined,
-        includeContext,
-        directMode,
-      });
-      setThreadId(result.threadId);
-      sessionStorage.setItem(THREAD_STORAGE_KEY, result.threadId);
-      setMessages((prev) => [
-        ...prev.filter((m) => m.id !== optimisticId),
-        result.userMessage,
-        result.assistantMessage,
-      ]);
+      await runStream(
+        "/api/coaching/chat/stream",
+        {
+          threadId: threadId ?? undefined,
+          message: msg,
+          ...coachOptions(),
+        },
+        () => {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: optimisticId,
+              role: "user",
+              content: msg,
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: STREAMING_ID,
+              role: "assistant",
+              content: "",
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        },
+      );
     } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
       if (!text) setInput(msg);
       setError(err instanceof Error ? err.message : "Failed to send message");
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!threadId || loading) return;
+
+    try {
+      await runStream(
+        "/api/coaching/chat/regenerate/stream",
+        { threadId, ...coachOptions() },
+        () => {
+          setMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              id: STREAMING_ID,
+              role: "assistant",
+              content: "",
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        },
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to regenerate");
+    }
+  };
+
+  const startEdit = (msg: ChatMessage) => {
+    if (loading) return;
+    setEditingId(msg.id);
+    setEditDraft(msg.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async () => {
+    const content = editDraft.trim();
+    if (!content || !editingId || !threadId || loading) return;
+
+    const messageId = editingId;
+    setEditingId(null);
+    setEditDraft("");
+
+    try {
+      await runStream(
+        "/api/coaching/chat/edit/stream",
+        { threadId, messageId, content, ...coachOptions() },
+        () => {
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === messageId);
+            if (idx === -1) return prev;
+            const updated = { ...prev[idx]!, content };
+            return [
+              ...prev.slice(0, idx),
+              updated,
+              {
+                id: STREAMING_ID,
+                role: "assistant" as const,
+                content: "",
+                createdAt: new Date().toISOString(),
+              },
+            ];
+          });
+        },
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to edit message");
     }
   };
 
@@ -246,10 +454,26 @@ export function CoachingPage({ anchorProblemId }: Props) {
     }
   };
 
+  const onEditKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+      return;
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void saveEdit();
+    }
+  };
+
   const isEmpty = !bootstrapping && messages.length === 0 && !loading;
   const filteredPrompts = visibleStarterPrompts(input);
   const showPrompts =
     isEmpty && promptsOpen && !loading && !llmDown && filteredPrompts.length > 0;
+
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
+  const streamingMessage = messages.find((m) => m.id === STREAMING_ID);
+  const showGenerating = loading && (!streamingMessage || !streamingMessage.content);
 
   const handleComposerInnerClick = () => {
     if (loading || bootstrapping || llmDown) return;
@@ -275,6 +499,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
   useEffect(() => {
     return () => {
       if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      abortRef.current?.abort();
     };
   }, []);
 
@@ -286,9 +511,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
           <code>pnpm study</code> (Ollama) or check your OpenRouter key, then reload.
         </div>
       )}
-      {error && (
-        <div className="error-banner coach-error">{error}</div>
-      )}
+      {error && <div className="error-banner coach-error">{error}</div>}
       <div
         className={`coach-composer-inner${loading ? " coach-composer-inner--busy" : ""}${promptsOpen ? " coach-composer-inner--prompts-open" : ""}`}
         onClick={handleComposerInnerClick}
@@ -304,16 +527,28 @@ export function CoachingPage({ anchorProblemId }: Props) {
           placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask a DSA question…"}
           disabled={loading || bootstrapping || llmDown}
         />
-        <button
-          type="button"
-          className={`coach-send-btn${loading ? " coach-send-btn--loading" : ""}`}
-          onClick={() => void handleSend()}
-          disabled={loading || bootstrapping || llmDown || !input.trim()}
-          title={loading ? "Generating response…" : "Send (Enter)"}
-          aria-label={loading ? "Generating response" : "Send message"}
-        >
-          <SendIcon loading={loading} />
-        </button>
+        {loading ? (
+          <button
+            type="button"
+            className="coach-send-btn coach-send-btn--stop"
+            onClick={handleStop}
+            title="Stop generating"
+            aria-label="Stop generating"
+          >
+            <StopIcon />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="coach-send-btn"
+            onClick={() => void handleSend()}
+            disabled={bootstrapping || llmDown || !input.trim()}
+            title="Send (Enter)"
+            aria-label="Send message"
+          >
+            <SendIcon />
+          </button>
+        )}
       </div>
       {showPrompts && (
         <div className="coach-composer-prompts" role="listbox" aria-label="Suggested questions">
@@ -338,7 +573,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
           ))}
         </div>
       )}
-      {composerFocused && (
+      {composerFocused && !loading && (
         <div className="coach-composer-hint">
           Enter to send · Shift+Enter for newline
         </div>
@@ -348,8 +583,6 @@ export function CoachingPage({ anchorProblemId }: Props) {
 
   return (
     <div className="coach-layout">
-
-      {/* ── Settings bar ── */}
       <div className="coach-settings-bar">
         <span className="coach-settings-title">Coach</span>
         <div className="coach-setting-sep" />
@@ -390,6 +623,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
           type="button"
           className="coach-new-btn"
           onClick={() => void handleNewChat()}
+          disabled={loading}
         >
           <svg viewBox="0 0 14 14" fill="currentColor" width="12" height="12">
             <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
@@ -398,7 +632,6 @@ export function CoachingPage({ anchorProblemId }: Props) {
         </button>
       </div>
 
-      {/* ── Anchored-problem chip (1.2) ── */}
       {anchoredProblem && (
         <div className="coach-anchor-bar">
           <span className="coach-anchor-chip">
@@ -449,32 +682,93 @@ export function CoachingPage({ anchorProblemId }: Props) {
                 </div>
               )}
 
-              {messages.map((msg) =>
-                msg.role === "user" ? (
-                  <div key={msg.id} className="coach-msg-row coach-msg-row--user">
-                    <UserAvatar />
-                    <div className="coach-msg-body">
-                      <div className="coach-user-turn">
-                        <div className="coach-user-bubble">{msg.content}</div>
-                        <div className="coach-msg-actions">
-                          <CopyButton text={msg.content} title="Copy message" />
+              {messages.map((msg) => {
+                if (msg.role === "user") {
+                  const isEditing = editingId === msg.id;
+                  return (
+                    <div key={msg.id} className="coach-msg-row coach-msg-row--user">
+                      <UserAvatar />
+                      <div className="coach-msg-body">
+                        <div className="coach-user-turn">
+                          {isEditing ? (
+                            <div className="coach-edit-box">
+                              <textarea
+                                ref={editTextareaRef}
+                                className="coach-edit-textarea"
+                                value={editDraft}
+                                rows={1}
+                                onChange={(e) => setEditDraft(e.target.value)}
+                                onKeyDown={onEditKeyDown}
+                              />
+                              <div className="coach-edit-actions">
+                                <button
+                                  type="button"
+                                  className="coach-edit-btn coach-edit-btn--primary"
+                                  onClick={() => void saveEdit()}
+                                  disabled={!editDraft.trim() || loading}
+                                >
+                                  Save & resend
+                                </button>
+                                <button
+                                  type="button"
+                                  className="coach-edit-btn"
+                                  onClick={cancelEdit}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="coach-user-bubble">{msg.content}</div>
+                              <CoachMessageActions
+                                text={msg.content}
+                                showEdit
+                                onEdit={() => startEdit(msg)}
+                                disabled={loading}
+                              />
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div key={msg.id} className="coach-msg-row coach-msg-row--assistant">
-                    <AssistantAvatar />
+                  );
+                }
+
+                const isStreaming = msg.id === STREAMING_ID;
+                const isLastAssistant = msg.id === lastAssistantId && !isStreaming;
+
+                return (
+                  <div
+                    key={msg.id}
+                    className={`coach-msg-row coach-msg-row--assistant${isStreaming ? " coach-msg-row--streaming" : ""}`}
+                  >
+                    <AssistantAvatar pulsing={isStreaming && !msg.content} />
                     <div className="coach-msg-body">
-                      <CoachMarkdown content={msg.content} />
+                      <div className="coach-assistant-turn">
+                        {isStreaming && !msg.content ? (
+                          <CoachGenerating />
+                        ) : (
+                          <CoachMarkdown content={msg.content} />
+                        )}
+                        {!isStreaming && msg.content && (
+                          <CoachMessageActions
+                            text={msg.content}
+                            showRetry={isLastAssistant}
+                            onRetry={() => void handleRegenerate()}
+                            disabled={loading}
+                            align="start"
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
-                )
-              )}
+                );
+              })}
 
-              {loading && (
+              {showGenerating && !streamingMessage && (
                 <div className="coach-msg-row coach-msg-row--assistant coach-msg-row--generating">
-                  <AssistantAvatar />
+                  <AssistantAvatar pulsing />
                   <div className="coach-msg-body">
                     <CoachGenerating />
                   </div>
@@ -484,10 +778,22 @@ export function CoachingPage({ anchorProblemId }: Props) {
               <div ref={bottomRef} className="coach-thread-anchor" aria-hidden />
             </div>
           </div>
+
+          {showScrollBtn && (
+            <button
+              type="button"
+              className="coach-scroll-btn"
+              onClick={() => scrollToBottom()}
+              title="Scroll to bottom"
+              aria-label="Scroll to bottom"
+            >
+              <ScrollDownIcon />
+            </button>
+          )}
+
           {composer}
         </div>
       )}
-
     </div>
   );
 }

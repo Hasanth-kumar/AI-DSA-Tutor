@@ -34,21 +34,64 @@ export class OllamaClient implements LLMClient {
   }
 
   async chat(messages: OllamaChatMessage[]): Promise<string | null> {
+    let full = "";
+    for await (const chunk of this.chatStream(messages)) {
+      full += chunk;
+    }
+    return full.trim() || null;
+  }
+
+  async *chatStream(
+    messages: OllamaChatMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
     const { baseUrl, model, timeoutMs = 120_000 } = this.config;
 
     const res = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages, stream: false }),
-      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({ model, messages, stream: true }),
+      signal: signal ?? AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
       throw new Error(`Ollama returned ${res.status}`);
     }
 
-    const data = (await res.json()) as { message?: { content?: string } };
-    return data.message?.content?.trim() ?? null;
+    const reader = res.body?.getReader();
+    if (!reader) {
+      throw new Error("Ollama returned an empty stream");
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          const data = JSON.parse(trimmed) as {
+            message?: { content?: string };
+            done?: boolean;
+          };
+
+          const content = data.message?.content;
+          if (content) yield content;
+          if (data.done) return;
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 }
 

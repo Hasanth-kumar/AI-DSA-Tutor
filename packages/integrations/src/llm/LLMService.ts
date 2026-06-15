@@ -128,12 +128,7 @@ export class LLMService {
       return fallbackChatReply(this.provider);
     }
 
-    const systemPrompt = buildChatSystemPrompt(learningContext, options);
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      ...history,
-      { role: "user" as const, content: userMessage },
-    ];
+    const messages = this.buildChatMessages(learningContext, history, userMessage, options);
 
     try {
       const text = await this.client.chat(messages);
@@ -145,6 +140,50 @@ export class LLMService {
       const detail = err instanceof Error ? err.message : "Unknown error";
       throw new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
     }
+  }
+
+  async *generateChatReplyStream(
+    learningContext: ChatLearningContext | null,
+    history: ChatHistoryMessage[],
+    userMessage: string,
+    options: ChatCoachOptions = {},
+    signal?: AbortSignal,
+  ): AsyncGenerator<string> {
+    if (!this.isConfigured()) {
+      yield fallbackChatReply(this.provider);
+      return;
+    }
+
+    const messages = this.buildChatMessages(learningContext, history, userMessage, options);
+
+    try {
+      let hasContent = false;
+      for await (const chunk of this.client.chatStream(messages, signal)) {
+        hasContent = true;
+        yield chunk;
+      }
+      if (!hasContent) {
+        throw new Error("Coach returned an empty response. Please try again.");
+      }
+    } catch (err) {
+      if (signal?.aborted) return;
+      const detail = err instanceof Error ? err.message : "Unknown error";
+      throw new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
+    }
+  }
+
+  private buildChatMessages(
+    learningContext: ChatLearningContext | null,
+    history: ChatHistoryMessage[],
+    userMessage: string,
+    options: ChatCoachOptions,
+  ) {
+    const systemPrompt = buildChatSystemPrompt(learningContext, options);
+    return [
+      { role: "system" as const, content: systemPrompt },
+      ...history,
+      { role: "user" as const, content: userMessage },
+    ];
   }
 }
 

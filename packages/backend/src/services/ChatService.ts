@@ -28,6 +28,12 @@ export interface ChatThreadDto {
   updatedAt: string;
 }
 
+export interface ChatThreadSummaryDto {
+  threadId: string;
+  preview: string;
+  updatedAt: string;
+}
+
 export interface SendChatInput {
   threadId?: string;
   message: string;
@@ -41,6 +47,12 @@ export interface SendChatResult {
   userMessage: ChatMessageDto;
   assistantMessage: ChatMessageDto;
 }
+
+export type ChatStreamEvent =
+  | { type: "meta"; threadId: string; userMessage: ChatMessageDto }
+  | { type: "chunk"; text: string }
+  | { type: "done"; assistantMessage: ChatMessageDto }
+  | { type: "error"; message: string };
 
 export class ChatService {
   private readonly llm: LLMService;
@@ -65,6 +77,18 @@ export class ChatService {
     this.llm = llm ?? createCoachLLMService(config);
   }
 
+  listThreads(limit = 30): ChatThreadSummaryDto[] {
+    return this.chatRepo.listThreads(limit).map((thread) => {
+      const firstUser = this.chatRepo.findFirstUserMessage(thread.id);
+      const preview = firstUser?.content.trim().slice(0, 80) ?? "New conversation";
+      return {
+        threadId: thread.id,
+        preview: preview.length >= 80 ? `${preview}…` : preview,
+        updatedAt: new Date(thread.updatedAt).toISOString(),
+      };
+    });
+  }
+
   getThread(threadId: string): ChatThreadDto | null {
     const thread = this.chatRepo.findThreadById(threadId);
     if (!thread) return null;
@@ -86,25 +110,110 @@ export class ChatService {
       throw new Error("message is required");
     }
 
-    const thread =
-      input.threadId != null
-        ? this.chatRepo.findThreadById(input.threadId)
-        : null;
-    const activeThread = thread ?? this.chatRepo.createThread();
+    const { thread, history, learningContext, coachOptions } =
+      await this.prepareTurn(input, message);
 
-    if (input.threadId && !thread) {
+    const reply = await this.llm.generateChatReply(
+      learningContext,
+      history,
+      message,
+      coachOptions,
+    );
+
+    const userMessage = this.chatRepo.addMessage(thread.id, "user", message);
+    const assistantMessage = this.chatRepo.addMessage(thread.id, "assistant", reply);
+
+    return {
+      threadId: thread.id,
+      userMessage: toMessageDto(userMessage),
+      assistantMessage: toMessageDto(assistantMessage),
+    };
+  }
+
+  async *sendMessageStream(
+    input: SendChatInput,
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamEvent> {
+    const message = input.message.trim();
+    if (!message) {
+      yield { type: "error", message: "message is required" };
+      return;
+    }
+
+    try {
+      const { thread, history, learningContext, coachOptions } =
+        await this.prepareTurn(input, message);
+
+      const userMessage = this.chatRepo.addMessage(thread.id, "user", message);
+      yield { type: "meta", threadId: thread.id, userMessage: toMessageDto(userMessage) };
+
+      let reply = "";
+      for await (const chunk of this.llm.generateChatReplyStream(
+        learningContext,
+        history,
+        message,
+        coachOptions,
+        signal,
+      )) {
+        if (signal?.aborted) break;
+        reply += chunk;
+        yield { type: "chunk", text: chunk };
+      }
+
+      const trimmed = reply.trim();
+      if (!trimmed && !signal?.aborted) {
+        this.chatRepo.deleteMessage(userMessage.id);
+        yield { type: "error", message: "Coach returned an empty response. Please try again." };
+        return;
+      }
+
+      if (signal?.aborted && !trimmed) {
+        this.chatRepo.deleteMessage(userMessage.id);
+        yield { type: "error", message: "Generation stopped" };
+        return;
+      }
+
+      const assistantMessage = this.chatRepo.addMessage(
+        thread.id,
+        "assistant",
+        trimmed || reply,
+      );
+      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Chat failed";
+      yield { type: "error", message: msg };
+    }
+  }
+
+  async regenerateMessage(input: {
+    threadId: string;
+    problemId?: string;
+    includeContext?: boolean;
+    directMode?: boolean;
+  }): Promise<SendChatResult> {
+    const thread = this.chatRepo.findThreadById(input.threadId);
+    if (!thread) {
       throw new Error(`Thread not found: ${input.threadId}`);
     }
 
-    const history = this.chatRepo
-      .findMessagesByThread(activeThread.id)
-      .map(
-        (row): ChatHistoryMessage => ({
-          role: row.role as "user" | "assistant",
-          content: row.content,
-        }),
-      );
+    const messages = this.chatRepo.findMessagesByThread(input.threadId);
+    if (messages.length < 2) {
+      throw new Error("Nothing to regenerate");
+    }
 
+    const last = messages[messages.length - 1]!;
+    if (last.role !== "assistant") {
+      throw new Error("Last message is not from the coach");
+    }
+
+    const userMsg = messages[messages.length - 2]!;
+    if (userMsg.role !== "user") {
+      throw new Error("Expected a user message before the coach reply");
+    }
+
+    this.chatRepo.deleteMessage(last.id);
+
+    const history = messages.slice(0, -2).map(toHistoryMessage);
     const learningContext = input.includeContext
       ? await this.buildLearningContext(input.problemId)
       : input.problemId
@@ -114,21 +223,271 @@ export class ChatService {
     const reply = await this.llm.generateChatReply(
       learningContext,
       history,
-      message,
+      userMsg.content,
       { directMode: input.directMode, anchored: Boolean(input.problemId) },
     );
 
-    const userMessage = this.chatRepo.addMessage(activeThread.id, "user", message);
-    const assistantMessage = this.chatRepo.addMessage(
-      activeThread.id,
-      "assistant",
-      reply,
-    );
+    const assistantMessage = this.chatRepo.addMessage(input.threadId, "assistant", reply);
 
     return {
-      threadId: activeThread.id,
+      threadId: input.threadId,
+      userMessage: toMessageDto(userMsg),
+      assistantMessage: toMessageDto(assistantMessage),
+    };
+  }
+
+  async *regenerateMessageStream(
+    input: {
+      threadId: string;
+      problemId?: string;
+      includeContext?: boolean;
+      directMode?: boolean;
+    },
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamEvent> {
+    try {
+      const thread = this.chatRepo.findThreadById(input.threadId);
+      if (!thread) {
+        yield { type: "error", message: `Thread not found: ${input.threadId}` };
+        return;
+      }
+
+      const messages = this.chatRepo.findMessagesByThread(input.threadId);
+      if (messages.length < 2) {
+        yield { type: "error", message: "Nothing to regenerate" };
+        return;
+      }
+
+      const last = messages[messages.length - 1]!;
+      if (last.role !== "assistant") {
+        yield { type: "error", message: "Last message is not from the coach" };
+        return;
+      }
+
+      const userMsg = messages[messages.length - 2]!;
+      if (userMsg.role !== "user") {
+        yield { type: "error", message: "Expected a user message before the coach reply" };
+        return;
+      }
+
+      this.chatRepo.deleteMessage(last.id);
+
+      const history = messages.slice(0, -2).map(toHistoryMessage);
+      const learningContext = input.includeContext
+        ? await this.buildLearningContext(input.problemId)
+        : input.problemId
+          ? await this.buildProblemOnlyContext(input.problemId)
+          : null;
+
+      yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMsg) };
+
+      let reply = "";
+      for await (const chunk of this.llm.generateChatReplyStream(
+        learningContext,
+        history,
+        userMsg.content,
+        { directMode: input.directMode, anchored: Boolean(input.problemId) },
+        signal,
+      )) {
+        if (signal?.aborted) break;
+        reply += chunk;
+        yield { type: "chunk", text: chunk };
+      }
+
+      const trimmed = reply.trim();
+      if (!trimmed && !signal?.aborted) {
+        yield { type: "error", message: "Coach returned an empty response. Please try again." };
+        return;
+      }
+
+      if (signal?.aborted && !trimmed) {
+        yield { type: "error", message: "Generation stopped" };
+        return;
+      }
+
+      const assistantMessage = this.chatRepo.addMessage(
+        input.threadId,
+        "assistant",
+        trimmed || reply,
+      );
+      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Regenerate failed";
+      yield { type: "error", message: msg };
+    }
+  }
+
+  async editMessage(input: {
+    threadId: string;
+    messageId: string;
+    content: string;
+    problemId?: string;
+    includeContext?: boolean;
+    directMode?: boolean;
+  }): Promise<SendChatResult> {
+    const content = input.content.trim();
+    if (!content) {
+      throw new Error("content is required");
+    }
+
+    const thread = this.chatRepo.findThreadById(input.threadId);
+    if (!thread) {
+      throw new Error(`Thread not found: ${input.threadId}`);
+    }
+
+    const target = this.chatRepo.findMessageById(input.messageId);
+    if (!target || target.threadId !== input.threadId) {
+      throw new Error("Message not found");
+    }
+    if (target.role !== "user") {
+      throw new Error("Only user messages can be edited");
+    }
+
+    this.chatRepo.updateMessageContent(input.messageId, content);
+    this.chatRepo.deleteMessagesAfter(input.threadId, target.createdAt);
+
+    const prior = this.chatRepo
+      .findMessagesByThread(input.threadId)
+      .filter((m) => m.createdAt < target.createdAt)
+      .map(toHistoryMessage);
+
+    const learningContext = input.includeContext
+      ? await this.buildLearningContext(input.problemId)
+      : input.problemId
+        ? await this.buildProblemOnlyContext(input.problemId)
+        : null;
+
+    const reply = await this.llm.generateChatReply(
+      learningContext,
+      prior,
+      content,
+      { directMode: input.directMode, anchored: Boolean(input.problemId) },
+    );
+
+    const userMessage = this.chatRepo.findMessageById(input.messageId)!;
+    const assistantMessage = this.chatRepo.addMessage(input.threadId, "assistant", reply);
+
+    return {
+      threadId: input.threadId,
       userMessage: toMessageDto(userMessage),
       assistantMessage: toMessageDto(assistantMessage),
+    };
+  }
+
+  async *editMessageStream(
+    input: {
+      threadId: string;
+      messageId: string;
+      content: string;
+      problemId?: string;
+      includeContext?: boolean;
+      directMode?: boolean;
+    },
+    signal?: AbortSignal,
+  ): AsyncGenerator<ChatStreamEvent> {
+    const content = input.content.trim();
+    if (!content) {
+      yield { type: "error", message: "content is required" };
+      return;
+    }
+
+    try {
+      const thread = this.chatRepo.findThreadById(input.threadId);
+      if (!thread) {
+        yield { type: "error", message: `Thread not found: ${input.threadId}` };
+        return;
+      }
+
+      const target = this.chatRepo.findMessageById(input.messageId);
+      if (!target || target.threadId !== input.threadId) {
+        yield { type: "error", message: "Message not found" };
+        return;
+      }
+      if (target.role !== "user") {
+        yield { type: "error", message: "Only user messages can be edited" };
+        return;
+      }
+
+      this.chatRepo.updateMessageContent(input.messageId, content);
+      this.chatRepo.deleteMessagesAfter(input.threadId, target.createdAt);
+
+      const prior = this.chatRepo
+        .findMessagesByThread(input.threadId)
+        .filter((m) => m.createdAt < target.createdAt)
+        .map(toHistoryMessage);
+
+      const learningContext = input.includeContext
+        ? await this.buildLearningContext(input.problemId)
+        : input.problemId
+          ? await this.buildProblemOnlyContext(input.problemId)
+          : null;
+
+      const userMessage = this.chatRepo.findMessageById(input.messageId)!;
+      yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMessage) };
+
+      let reply = "";
+      for await (const chunk of this.llm.generateChatReplyStream(
+        learningContext,
+        prior,
+        content,
+        { directMode: input.directMode, anchored: Boolean(input.problemId) },
+        signal,
+      )) {
+        if (signal?.aborted) break;
+        reply += chunk;
+        yield { type: "chunk", text: chunk };
+      }
+
+      const trimmed = reply.trim();
+      if (!trimmed && !signal?.aborted) {
+        yield { type: "error", message: "Coach returned an empty response. Please try again." };
+        return;
+      }
+
+      if (signal?.aborted && !trimmed) {
+        yield { type: "error", message: "Generation stopped" };
+        return;
+      }
+
+      const assistantMessage = this.chatRepo.addMessage(
+        input.threadId,
+        "assistant",
+        trimmed || reply,
+      );
+      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Edit failed";
+      yield { type: "error", message: msg };
+    }
+  }
+
+  private async prepareTurn(input: SendChatInput, message: string) {
+    const thread =
+      input.threadId != null ? this.chatRepo.findThreadById(input.threadId) : null;
+    const activeThread = thread ?? this.chatRepo.createThread();
+
+    if (input.threadId && !thread) {
+      throw new Error(`Thread not found: ${input.threadId}`);
+    }
+
+    const history = this.chatRepo
+      .findMessagesByThread(activeThread.id)
+      .map(toHistoryMessage);
+
+    const learningContext = input.includeContext
+      ? await this.buildLearningContext(input.problemId)
+      : input.problemId
+        ? await this.buildProblemOnlyContext(input.problemId)
+        : null;
+
+    return {
+      thread: activeThread,
+      history,
+      learningContext,
+      coachOptions: {
+        directMode: input.directMode,
+        anchored: Boolean(input.problemId),
+      },
     };
   }
 
@@ -225,6 +584,16 @@ export class ChatService {
       },
     };
   }
+}
+
+function toHistoryMessage(row: {
+  role: string;
+  content: string;
+}): ChatHistoryMessage {
+  return {
+    role: row.role as "user" | "assistant",
+    content: row.content,
+  };
 }
 
 function toMessageDto(row: {

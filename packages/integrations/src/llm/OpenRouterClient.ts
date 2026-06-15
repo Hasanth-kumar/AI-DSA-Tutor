@@ -57,6 +57,17 @@ export class OpenRouterClient implements LLMClient {
   }
 
   async chat(messages: LLMChatMessage[]): Promise<string | null> {
+    let full = "";
+    for await (const chunk of this.chatStream(messages)) {
+      full += chunk;
+    }
+    return full.trim() || null;
+  }
+
+  async *chatStream(
+    messages: LLMChatMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${this.config.apiKey}`,
@@ -72,7 +83,7 @@ export class OpenRouterClient implements LLMClient {
     const body = JSON.stringify({
       model: this.config.model,
       messages,
-      stream: false,
+      stream: true,
     });
 
     let lastError: Error | null = null;
@@ -83,12 +94,11 @@ export class OpenRouterClient implements LLMClient {
           method: "POST",
           headers,
           body,
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: signal ?? AbortSignal.timeout(this.timeoutMs),
         });
 
-        const data = (await res.json()) as ChatCompletionResponse;
-
         if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as ChatCompletionResponse;
           const detail = data.error?.message ?? `HTTP ${res.status}`;
           const err = new Error(`OpenRouter error: ${detail}`);
           if (isRetryableStatus(res.status) && attempt < MAX_RETRIES - 1) {
@@ -99,14 +109,42 @@ export class OpenRouterClient implements LLMClient {
           throw err;
         }
 
-        const content = data.choices?.[0]?.message?.content?.trim() ?? null;
-        if (!content && attempt < MAX_RETRIES - 1) {
-          lastError = new Error("OpenRouter returned an empty response");
-          await sleep(RETRY_BASE_MS * 2 ** attempt);
-          continue;
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("OpenRouter returned an empty stream");
         }
 
-        return content;
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data:")) continue;
+
+              const payload = trimmed.slice(5).trim();
+              if (payload === "[DONE]") return;
+
+              const data = JSON.parse(payload) as {
+                choices?: Array<{ delta?: { content?: string } }>;
+              };
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) yield content;
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        return;
       } catch (err) {
         if (isRetryableError(err) && attempt < MAX_RETRIES - 1) {
           lastError = err instanceof Error ? err : new Error(String(err));

@@ -21,11 +21,14 @@ let ctx: AppContext;
 const MS_PER_DAY = 86_400_000;
 
 function createTestCoachLLM(): LLMService {
+  const reply = "Try breaking the problem into smaller subproblems and check edge cases.";
   const client: LLMClient = {
     isConfigured: () => true,
     generate: async () => "Structured coaching response for tests.",
-    chat: async () =>
-      "Try breaking the problem into smaller subproblems and check edge cases.",
+    chat: async () => reply,
+    async *chatStream() {
+      yield reply;
+    },
   };
   return new LLMService(
     { provider: "ollama", model: "test", ollama: { baseUrl: "http://127.0.0.1:1" } },

@@ -331,8 +331,27 @@ export interface ChatThread {
   updatedAt: string;
 }
 
+export interface ChatThreadSummary {
+  threadId: string;
+  preview: string;
+  updatedAt: string;
+}
+
 export interface SendChatResult {
   threadId: string;
   userMessage: ChatMessage;
   assistantMessage: ChatMessage;
+}
+
+export interface ChatThreadList {
+  threads: ChatThreadSummary[];
+}
+
+export interface ChatStreamEvent {
+  type: "meta" | "chunk" | "done" | "error";
+  threadId?: string;
+  userMessage?: ChatMessage;
+  text?: string;
+  assistantMessage?: ChatMessage;
+  message?: string;
 }

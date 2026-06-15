@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { chatMessages, chatThreads } from "@dsa/database/schema";
 import type { SqliteDb } from "@dsa/integrations";
@@ -72,6 +72,42 @@ export class ChatRepository {
       .orderBy(asc(chatMessages.createdAt))
       .limit(limit)
       .all();
+  }
+
+  findFirstUserMessage(threadId: string): ChatMessageRow | null {
+    return (
+      this.db
+        .select()
+        .from(chatMessages)
+        .where(and(eq(chatMessages.threadId, threadId), eq(chatMessages.role, "user")))
+        .orderBy(asc(chatMessages.createdAt))
+        .limit(1)
+        .get() ?? null
+    );
+  }
+
+  updateMessageContent(id: string, content: string): ChatMessageRow | null {
+    this.db.update(chatMessages).set({ content }).where(eq(chatMessages.id, id)).run();
+    return this.findMessageById(id);
+  }
+
+  deleteMessage(id: string): boolean {
+    const result = this.db.delete(chatMessages).where(eq(chatMessages.id, id)).run();
+    return result.changes > 0;
+  }
+
+  deleteMessagesAfter(threadId: string, afterCreatedAt: number): void {
+    this.db
+      .delete(chatMessages)
+      .where(and(eq(chatMessages.threadId, threadId), gt(chatMessages.createdAt, afterCreatedAt)))
+      .run();
+  }
+
+  deleteMessagesFrom(threadId: string, fromCreatedAt: number): void {
+    this.db
+      .delete(chatMessages)
+      .where(and(eq(chatMessages.threadId, threadId), gte(chatMessages.createdAt, fromCreatedAt)))
+      .run();
   }
 
   listThreads(limit = 20): ChatThreadRow[] {
