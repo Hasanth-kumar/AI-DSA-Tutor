@@ -7,12 +7,6 @@ async function main() {
   const config = loadConfig();
   const ctx = createAppContext(config);
 
-  try {
-    await ctx.cache.connect();
-  } catch (err) {
-    console.warn("Redis unavailable — plan caching disabled:", err);
-  }
-
   const schedulers = startSchedulers(ctx);
   const app = buildApp(config, ctx);
 
@@ -47,7 +41,7 @@ async function main() {
     await app.listen({ port: config.port, host: "0.0.0.0" });
     app.log.info(`API listening on http://localhost:${config.port}`);
     if (config.schedulers.enabled) {
-      app.log.info("BullMQ scheduler active (weekly digest only — daily pushes removed)");
+      app.log.info("Weekly digest scheduler active (in-process cron — daily pushes removed)");
     }
   } catch (err) {
     app.log.error(err);
