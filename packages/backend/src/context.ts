@@ -81,7 +81,7 @@ export function createAppContext(
   const attemptRepo = new AttemptRepository(db, mirrorCache);
   const noteRepo = new NoteRepository(db, mirrorCache);
   const conflictRepo = new ConflictRepository(db);
-  const cache = new CacheService(config.redis.url);
+  const cache = new CacheService();
   const llm = createAppLLMService(config);
   const events = new EventBus();
   const intelligence = createIntelligenceOrchestrator(config.intelligenceWeights);

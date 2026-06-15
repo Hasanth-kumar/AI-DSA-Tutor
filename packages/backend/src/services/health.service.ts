@@ -67,13 +67,12 @@ async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
     };
   }
 
-  const [redisResult, notionResult, llmHealth] = await Promise.all([
-    checkRedis(ctx),
+  const [notionResult, llmHealth] = await Promise.all([
     checkNotion(ctx),
     checkLlmHealth(ctx.config),
   ]);
 
-  const services = { api, sqlite, redis: redisResult, notion: notionResult, ollama: llmHealth };
+  const services = { api, sqlite, notion: notionResult, llm: llmHealth };
   const status = aggregateStatus(Object.values(services));
 
   let sync: HealthResponse["sync"];
@@ -93,21 +92,6 @@ async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
   };
 }
 
-async function checkRedis(ctx: AppContext): Promise<ServiceHealth> {
-  try {
-    const { latencyMs } = await timed(async () => {
-      const ok = await ctx.cache.ping();
-      if (!ok) throw new Error("Redis ping failed");
-    });
-    return { status: "ok", latencyMs };
-  } catch (err) {
-    return {
-      status: "down",
-      message: err instanceof Error ? err.message : "Redis unreachable",
-    };
-  }
-}
-
 async function checkNotion(ctx: AppContext): Promise<ServiceHealth> {
   if (!ctx.notionSync.isConfigured()) {
     return { status: "down", message: "Not configured" };
@@ -123,52 +107,35 @@ async function checkNotion(ctx: AppContext): Promise<ServiceHealth> {
   }
 }
 
-/** @deprecated Use checkHealthFromContext — avoids reopening DB/Redis per probe. */
+/** @deprecated Use checkHealthFromContext — avoids reopening the DB per probe. */
 export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
   void config;
   throw new Error("checkHealth(config) requires AppContext — use checkHealthFromContext");
 }
 
 async function checkLlmHealth(config: AppConfig): Promise<ServiceHealth> {
-  if (config.llm.provider === "openrouter") {
-    const apiKey = config.llm.openrouter.apiKey;
-    if (!apiKey) {
-      return { status: "down", message: "OPENROUTER_API_KEY not set" };
-    }
-    try {
-      const baseUrl = config.llm.openrouter.baseUrl.replace(/\/$/, "");
-      const { latencyMs } = await timed(async () => {
-        const res = await fetch(`${baseUrl}/models`, {
-          headers: { Authorization: `Bearer ${apiKey}` },
-          signal: AbortSignal.timeout(5000),
-        });
-        if (!res.ok) throw new Error(`OpenRouter returned ${res.status}`);
-      });
-      return {
-        status: "ok",
-        latencyMs,
-        message: `OpenRouter · ${config.llm.model}`,
-      };
-    } catch (err) {
-      return {
-        status: "down",
-        message: err instanceof Error ? err.message : "OpenRouter unreachable",
-      };
-    }
+  const apiKey = config.llm.openrouter.apiKey;
+  if (!apiKey) {
+    return { status: "down", message: "OPENROUTER_API_KEY not set" };
   }
-
   try {
+    const baseUrl = config.llm.openrouter.baseUrl.replace(/\/$/, "");
     const { latencyMs } = await timed(async () => {
-      const res = await fetch(`${config.llm.ollama.baseUrl}/api/tags`, {
-        signal: AbortSignal.timeout(3000),
+      const res = await fetch(`${baseUrl}/models`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
       });
-      if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+      if (!res.ok) throw new Error(`OpenRouter returned ${res.status}`);
     });
-    return { status: "ok", latencyMs, message: `Ollama · ${config.llm.model}` };
+    return {
+      status: "ok",
+      latencyMs,
+      message: `OpenRouter · ${config.llm.model}`,
+    };
   } catch (err) {
     return {
       status: "down",
-      message: err instanceof Error ? err.message : "Ollama unreachable",
+      message: err instanceof Error ? err.message : "OpenRouter unreachable",
     };
   }
 }

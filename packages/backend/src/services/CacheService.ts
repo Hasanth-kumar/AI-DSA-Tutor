@@ -1,68 +1,40 @@
-import { Redis } from "ioredis";
+interface CacheEntry {
+  value: unknown;
+  expiresAt: number;
+}
 
+/**
+ * In-process TTL cache. A single-user, single-process backend doesn't need a
+ * separate Redis service for the two things it caches (today's plan and hints),
+ * so this keeps the same async API while storing entries in a plain Map.
+ *
+ * Trade-off vs. Redis: the cache is cleared on restart and not shared across
+ * processes — both acceptable here, since cache misses simply recompute.
+ */
 export class CacheService {
-  private readonly redis: Redis;
+  private readonly store = new Map<string, CacheEntry>();
 
-  constructor(redisUrl: string) {
-    this.redis = new Redis(redisUrl, {
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-      enableOfflineQueue: false,
-      connectTimeout: 1000,
-      retryStrategy: () => null,
-    });
-    this.redis.on("error", () => {
-      // Handled per-operation; avoid unhandled error events when Redis is down
-    });
-  }
-
-  async connect(): Promise<void> {
-    if (this.redis.status === "wait") {
-      await this.redis.connect();
-    }
-  }
+  async connect(): Promise<void> {}
 
   async disconnect(): Promise<void> {
-    if (this.redis.status === "end") return;
-    try {
-      if (this.redis.status === "ready") {
-        await this.redis.quit();
-      } else {
-        this.redis.disconnect();
-      }
-    } catch {
-      this.redis.disconnect();
-    }
+    this.store.clear();
   }
 
   async get<T>(key: string): Promise<T | null> {
-    const raw = await this.redis.get(key);
-    if (!raw) return null;
-    return JSON.parse(raw, dateReviver) as T;
+    const entry = this.store.get(key);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      this.store.delete(key);
+      return null;
+    }
+    return entry.value as T;
   }
 
   async set<T>(key: string, value: T, ttlSeconds = 3600): Promise<void> {
-    await this.redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
+    this.store.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   }
 
   async del(key: string): Promise<void> {
-    await this.redis.del(key);
+    this.store.delete(key);
   }
-
-  async ping(): Promise<boolean> {
-    try {
-      const result = await this.redis.ping();
-      return result === "PONG";
-    } catch {
-      return false;
-    }
-  }
-}
-
-function dateReviver(_key: string, value: unknown): unknown {
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
-    const d = new Date(value);
-    if (!Number.isNaN(d.getTime())) return d;
-  }
-  return value;
 }

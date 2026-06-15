@@ -31,7 +31,7 @@ export class PlanService {
       const cached = await this.cache.get<StudyPlan>(cacheKey);
       if (cached) return cached;
     } catch {
-      // Redis optional — continue without cache
+      // cache is best-effort — continue without it
     }
 
     const topics = this.topicRepo.findAll();
@@ -46,7 +46,7 @@ export class PlanService {
     try {
       await this.cache.set(cacheKey, plan, 3600);
     } catch {
-      // Redis optional
+      // cache is best-effort
     }
     return plan;
   }
@@ -126,7 +126,7 @@ export class PlanService {
     try {
       await this.cache.del(`plan:${formatDateKey(new Date())}`);
     } catch {
-      // Redis optional
+      // cache is best-effort
     }
   }
 }
