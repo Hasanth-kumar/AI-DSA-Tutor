@@ -41,6 +41,10 @@ export {
 export { deriveProductivityFromDuration } from "./session-productivity.js";
 export { TopicDAG } from "./roadmap-engine/dag.js";
 export { DSA_PREREQUISITES } from "./roadmap-engine/dsa-roadmap.js";
+export {
+  buildTopicGraphEdges,
+  GRAPH_TOPIC_PREREQUISITES,
+} from "./roadmap-engine/graph-edges.js";
 export { RoadmapEngine } from "./roadmap-engine/RoadmapEngine.js";
 export {
   createIntelligenceOrchestrator,
