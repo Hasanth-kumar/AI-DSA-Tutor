@@ -20,9 +20,8 @@ export interface HealthResponse {
   services: {
     api: ServiceHealth;
     sqlite: ServiceHealth;
-    redis: ServiceHealth;
     notion: ServiceHealth;
-    ollama: ServiceHealth;
+    llm: ServiceHealth;
   };
   counts?: {
     topics: number;

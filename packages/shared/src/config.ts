@@ -26,15 +26,11 @@ const envSchema = z.object({
   NOTION_TOPICS_DB_ID: z.string().optional(),
   NOTION_PROBLEMS_DB_ID: z.string().optional(),
   NOTION_SESSIONS_DB_ID: z.string().optional(),
-  REDIS_URL: z.string().default("redis://localhost:6379"),
-  LLM_PROVIDER: z.enum(["ollama", "openrouter"]).optional(),
-  /** Provider override for coaching/hint/debrief paths (defaults to LLM_PROVIDER). */
-  COACH_LLM_PROVIDER: z.enum(["ollama", "openrouter"]).optional(),
-  /** Model override for the coach provider (defaults to that provider's model). */
+  /** Model override for the coach (defaults to OPENROUTER_MODEL). */
   COACH_LLM_MODEL: z.string().optional(),
-  OLLAMA_BASE_URL: z.string().default("http://localhost:11434"),
-  OLLAMA_MODEL: z.string().default("qwen2.5-coder:3b"),
   OPENROUTER_API_KEY: z.string().optional(),
+  /** Separate OpenRouter key for coach paths (falls back to OPENROUTER_API_KEY). */
+  OPENROUTER_COACH_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().default("google/gemma-4-31b-it:free"),
   OPENROUTER_BASE_URL: z.string().default("https://openrouter.ai/api/v1"),
   OPENROUTER_SITE_URL: z.string().default("http://localhost:5173"),
@@ -73,6 +69,18 @@ const envSchema = z.object({
   GITHUB_SOLUTIONS_PATH: z.string().default(""),
 });
 
+/** A coach LLM the user can pick from in the UI. */
+export type CoachModelOption = {
+  /** Stable id used by the picker and chat requests (e.g. "openrouter:deepseek/deepseek-r1:free"). */
+  id: string;
+  /** Human-friendly name shown in the picker. */
+  label: string;
+  /** Provider-specific model identifier sent to the API. */
+  model: string;
+  /** OpenRouter key for this model (never sent to the frontend). */
+  apiKey?: string;
+};
+
 export type AppConfig = {
   nodeEnv: string;
   port: number;
@@ -83,11 +91,8 @@ export type AppConfig = {
     problemsDbId?: string;
     sessionsDbId?: string;
   };
-  redis: { url: string };
   llm: {
-    provider: "ollama" | "openrouter";
     model: string;
-    ollama: { baseUrl: string };
     openrouter: {
       apiKey?: string;
       baseUrl: string;
@@ -95,10 +100,16 @@ export type AppConfig = {
       siteName: string;
     };
   };
-  /** Coaching/hint/debrief LLM — may differ from the general provider (3.3). */
+  /** Coaching/hint/debrief LLM — may use a different model than the general LLM. */
   coachLlm: {
-    provider: "ollama" | "openrouter";
     model: string;
+    openrouter: {
+      apiKey?: string;
+    };
+    /** Id (within `models`) selected when the user hasn't chosen one. */
+    defaultModelId: string;
+    /** Models the user can switch between in the coach UI. */
+    models: CoachModelOption[];
   };
   whatsapp: {
     phoneNumberId?: string;
@@ -157,16 +168,8 @@ export function loadConfig(envPath?: string): AppConfig {
       problemsDbId: env.NOTION_PROBLEMS_DB_ID,
       sessionsDbId: env.NOTION_SESSIONS_DB_ID,
     },
-    redis: { url: env.REDIS_URL },
     llm: {
-      provider:
-        env.LLM_PROVIDER ??
-        (env.OPENROUTER_API_KEY ? "openrouter" : "ollama"),
-      model:
-        env.LLM_PROVIDER === "openrouter" || env.OPENROUTER_API_KEY
-          ? env.OPENROUTER_MODEL
-          : env.OLLAMA_MODEL,
-      ollama: { baseUrl: env.OLLAMA_BASE_URL },
+      model: env.OPENROUTER_MODEL,
       openrouter: {
         apiKey: env.OPENROUTER_API_KEY,
         baseUrl: env.OPENROUTER_BASE_URL,
@@ -227,18 +230,59 @@ export function loadConfig(envPath?: string): AppConfig {
 type ParsedEnv = z.infer<typeof envSchema>;
 
 /**
- * The coach can use a stronger (cloud) model than the general LLM:
- * COACH_LLM_PROVIDER / COACH_LLM_MODEL override, falling back to the
- * general provider selection.
+ * The coach can use a stronger model than the general LLM via COACH_LLM_MODEL.
  */
 function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
-  const generalProvider =
-    env.LLM_PROVIDER ?? (env.OPENROUTER_API_KEY ? "openrouter" : "ollama");
-  const provider = env.COACH_LLM_PROVIDER ?? generalProvider;
-  const model =
-    env.COACH_LLM_MODEL ??
-    (provider === "openrouter" ? env.OPENROUTER_MODEL : env.OLLAMA_MODEL);
-  return { provider, model };
+  const model = env.COACH_LLM_MODEL ?? env.OPENROUTER_MODEL;
+  const apiKey = env.OPENROUTER_COACH_API_KEY ?? env.OPENROUTER_API_KEY;
+  const models = buildCoachModels(env, { model, apiKey });
+
+  return {
+    model,
+    openrouter: { apiKey },
+    defaultModelId: coachModelId(model),
+    models,
+  };
+}
+
+function coachModelId(model: string): string {
+  return `openrouter:${model}`;
+}
+
+/** "deepseek/deepseek-r1:free" → "Deepseek R1". */
+function prettyModelLabel(model: string): string {
+  const base = (model.split("/").pop() ?? model).split(":")[0] ?? model;
+  return base
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+/**
+ * Models offered in the coach picker: the configured coach model (default,
+ * listed first) and the general model (e.g. Gemma 4). Entries without an
+ * OpenRouter key are dropped; duplicates are de-duplicated.
+ */
+function buildCoachModels(
+  env: ParsedEnv,
+  coach: { model: string; apiKey?: string },
+): CoachModelOption[] {
+  const models: CoachModelOption[] = [];
+
+  const add = (opt: { model: string; apiKey?: string }) => {
+    if (!opt.apiKey) return;
+    const id = coachModelId(opt.model);
+    if (models.some((m) => m.id === id)) return;
+    models.push({ id, label: prettyModelLabel(opt.model), ...opt });
+  };
+
+  add(coach);
+  if (coach.model !== env.OPENROUTER_MODEL) {
+    add({ model: env.OPENROUTER_MODEL, apiKey: env.OPENROUTER_API_KEY });
+  }
+
+  return models;
 }
 
 export function resetConfigCache(): void {
