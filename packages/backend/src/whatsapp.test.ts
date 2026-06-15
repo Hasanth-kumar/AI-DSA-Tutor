@@ -41,7 +41,6 @@ describe("WhatsApp webhook", () => {
     testDbPath = join(tmpdir(), `dsa-wa-test-${Date.now()}.db`);
     process.env.SQLITE_PATH = testDbPath;
     process.env.ENABLE_SCHEDULERS = "false";
-    process.env.REDIS_URL = "redis://127.0.0.1:6399";
     process.env.WHATSAPP_VERIFY_TOKEN = "test-verify-token";
     seedTestDb(testDbPath);
     config = loadConfig("/nonexistent/.env");

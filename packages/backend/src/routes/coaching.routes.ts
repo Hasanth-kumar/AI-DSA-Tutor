@@ -130,6 +130,10 @@ export async function coachingRoutes(
     return reply.send(serializeForJson({ threads }));
   });
 
+  app.get("/coaching/models", async (_request, reply) => {
+    return reply.send(serializeForJson(ctx.chatService.listModels()));
+  });
+
   app.post<{
     Body: {
       threadId?: string;
@@ -137,6 +141,7 @@ export async function coachingRoutes(
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     };
   }>("/coaching/chat", async (request, reply) => {
     const message = request.body.message?.trim();
@@ -151,6 +156,7 @@ export async function coachingRoutes(
         problemId: request.body.problemId,
         includeContext: request.body.includeContext ?? true,
         directMode: request.body.directMode ?? false,
+        model: request.body.model,
       });
       return reply.send(serializeForJson(result));
     } catch (err) {
@@ -167,6 +173,7 @@ export async function coachingRoutes(
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     };
   }>("/coaching/chat/stream", async (request, reply) => {
     const message = request.body.message?.trim();
@@ -187,6 +194,7 @@ export async function coachingRoutes(
           problemId: request.body.problemId,
           includeContext: request.body.includeContext ?? true,
           directMode: request.body.directMode ?? false,
+          model: request.body.model,
         },
         abortController.signal,
       ),
@@ -199,6 +207,7 @@ export async function coachingRoutes(
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     };
   }>("/coaching/chat/regenerate/stream", async (request, reply) => {
     const threadId = request.body.threadId?.trim();
@@ -218,6 +227,7 @@ export async function coachingRoutes(
           problemId: request.body.problemId,
           includeContext: request.body.includeContext ?? true,
           directMode: request.body.directMode ?? false,
+          model: request.body.model,
         },
         abortController.signal,
       ),
@@ -232,6 +242,7 @@ export async function coachingRoutes(
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     };
   }>("/coaching/chat/edit/stream", async (request, reply) => {
     const threadId = request.body.threadId?.trim();
@@ -257,6 +268,7 @@ export async function coachingRoutes(
           problemId: request.body.problemId,
           includeContext: request.body.includeContext ?? true,
           directMode: request.body.directMode ?? false,
+          model: request.body.model,
         },
         abortController.signal,
       ),

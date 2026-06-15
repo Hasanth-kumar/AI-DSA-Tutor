@@ -6,7 +6,7 @@ import {
 } from "@dsa/integrations";
 import type { IntelligenceOrchestrator } from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
-import { createCoachLLMService } from "../llm.factory.js";
+import { createCoachLLMService, createCoachModelLLMService } from "../llm.factory.js";
 import type { AttemptRepository } from "../repositories/AttemptRepository.js";
 import type { ChatRepository } from "../repositories/ChatRepository.js";
 import type { NoteRepository } from "../repositories/NoteRepository.js";
@@ -40,6 +40,20 @@ export interface SendChatInput {
   problemId?: string;
   includeContext?: boolean;
   directMode?: boolean;
+  /** Coach model id (from listModels); falls back to the configured default. */
+  model?: string;
+}
+
+/** Coach model exposed to the UI — never carries the API key. */
+export interface CoachModelDto {
+  id: string;
+  label: string;
+  model: string;
+}
+
+export interface CoachModelList {
+  models: CoachModelDto[];
+  defaultModelId: string;
 }
 
 export interface SendChatResult {
@@ -55,7 +69,10 @@ export type ChatStreamEvent =
   | { type: "error"; message: string };
 
 export class ChatService {
-  private readonly llm: LLMService;
+  /** Coach model used when the request doesn't pick one (also the test stub). */
+  private readonly defaultLlm: LLMService;
+  /** Lazily-built services for non-default models, keyed by model id. */
+  private readonly llmByModelId = new Map<string, LLMService>();
   private learningContextCache: {
     ctx: ChatLearningContext;
     expiresAt: number;
@@ -63,7 +80,7 @@ export class ChatService {
   private static readonly CONTEXT_TTL_MS = 60_000;
 
   constructor(
-    config: AppConfig,
+    private readonly config: AppConfig,
     private readonly chatRepo: ChatRepository,
     private readonly planService: PlanService,
     private readonly analyticsService: AnalyticsService,
@@ -74,7 +91,39 @@ export class ChatService {
     private readonly attemptRepo?: AttemptRepository,
     private readonly noteRepo?: NoteRepository,
   ) {
-    this.llm = llm ?? createCoachLLMService(config);
+    this.defaultLlm = llm ?? createCoachLLMService(config);
+  }
+
+  /** Models the coach UI can switch between (API keys stripped). */
+  listModels(): CoachModelList {
+    return {
+      models: this.config.coachLlm.models.map(({ id, label, model }) => ({
+        id,
+        label,
+        model,
+      })),
+      defaultModelId: this.config.coachLlm.defaultModelId,
+    };
+  }
+
+  /**
+   * Resolve the LLM for a chat turn. Unknown or default ids use the configured
+   * coach model (the injected stub in tests); other ids build and cache a
+   * dedicated service so switching models doesn't rebuild on every message.
+   */
+  private resolveLlm(modelId?: string): LLMService {
+    if (!modelId || modelId === this.config.coachLlm.defaultModelId) {
+      return this.defaultLlm;
+    }
+    const cached = this.llmByModelId.get(modelId);
+    if (cached) return cached;
+
+    const option = this.config.coachLlm.models.find((m) => m.id === modelId);
+    if (!option) return this.defaultLlm;
+
+    const service = createCoachModelLLMService(this.config, option);
+    this.llmByModelId.set(modelId, service);
+    return service;
   }
 
   listThreads(limit = 30): ChatThreadSummaryDto[] {
@@ -113,7 +162,7 @@ export class ChatService {
     const { thread, history, learningContext, coachOptions } =
       await this.prepareTurn(input);
 
-    const reply = await this.llm.generateChatReply(
+    const reply = await this.resolveLlm(input.model).generateChatReply(
       learningContext,
       history,
       message,
@@ -148,7 +197,7 @@ export class ChatService {
       yield { type: "meta", threadId: thread.id, userMessage: toMessageDto(userMessage) };
 
       let reply = "";
-      for await (const chunk of this.llm.generateChatReplyStream(
+      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
         learningContext,
         history,
         message,
@@ -190,6 +239,7 @@ export class ChatService {
     problemId?: string;
     includeContext?: boolean;
     directMode?: boolean;
+    model?: string;
   }): Promise<SendChatResult> {
     const thread = this.chatRepo.findThreadById(input.threadId);
     if (!thread) {
@@ -220,7 +270,7 @@ export class ChatService {
         ? await this.buildProblemOnlyContext(input.problemId)
         : null;
 
-    const reply = await this.llm.generateChatReply(
+    const reply = await this.resolveLlm(input.model).generateChatReply(
       learningContext,
       history,
       userMsg.content,
@@ -242,6 +292,7 @@ export class ChatService {
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     },
     signal?: AbortSignal,
   ): AsyncGenerator<ChatStreamEvent> {
@@ -282,7 +333,7 @@ export class ChatService {
       yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMsg) };
 
       let reply = "";
-      for await (const chunk of this.llm.generateChatReplyStream(
+      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
         learningContext,
         history,
         userMsg.content,
@@ -324,6 +375,7 @@ export class ChatService {
     problemId?: string;
     includeContext?: boolean;
     directMode?: boolean;
+    model?: string;
   }): Promise<SendChatResult> {
     const content = input.content.trim();
     if (!content) {
@@ -357,7 +409,7 @@ export class ChatService {
         ? await this.buildProblemOnlyContext(input.problemId)
         : null;
 
-    const reply = await this.llm.generateChatReply(
+    const reply = await this.resolveLlm(input.model).generateChatReply(
       learningContext,
       prior,
       content,
@@ -382,6 +434,7 @@ export class ChatService {
       problemId?: string;
       includeContext?: boolean;
       directMode?: boolean;
+      model?: string;
     },
     signal?: AbortSignal,
   ): AsyncGenerator<ChatStreamEvent> {
@@ -426,7 +479,7 @@ export class ChatService {
       yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMessage) };
 
       let reply = "";
-      for await (const chunk of this.llm.generateChatReplyStream(
+      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
         learningContext,
         prior,
         content,

@@ -31,7 +31,7 @@ function createTestCoachLLM(): LLMService {
     },
   };
   return new LLMService(
-    { provider: "ollama", model: "test", ollama: { baseUrl: "http://127.0.0.1:1" } },
+    { model: "test", openrouter: { apiKey: "test-key" } },
     client,
   );
 }
@@ -139,7 +139,6 @@ describe("API routes", () => {
     testDbPath = join(tmpdir(), `dsa-api-test-${Date.now()}.db`);
     process.env.SQLITE_PATH = testDbPath;
     process.env.ENABLE_SCHEDULERS = "false";
-    process.env.REDIS_URL = "redis://127.0.0.1:6399";
     seedTestDb(testDbPath);
     config = loadConfig("/nonexistent/.env");
     config = { ...config, sqlite: { path: testDbPath }, schedulers: { ...config.schedulers, enabled: false } };

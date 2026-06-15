@@ -37,7 +37,7 @@ export class HintService {
         const cached = await this.cache.get<string>(cacheKey);
         if (cached) return cached;
       } catch {
-        // Redis optional
+        // cache is best-effort
       }
     }
 
@@ -47,7 +47,7 @@ export class HintService {
       try {
         await this.cache.set(cacheKey, hint, HINT_CACHE_TTL_SECONDS);
       } catch {
-        // Redis optional
+        // cache is best-effort
       }
     }
 

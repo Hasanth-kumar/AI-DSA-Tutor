@@ -30,7 +30,7 @@ function createTestCoachLLM(): LLMService {
     },
   };
   return new LLMService(
-    { provider: "ollama", model: "test", ollama: { baseUrl: "http://127.0.0.1:1" } },
+    { model: "test", openrouter: { apiKey: "test-key" } },
     client,
   );
 }

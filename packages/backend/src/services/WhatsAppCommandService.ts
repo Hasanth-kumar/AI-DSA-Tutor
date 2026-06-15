@@ -197,7 +197,7 @@ export class WhatsAppCommandService {
       );
       reply += `\n\n${debrief.debrief}`;
     } catch {
-      // debrief is optional when Ollama is unavailable
+      // debrief is optional when the LLM is unavailable
     }
 
     return reply;
