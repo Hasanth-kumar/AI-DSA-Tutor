@@ -141,10 +141,29 @@ textarea {
   border-bottom: none;
 }
 
+.app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav {
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.15rem;
+}
+
 .app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav button {
   justify-content: center;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  margin-inline: auto;
+}
+
+.app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.app-shell:not(.app-shell--mobile) .sidebar--collapsed .nav button.active::before {
+  height: 50%;
 }
 
 .brand {
@@ -773,23 +792,82 @@ button:focus-visible,
 .coach-settings-bar {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.55rem 1.25rem;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1.25rem;
   border-bottom: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg-elevated) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   flex-shrink: 0;
-  flex-wrap: wrap;
 }
 
 .coach-settings-title {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 500;
   letter-spacing: -0.025em;
   color: var(--text);
-  margin-right: 0.15rem;
+}
+
+.coach-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+}
+
+.coach-options-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  padding: 0.32rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    color var(--transition),
+    background var(--transition);
+}
+
+.coach-options-btn:hover {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--bg-surface);
+}
+
+.coach-options-btn--active {
+  border-color: var(--accent-ring);
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.coach-options-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1.25rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+  animation: coach-panel-in 0.18s ease;
+}
+
+@keyframes coach-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .coach-setting-sep {
@@ -861,7 +939,6 @@ button:focus-visible,
 }
 
 .coach-new-btn {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -901,9 +978,9 @@ button:focus-visible,
 }
 
 .coach-thread-inner {
-  max-width: 44rem;
+  max-width: 46rem;
   margin: 0 auto;
-  padding: 0.5rem 1.5rem 0.25rem;
+  padding: 0.75rem 1.5rem 0.5rem;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -926,11 +1003,11 @@ button:focus-visible,
 
 .coach-empty-state-inner {
   width: 100%;
-  max-width: 44rem;
+  max-width: 46rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  transform: translateY(-4vh);
+  transform: translateY(-6vh);
 }
 
 .coach-empty-state .coach-welcome {
@@ -958,17 +1035,15 @@ button:focus-visible,
 }
 
 .coach-welcome-icon {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(145deg, var(--accent-hover), var(--accent));
-  border-radius: 16px;
+  width: 52px;
+  height: 52px;
+  background: var(--accent);
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow:
-    0 4px 16px var(--accent-ring),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   flex-shrink: 0;
+  box-shadow: 0 4px 16px var(--accent-ring);
 }
 
 .coach-welcome-icon svg {
@@ -998,9 +1073,9 @@ button:focus-visible,
 .coach-composer-prompts {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  max-width: 44rem;
-  margin: 0.55rem auto 0;
+  gap: 0.4rem;
+  max-width: 46rem;
+  margin: 0.65rem auto 0;
 }
 
 .coach-prompt-btn {
@@ -1008,10 +1083,10 @@ button:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  background: var(--bg-card);
+  background: transparent;
   border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  padding: 0.8rem 0.95rem 0.8rem 1.05rem;
+  border-radius: 12px;
+  padding: 0.75rem 0.95rem 0.75rem 1.05rem;
   font-size: 0.875rem;
   color: var(--text-muted);
   cursor: pointer;
@@ -1019,11 +1094,8 @@ button:focus-visible,
   transition:
     border-color var(--transition),
     color var(--transition),
-    background var(--transition),
-    box-shadow var(--transition),
-    transform var(--transition);
+    background var(--transition);
   line-height: 1.45;
-  box-shadow: var(--shadow-sm);
 }
 
 .coach-prompt-btn__text {
@@ -1048,9 +1120,7 @@ button:focus-visible,
 .coach-prompt-btn:hover {
   border-color: var(--border);
   color: var(--text);
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow);
-  transform: translateY(-1px);
+  background: var(--bg-surface);
 }
 
 .coach-prompt-btn:hover .coach-prompt-btn__icon {
@@ -1058,16 +1128,16 @@ button:focus-visible,
   transform: translateX(2px);
 }
 
-/* ── Message rows: assistant left, user right ── */
+/* ── Message rows: assistant left with avatar, user right ── */
 .coach-msg-row {
   display: flex;
   align-items: flex-start;
-  gap: 0.85rem;
-  padding: 1.1rem 0;
+  gap: 0.75rem;
+  padding: 1.25rem 0;
 }
 
 .coach-msg-row:first-child {
-  padding-top: 0.75rem;
+  padding-top: 1rem;
 }
 
 .coach-msg-row + .coach-msg-row {
@@ -1076,45 +1146,36 @@ button:focus-visible,
 
 .coach-msg-row--user {
   flex-direction: row-reverse;
+  padding-left: 2.5rem;
+}
+
+.coach-msg-row--assistant {
+  padding-right: 1.5rem;
 }
 
 .coach-msg-row--user + .coach-msg-row--assistant,
 .coach-msg-row--assistant + .coach-msg-row--user {
-  padding-top: 0.15rem;
+  padding-top: 0.35rem;
 }
 
-/* Avatar */
-.coach-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+/* Assistant avatar — Claude-style coral icon */
+.coach-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 0.15rem;
+  box-shadow: 0 1px 4px var(--accent-ring);
 }
 
-.coach-avatar--assistant {
-  background: linear-gradient(145deg, var(--accent-hover), var(--accent));
-  box-shadow: 0 2px 10px var(--accent-ring);
-}
-
-.coach-avatar--assistant svg {
-  width: 15px;
-  height: 15px;
+.coach-msg-avatar svg {
+  width: 16px;
+  height: 16px;
   fill: #fff;
-}
-
-.coach-avatar--user {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 /* Message body */
@@ -1133,23 +1194,21 @@ button:focus-visible,
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  max-width: 78%;
+  max-width: 85%;
 }
 
-/* User turn — right-aligned bubble beside avatar */
+/* User turn — warm bubble like Claude */
 .coach-user-bubble {
-  background: color-mix(in srgb, var(--bg-elevated) 90%, var(--accent) 10%);
-  border: 1px solid var(--border-soft);
-  border-radius: 18px;
-  border-bottom-right-radius: 6px;
-  padding: 0.8rem 1rem;
+  background: color-mix(in srgb, var(--bg-surface) 82%, var(--accent) 18%);
+  border: 1px solid color-mix(in srgb, var(--border-soft) 60%, var(--accent) 40%);
+  border-radius: 1.125rem;
+  padding: 0.75rem 1rem;
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
   width: 100%;
-  box-shadow: var(--shadow-sm);
 }
 
 /* Message actions — Claude-style hover copy */
@@ -1188,10 +1247,6 @@ button:focus-visible,
 
 .coach-msg-row--streaming .coach-assistant-text {
   animation: coach-stream-fade 0.2s ease;
-}
-
-.coach-avatar--pulsing {
-  animation: coach-avatar-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes coach-stream-fade {
@@ -1477,11 +1532,7 @@ button:focus-visible,
   padding: 3rem 0;
 }
 
-/* Assistant generating row — visible feedback like ChatGPT / Claude */
-.coach-msg-row--generating .coach-avatar--assistant {
-  animation: coach-avatar-pulse 1.6s ease-in-out infinite;
-}
-
+/* Assistant generating row — visible feedback like Claude */
 .coach-generating {
   display: flex;
   align-items: center;
@@ -1499,11 +1550,6 @@ button:focus-visible,
 
 .coach-generating .coach-thinking {
   padding: 0;
-}
-
-@keyframes coach-avatar-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.72; transform: scale(0.96); }
 }
 
 @keyframes coach-label-fade {
@@ -1526,12 +1572,12 @@ button:focus-visible,
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: 0 1.5rem 1.25rem;
+  padding: 0 1.5rem 1.35rem;
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    color-mix(in srgb, var(--bg) 72%, transparent) 22%,
-    var(--bg) 48%
+    color-mix(in srgb, var(--bg) 65%, transparent) 18%,
+    var(--bg) 42%
   );
 }
 
@@ -1540,38 +1586,128 @@ button:focus-visible,
 }
 
 .coach-composer-inner {
-  max-width: 44rem;
+  max-width: 46rem;
   margin: 0 auto;
   background: var(--bg-card);
-  border: 1px solid var(--border-soft);
-  border-radius: 1.35rem;
-  padding: 0.7rem 0.7rem 0.7rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 1.75rem;
+  min-height: 4.5rem;
+  padding: 1.15rem 1.35rem 0.85rem;
   display: flex;
-  align-items: flex-end;
-  gap: 0.55rem;
-  box-shadow: var(--shadow);
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-sm);
   transition:
     border-color var(--transition),
     box-shadow var(--transition),
     background var(--transition);
 }
 
+/* Footer row — model left, send right (Claude layout) */
+.coach-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  min-height: 34px;
+  padding-top: 0.15rem;
+}
+
+.coach-composer-footer-left,
+.coach-composer-footer-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  height: 34px;
+}
+
+.coach-composer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  height: 34px;
+}
+
+.coach-model-picker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  max-width: 12rem;
+  margin-right: 0.15rem;
+  color: var(--text-subtle);
+}
+
+.coach-model-picker::after {
+  content: "";
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-right: 1.25px solid currentColor;
+  border-bottom: 1.25px solid currentColor;
+  transform: translateY(-50%) rotate(45deg);
+  pointer-events: none;
+  opacity: 0.65;
+}
+
+.coach-model-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-subtle);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 34px;
+  height: 34px;
+  margin: 0;
+  padding: 0 1.35rem 0 0.15rem;
+  width: 100%;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.coach-model-select:hover:not(:disabled),
+.coach-model-select:focus-visible {
+  outline: none;
+  color: var(--text-muted);
+}
+
+.coach-model-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.coach-model-select option {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
 .coach-composer-inner:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  box-shadow:
-    var(--shadow),
-    0 0 0 3px var(--accent-ring);
+  border-color: color-mix(in srgb, var(--border-strong) 55%, var(--accent) 45%);
+  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-sm);
   background: var(--bg-elevated);
 }
 
 .coach-composer-inner--busy {
-  border-color: var(--border);
-  opacity: 0.92;
+  border-color: var(--border-soft);
+  opacity: 0.95;
 }
 
 .coach-composer-inner--prompts-open {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
+  border-color: color-mix(in srgb, var(--border-strong) 55%, var(--accent) 45%);
+  box-shadow: var(--shadow-sm);
 }
 
 .coach-prompt-btn:disabled {
@@ -1582,6 +1718,8 @@ button:focus-visible,
 
 .coach-composer-inner textarea {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
@@ -1589,9 +1727,9 @@ button:focus-visible,
   resize: none;
   font-size: 0.9375rem;
   line-height: 1.55;
-  min-height: 24px;
+  min-height: 26px;
   max-height: 200px;
-  padding: 0.15rem 0;
+  padding: 0.2rem 0.15rem;
   overflow-y: auto;
 }
 
@@ -1615,7 +1753,7 @@ button:focus-visible,
     transform var(--transition),
     box-shadow var(--transition);
   flex-shrink: 0;
-  box-shadow: 0 2px 8px var(--accent-ring);
+  box-shadow: 0 1px 4px var(--accent-ring);
 }
 
 .coach-send-btn:hover:not(:disabled) {
@@ -1641,8 +1779,8 @@ button:focus-visible,
 }
 
 .coach-send-btn svg {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .coach-send-spinner {
@@ -1760,7 +1898,7 @@ button:focus-visible,
 }
 
 .coach-composer-hint {
-  max-width: 44rem;
+  max-width: 46rem;
   margin: 0.45rem auto 0;
   text-align: center;
   font-size: 0.68rem;
@@ -1770,7 +1908,7 @@ button:focus-visible,
 
 /* Error inside coach */
 .coach-error {
-  max-width: 44rem;
+  max-width: 46rem;
   margin: 0 auto 0.55rem;
   border-radius: 12px;
   font-size: 0.82rem;
@@ -2685,8 +2823,10 @@ button:focus-visible,
   }
 
   .coach-composer-inner {
-    border-radius: 1.15rem;
-    padding: 0.65rem 0.65rem 0.65rem 0.95rem;
+    border-radius: 1.6rem;
+    min-height: 4.25rem;
+    padding: 1rem 1.1rem 0.75rem;
+    gap: 0.45rem;
   }
 
   .coach-settings-bar {
@@ -2729,37 +2869,34 @@ button:focus-visible,
 /* Coach — narrow phones */
 @media (max-width: 640px) {
   .coach-settings-bar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    padding: 0.55rem 0.85rem;
     align-items: center;
   }
 
-  .coach-settings-title {
-    grid-column: 1 / -1;
-    margin-right: 0;
-    margin-bottom: 0.1rem;
+  .coach-settings-actions {
+    gap: 0.35rem;
   }
 
-  .coach-setting-sep {
-    display: none;
+  .coach-options-btn,
+  .coach-new-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.74rem;
+  }
+
+  .coach-options-panel {
+    padding: 0.5rem 0.85rem;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .coach-option {
-    justify-content: center;
+    justify-content: flex-start;
     font-size: 0.76rem;
     padding: 0.3rem 0.55rem;
   }
 
   .coach-select {
-    grid-column: 1 / -1;
     max-width: none;
-    width: 100%;
-  }
-
-  .coach-new-btn {
-    grid-column: 1 / -1;
-    margin-left: 0;
-    justify-content: center;
     width: 100%;
   }
 
@@ -2768,29 +2905,22 @@ button:focus-visible,
     align-items: flex-start;
   }
 
+  .coach-msg-row--user {
+    padding-left: 0;
+  }
+
+  .coach-msg-row--assistant {
+    padding-right: 0;
+  }
+
   .coach-user-turn {
     max-width: 92%;
-  }
-
-  .coach-avatar {
-    width: 26px;
-    height: 26px;
-    margin-top: 4px;
-  }
-
-  .coach-avatar--assistant svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .coach-avatar--user {
-    font-size: 0.58rem;
   }
 
   .coach-user-bubble {
     padding: 0.7rem 0.85rem;
     font-size: 0.9rem;
-    border-radius: 16px;
+    border-radius: 1rem;
   }
 
   .coach-assistant-text {
@@ -2799,12 +2929,42 @@ button:focus-visible,
   }
 
   .coach-composer-inner textarea {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
   }
 
   .coach-send-btn {
     width: 32px;
     height: 32px;
+    border-radius: 50%;
+  }
+
+  .coach-send-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .coach-composer-footer {
+    min-height: 30px;
+  }
+
+  .coach-composer-footer-left,
+  .coach-composer-footer-right {
+    height: 30px;
+    gap: 0.45rem;
+  }
+
+  .coach-model-picker {
+    height: 30px;
+    max-width: 10.5rem;
+    margin-right: 0.1rem;
+  }
+
+  .coach-model-select {
+    height: 30px;
+    line-height: 30px;
+    max-width: 10.5rem;
+    font-size: 0.6875rem;
+    padding-right: 1.25rem;
   }
 
   .coach-prompt-btn {
@@ -2819,13 +2979,13 @@ button:focus-visible,
 
 /* Coach — very small screens */
 @media (max-width: 380px) {
-  .coach-settings-bar {
-    grid-template-columns: 1fr;
+  .coach-settings-title {
+    font-size: 0.98rem;
   }
 
-  .coach-option {
-    width: 100%;
-    justify-content: flex-start;
+  .coach-options-btn,
+  .coach-new-btn {
+    padding-inline: 0.5rem;
   }
 
   .coach-welcome-heading {
@@ -2940,20 +3100,21 @@ button:focus-visible,
 
 :root[data-theme="dark"] .coach-user-bubble,
 :root:not([data-theme]) .coach-user-bubble {
-  background: color-mix(in srgb, var(--bg-surface) 92%, var(--accent) 8%);
-  border-color: var(--border-soft);
+  background: color-mix(in srgb, var(--bg-surface) 78%, var(--accent) 22%);
+  border-color: color-mix(in srgb, var(--border-soft) 50%, var(--accent) 50%);
 }
 
 :root[data-theme="dark"] .coach-composer-inner,
 :root:not([data-theme]) .coach-composer-inner {
   background: var(--bg-elevated);
-  border-color: var(--border-soft);
+  border-color: var(--border);
+  box-shadow: none;
 }
 
 :root[data-theme="light"] .coach-user-bubble {
-  background: color-mix(in srgb, var(--bg-surface) 88%, var(--accent) 12%);
-  border-color: var(--border-soft);
-  box-shadow: var(--shadow-sm);
+  background: color-mix(in srgb, var(--bg-surface) 75%, var(--accent) 25%);
+  border-color: color-mix(in srgb, var(--border-soft) 40%, var(--accent) 60%);
+  box-shadow: none;
 }
 
 :root[data-theme="light"] .btn-primary {
@@ -2987,11 +3148,17 @@ button:focus-visible,
 :root[data-theme="light"] .coach-composer-inner {
   background: #f5f0e8;
   border-color: var(--border-soft);
-  box-shadow: var(--shadow);
+  box-shadow: none;
 }
 
 :root[data-theme="light"] .coach-composer-inner:focus-within {
   background: #faf9f5;
+  border-color: color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+:root[data-theme="light"] .coach-composer-inner--prompts-open {
+  border-color: color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
 }
 
 :root[data-theme="light"] .coach-code-block {

@@ -1,6 +1,7 @@
 import type {
   AnalyticsDashboard,
   ChatThread,
+  CoachModelList,
   CurriculumState,
   DayDetail,
   DifficultyAnalysis,
@@ -364,11 +365,14 @@ export const api = {
     problemId?: string;
     includeContext?: boolean;
     directMode?: boolean;
+    model?: string;
   }) =>
     request<SendChatResult>("/api/coaching/chat", {
       method: "POST",
       body: JSON.stringify(body),
     }),
+
+  getCoachModels: () => request<CoachModelList>("/api/coaching/models"),
 
   getChatThread: (threadId: string) =>
     request<ChatThread>(`/api/coaching/chat/${threadId}`),

@@ -216,9 +216,8 @@ export interface HealthInfo {
   services?: {
     api: ServiceHealth;
     sqlite: ServiceHealth;
-    redis: ServiceHealth;
     notion: ServiceHealth;
-    ollama: ServiceHealth;
+    llm: ServiceHealth;
   };
   sync?: SyncStatusInfo;
 }
@@ -349,6 +348,17 @@ export interface ChatThreadSummary {
   threadId: string;
   preview: string;
   updatedAt: string;
+}
+
+export interface CoachModel {
+  id: string;
+  label: string;
+  model: string;
+}
+
+export interface CoachModelList {
+  models: CoachModel[];
+  defaultModelId: string;
 }
 
 export interface SendChatResult {

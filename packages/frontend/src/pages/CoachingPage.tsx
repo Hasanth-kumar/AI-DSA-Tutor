@@ -3,9 +3,10 @@ import { api } from "../api/client.js";
 import { CoachMarkdown } from "../components/CoachMarkdown.js";
 import { CoachMessageActions } from "../components/CoachMessageActions.js";
 import { consumeChatStream, IncompleteChatStreamError } from "../lib/chatStream.js";
-import type { ChatMessage, HealthInfo, Problem } from "../types/api.js";
+import type { ChatMessage, CoachModel, HealthInfo, Problem } from "../types/api.js";
 
 const THREAD_STORAGE_KEY = "dsa-coach-thread-id";
+const MODEL_STORAGE_KEY = "dsa-coach-model-id";
 const STREAMING_ID = "__streaming__";
 
 interface Props {
@@ -17,6 +18,7 @@ interface CoachRequestOptions {
   problemId?: string;
   includeContext: boolean;
   directMode: boolean;
+  model?: string;
 }
 
 const STARTER_PROMPTS = [
@@ -33,29 +35,16 @@ function visibleStarterPrompts(input: string): string[] {
 
 function CoachIcon() {
   return (
-    <svg viewBox="0 0 16 16" fill="white" width="28" height="28">
+    <svg viewBox="0 0 16 16" aria-hidden>
       <path d="M8 1L2 4.5v5L8 13l6-3.5v-5L8 1zm0 2.2l3.8 2.2L8 7.6 4.2 5.4 8 3.2zM3.5 6.8L7 8.7V11L3.5 9V6.8zm5 4.2V8.7l3.5-1.9V9L8.5 11z" />
     </svg>
   );
 }
 
-function AssistantAvatar({ pulsing }: { pulsing?: boolean }) {
+function CoachAvatar() {
   return (
-    <div
-      className={`coach-avatar coach-avatar--assistant${pulsing ? " coach-avatar--pulsing" : ""}`}
-      aria-hidden
-    >
-      <svg viewBox="0 0 16 16" fill="white">
-        <path d="M8 1L2 4.5v5L8 13l6-3.5v-5L8 1zm0 2.2l3.8 2.2L8 7.6 4.2 5.4 8 3.2zM3.5 6.8L7 8.7V11L3.5 9V6.8zm5 4.2V8.7l3.5-1.9V9L8.5 11z" />
-      </svg>
-    </div>
-  );
-}
-
-function UserAvatar() {
-  return (
-    <div className="coach-avatar coach-avatar--user" aria-hidden>
-      You
+    <div className="coach-msg-avatar" aria-hidden>
+      <CoachIcon />
     </div>
   );
 }
@@ -107,6 +96,8 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [problemId, setProblemId] = useState("");
+  const [models, setModels] = useState<CoachModel[]>([]);
+  const [modelId, setModelId] = useState("");
   const [includeContext, setIncludeContext] = useState(true);
   const [directMode, setDirectMode] = useState(false);
   const [input, setInput] = useState("");
@@ -116,6 +107,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const [llmDown, setLlmDown] = useState(false);
   const [composerFocused, setComposerFocused] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -136,7 +128,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
     void api
       .getFullHealth()
       .then((health: HealthInfo) => {
-        if (!cancelled) setLlmDown(health.services?.ollama.status === "down");
+        if (!cancelled) setLlmDown(health.services?.llm.status === "down");
       })
       .catch(() => {
         /* health probe is best-effort */
@@ -154,6 +146,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
     problemId: problemId || undefined,
     includeContext,
     directMode,
+    model: modelId || undefined,
   });
 
   const onThreadScroll = useCallback(() => {
@@ -169,6 +162,31 @@ export function CoachingPage({ anchorProblemId }: Props) {
     setShowScrollBtn(false);
     bottomRef.current?.scrollIntoView({ behavior });
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getCoachModels()
+      .then(({ models: available, defaultModelId }) => {
+        if (cancelled) return;
+        setModels(available);
+        const saved = localStorage.getItem(MODEL_STORAGE_KEY);
+        const initial =
+          saved && available.some((m) => m.id === saved) ? saved : defaultModelId;
+        setModelId(initial);
+      })
+      .catch(() => {
+        /* picker is best-effort; coach falls back to the default model */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleModelChange = (id: string) => {
+    setModelId(id);
+    localStorage.setItem(MODEL_STORAGE_KEY, id);
+  };
 
   useEffect(() => {
     void (async () => {
@@ -469,7 +487,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const isEmpty = !bootstrapping && messages.length === 0 && !loading;
   const filteredPrompts = visibleStarterPrompts(input);
   const showPrompts =
-    isEmpty && promptsOpen && !loading && !llmDown && filteredPrompts.length > 0;
+    isEmpty && !loading && !llmDown && filteredPrompts.length > 0 && composerFocused;
 
   const lastAssistantId = [...messages].reverse().find((m) => m.role === "assistant")?.id;
   const streamingMessage = messages.find((m) => m.id === STREAMING_ID);
@@ -507,8 +525,8 @@ export function CoachingPage({ anchorProblemId }: Props) {
     <div className="coach-composer-wrap">
       {llmDown && (
         <div className="error-banner coach-error">
-          Coach is disabled — the LLM is unreachable. Start it with{" "}
-          <code>pnpm study</code> (Ollama) or check your OpenRouter key, then reload.
+          Coach is disabled — the LLM is unreachable. Check your OpenRouter key in{" "}
+          <code>.env</code>, then reload.
         </div>
       )}
       {error && <div className="error-banner coach-error">{error}</div>}
@@ -524,31 +542,53 @@ export function CoachingPage({ anchorProblemId }: Props) {
           onFocus={handleComposerFocus}
           onBlur={handleComposerBlur}
           onKeyDown={onKeyDown}
-          placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask a DSA question…"}
+          placeholder={llmDown ? "Coach unavailable — LLM is down" : "Ask anything about DSA"}
           disabled={loading || bootstrapping || llmDown}
         />
-        {loading ? (
-          <button
-            type="button"
-            className="coach-send-btn coach-send-btn--stop"
-            onClick={handleStop}
-            title="Stop generating"
-            aria-label="Stop generating"
-          >
-            <StopIcon />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="coach-send-btn"
-            onClick={() => void handleSend()}
-            disabled={bootstrapping || llmDown || !input.trim()}
-            title="Send (Enter)"
-            aria-label="Send message"
-          >
-            <SendIcon />
-          </button>
-        )}
+        <div className="coach-composer-footer">
+          <div className="coach-composer-footer-left" onClick={(e) => e.stopPropagation()}>
+            {models.length > 1 && (
+              <span className="coach-model-picker">
+                <select
+                  className="coach-model-select"
+                  value={modelId}
+                  onChange={(e) => handleModelChange(e.target.value)}
+                  disabled={loading}
+                  aria-label="Coach model"
+                  title="Choose the model"
+                >
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </span>
+            )}
+          </div>
+          <div className="coach-composer-footer-right" onClick={(e) => e.stopPropagation()}>
+            {loading ? (
+              <button
+                type="button"
+                className="coach-send-btn coach-send-btn--stop"
+                onClick={handleStop}
+                title="Stop generating"
+                aria-label="Stop generating"
+              >
+                <StopIcon />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="coach-send-btn"
+                onClick={() => void handleSend()}
+                disabled={bootstrapping || llmDown || !input.trim()}
+                title="Send (Enter)"
+                aria-label="Send message"
+              >
+                <SendIcon />
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       {showPrompts && (
         <div className="coach-composer-prompts" role="listbox" aria-label="Suggested questions">
@@ -585,52 +625,69 @@ export function CoachingPage({ anchorProblemId }: Props) {
     <div className="coach-layout">
       <div className="coach-settings-bar">
         <span className="coach-settings-title">Coach</span>
-        <div className="coach-setting-sep" />
 
-        <label className="coach-option">
-          <input
-            type="checkbox"
-            checked={includeContext}
-            onChange={(e) => setIncludeContext(e.target.checked)}
-          />
-          <span>My learning context</span>
-        </label>
+        <div className="coach-settings-actions">
+          <button
+            type="button"
+            className={`coach-options-btn${optionsOpen ? " coach-options-btn--active" : ""}`}
+            onClick={() => setOptionsOpen((v) => !v)}
+            aria-expanded={optionsOpen}
+            aria-controls="coach-options-panel"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden width="14" height="14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+            Settings
+          </button>
 
-        <label className="coach-option">
-          <input
-            type="checkbox"
-            checked={directMode}
-            onChange={(e) => setDirectMode(e.target.checked)}
-          />
-          <span>Direct explanations</span>
-        </label>
-
-        <div className="coach-setting-sep" />
-
-        <select
-          className="coach-select"
-          value={problemId}
-          onChange={(e) => setProblemId(e.target.value)}
-          aria-label="Problem context"
-        >
-          <option value="">No problem selected</option>
-          {problems.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-
-        <button
-          type="button"
-          className="coach-new-btn"
-          onClick={() => void handleNewChat()}
-          disabled={loading}
-        >
-          <svg viewBox="0 0 14 14" fill="currentColor" width="12" height="12">
-            <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-          </svg>
-          New chat
-        </button>
+          <button
+            type="button"
+            className="coach-new-btn"
+            onClick={() => void handleNewChat()}
+            disabled={loading}
+          >
+            <svg viewBox="0 0 14 14" fill="currentColor" width="12" height="12">
+              <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
+            </svg>
+            New chat
+          </button>
+        </div>
       </div>
+
+      {optionsOpen && (
+        <div className="coach-options-panel" id="coach-options-panel">
+          <label className="coach-option">
+            <input
+              type="checkbox"
+              checked={includeContext}
+              onChange={(e) => setIncludeContext(e.target.checked)}
+            />
+            <span>My learning context</span>
+          </label>
+
+          <label className="coach-option">
+            <input
+              type="checkbox"
+              checked={directMode}
+              onChange={(e) => setDirectMode(e.target.checked)}
+            />
+            <span>Direct explanations</span>
+          </label>
+
+          <select
+            className="coach-select"
+            value={problemId}
+            onChange={(e) => setProblemId(e.target.value)}
+            aria-label="Problem context"
+          >
+            <option value="">No problem selected</option>
+            {problems.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {anchoredProblem && (
         <div className="coach-anchor-bar">
@@ -659,9 +716,9 @@ export function CoachingPage({ anchorProblemId }: Props) {
               <div className="coach-welcome-icon">
                 <CoachIcon />
               </div>
-              <h2 className="coach-welcome-heading">What would you like to learn?</h2>
+              <h2 className="coach-welcome-heading">How can I help you learn today?</h2>
               <p className="coach-welcome-sub">
-                Ask about algorithms, get hints on problems, or have your weak areas explained.
+                Ask about algorithms, get hints on problems, or explore your weak areas.
               </p>
             </div>
             {composer}
@@ -687,7 +744,6 @@ export function CoachingPage({ anchorProblemId }: Props) {
                   const isEditing = editingId === msg.id;
                   return (
                     <div key={msg.id} className="coach-msg-row coach-msg-row--user">
-                      <UserAvatar />
                       <div className="coach-msg-body">
                         <div className="coach-user-turn">
                           {isEditing ? (
@@ -743,7 +799,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
                     key={msg.id}
                     className={`coach-msg-row coach-msg-row--assistant${isStreaming ? " coach-msg-row--streaming" : ""}`}
                   >
-                    <AssistantAvatar pulsing={isStreaming && !msg.content} />
+                    <CoachAvatar />
                     <div className="coach-msg-body">
                       <div className="coach-assistant-turn">
                         {isStreaming && !msg.content ? (
@@ -768,7 +824,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
 
               {showGenerating && !streamingMessage && (
                 <div className="coach-msg-row coach-msg-row--assistant coach-msg-row--generating">
-                  <AssistantAvatar pulsing />
+                  <CoachAvatar />
                   <div className="coach-msg-body">
                     <CoachGenerating />
                   </div>
