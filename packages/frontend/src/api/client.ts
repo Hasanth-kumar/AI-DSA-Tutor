@@ -216,13 +216,14 @@ export const api = {
       return result;
     }),
 
-  setMistakeTag: (attemptId: string, mistakeTag: string | null) =>
+  setMistake: (attemptId: string, input: { tags: string[] }) =>
     request<{ attempt: { id: string; mistakeTag: string | null } }>(
       `/api/attempts/${attemptId}/mistake`,
-      { method: "PATCH", body: JSON.stringify({ mistakeTag }) },
+      { method: "PATCH", body: JSON.stringify(input) },
     ).then((result) => {
       invalidateCache("topics");
       invalidateCache("dashboard");
+      invalidateCache("activity:");
       return result;
     }),
 

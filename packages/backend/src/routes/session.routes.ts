@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
+import { parseMistakeTags } from "../repositories/AttemptRepository.js";
 
 export async function sessionRoutes(
   app: FastifyInstance,
@@ -44,7 +45,7 @@ export async function sessionRoutes(
           problemId: a.problemId,
           problemName: ctx.problemRepo.findById(a.problemId)?.name ?? a.problemId,
           timeTaken: a.timeTaken,
-          mistakeTag: a.mistakeTag,
+          mistakeTags: parseMistakeTags(a.mistakeTag),
         }));
 
       return reply.send(
@@ -124,15 +125,15 @@ export async function sessionRoutes(
     }
   });
 
-  // One-tap mistake capture (1.4) — PATCHes the attempt created by POST /session.
+  // Mistake capture (1.4) — PATCHes the attempt created by POST /session.
+  // Multi-select tags + optional free-text note; empty = a smooth solve.
   app.patch<{
     Params: { id: string };
-    Body: { mistakeTag: string | null };
+    Body: { tags?: string[] };
   }>("/attempts/:id/mistake", async (request, reply) => {
-    const attempt = ctx.attemptRepo.setMistakeTag(
-      request.params.id,
-      request.body.mistakeTag ?? null,
-    );
+    const attempt = ctx.attemptRepo.setMistake(request.params.id, {
+      tags: request.body.tags ?? [],
+    });
     if (!attempt) {
       return reply.status(404).send({ error: "Attempt not found" });
     }

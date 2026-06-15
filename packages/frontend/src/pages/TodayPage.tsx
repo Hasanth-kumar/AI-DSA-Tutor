@@ -397,6 +397,7 @@ export function TodayPage({ onOpenCoach }: Props) {
             <WarmupCard
               topicId={plan.primaryTopic.id}
               topicName={plan.primaryTopic.name}
+              firstProblemUrl={plan.suggestedProblems[0]?.leetcodeLink ?? null}
               onComplete={(graded) => {
                 setWarmupGraded(graded);
                 setFlow({ kind: "idle" });

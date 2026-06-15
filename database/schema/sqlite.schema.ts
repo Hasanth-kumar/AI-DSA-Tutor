@@ -59,6 +59,7 @@ export const problemAttempts = sqliteTable("problem_attempts", {
   sessionId: text("session_id"),
   solvedAt: integer("solved_at").notNull(),
   timeTaken: integer("time_taken"),
+  /** JSON array of mistake tags (legacy rows may hold a single bare tag string). */
   mistakeTag: text("mistake_tag"),
   createdAt: integer("created_at").notNull(),
 });

@@ -11,6 +11,12 @@ import type { WarmupQuestions } from "../types/api.js";
 interface Props {
   topicId: string;
   topicName: string;
+  /**
+   * LeetCode URL of the first suggested problem. Opened synchronously on the
+   * final grade / skip click (a real user gesture) so the browser doesn't block
+   * the tab — `onComplete` itself fires from a timer, too late to open then.
+   */
+  firstProblemUrl?: string | null;
   /** Called when the warm-up finishes or is skipped. */
   onComplete: (graded: boolean) => void;
 }
@@ -28,7 +34,17 @@ const GRADES: { label: string; quality: number; hint: string }[] = [
  * session-start flow. Per-question self-grades average into one SM-2 quality.
  * Forgot re-queues at end of queue (ADR Decision C); see warmupQueue reducer.
  */
-export function WarmupCard({ topicId, topicName, onComplete }: Props) {
+export function WarmupCard({
+  topicId,
+  topicName,
+  firstProblemUrl,
+  onComplete,
+}: Props) {
+  const openFirstProblem = () => {
+    if (firstProblemUrl) {
+      window.open(firstProblemUrl, "_blank", "noopener,noreferrer");
+    }
+  };
   const [data, setData] = useState<WarmupQuestions | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [queue, setQueue] = useState<WarmupQueueState | null>(null);
@@ -75,6 +91,8 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
     const next = gradeWarmup(queue, quality);
     setQueue(next);
     if (next.done) {
+      // Synchronous with the click so the LeetCode tab isn't popup-blocked.
+      openFirstProblem();
       void finish(next);
     }
   };
@@ -151,7 +169,10 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
         type="button"
         className="btn btn-ghost mt-3"
         disabled={submitting}
-        onClick={() => onComplete(false)}
+        onClick={() => {
+          openFirstProblem();
+          onComplete(false);
+        }}
       >
         Skip warm-up
       </button>

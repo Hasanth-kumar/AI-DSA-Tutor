@@ -97,10 +97,19 @@ export type MistakeTag =
 
 export const MISTAKE_TAG_OPTIONS: { tag: MistakeTag; label: string }[] = [
   { tag: "wrong-approach", label: "Wrong approach" },
-  { tag: "edge-case", label: "Edge case" },
+  { tag: "edge-case", label: "Missed edge case" },
   { tag: "off-by-one", label: "Off-by-one" },
   { tag: "pattern-recall", label: "Couldn't recall pattern" },
 ];
+
+const MISTAKE_TAG_LABELS: Record<string, string> = Object.fromEntries(
+  MISTAKE_TAG_OPTIONS.map((o) => [o.tag, o.label]),
+);
+
+/** Human label for a stored mistake tag, falling back to the raw key. */
+export function mistakeTagLabel(tag: string): string {
+  return MISTAKE_TAG_LABELS[tag] ?? tag;
+}
 
 export interface ProblemNote {
   path: string;
@@ -197,7 +206,7 @@ export interface DayDetail {
     problemId: string;
     problemName: string;
     timeTaken: number | null;
-    mistakeTag: string | null;
+    mistakeTags: string[];
   }[];
 }
 

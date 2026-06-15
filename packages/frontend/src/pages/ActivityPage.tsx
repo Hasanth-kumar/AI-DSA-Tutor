@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { ActivityHeatmap } from "../components/ActivityHeatmap.js";
 import { Skeleton, SkeletonLines } from "../components/Skeleton.js";
+import { mistakeTagLabel } from "../types/api.js";
 import type { DayDetail } from "../types/api.js";
 
 export function ActivityPage() {
@@ -146,7 +147,9 @@ export function ActivityPage() {
                     <span>{p.problemName}</span>
                     <span className="muted">
                       {p.timeTaken != null ? `${p.timeTaken}m` : ""}
-                      {p.mistakeTag ? ` · ${p.mistakeTag}` : ""}
+                      {p.mistakeTags.length > 0
+                        ? ` · ${p.mistakeTags.map(mistakeTagLabel).join(", ")}`
+                        : ""}
                     </span>
                   </li>
                 ))}

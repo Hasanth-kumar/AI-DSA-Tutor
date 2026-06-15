@@ -1,4 +1,4 @@
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { desc, eq, gte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { problemAttempts } from "@dsa/database/schema";
 import type { SqliteDb } from "@dsa/integrations";
@@ -16,6 +16,21 @@ export interface CreateAttemptInput {
 }
 
 const MISTAKE_WINDOW_DAYS = 90;
+
+/**
+ * Decode the stored `mistake_tag` column into a list of tags. New rows hold a
+ * JSON array; legacy rows hold a single bare tag string (or null).
+ */
+export function parseMistakeTags(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter((t): t is string => typeof t === "string");
+  } catch {
+    // Legacy single bare tag, e.g. "edge-case".
+  }
+  return [raw];
+}
 
 export class AttemptRepository {
   constructor(
@@ -72,12 +87,17 @@ export class AttemptRepository {
       .all();
   }
 
-  setMistakeTag(id: string, mistakeTag: string | null): AttemptRow | null {
+  /**
+   * Save the captured mistake tags (stored as a JSON array). Empty tags clears
+   * them (a "smooth solve"). Free-text reflection lives in the Obsidian note.
+   */
+  setMistake(id: string, input: { tags: string[] }): AttemptRow | null {
     const existing = this.findById(id);
     if (!existing) return null;
+    const tags = input.tags.filter((t) => t.trim().length > 0);
     this.db
       .update(problemAttempts)
-      .set({ mistakeTag })
+      .set({ mistakeTag: tags.length > 0 ? JSON.stringify(tags) : null })
       .where(eq(problemAttempts.id, id))
       .run();
     this.mirrorCache.invalidate();
@@ -87,22 +107,23 @@ export class AttemptRepository {
   /** Mistake-tag counts per topic over the recent window — weakness-engine input. */
   mistakeTagCountsByTopic(windowDays = MISTAKE_WINDOW_DAYS): Map<string, Record<string, number>> {
     const since = Date.now() - windowDays * 86_400_000;
+    // Tags are JSON arrays now, so tally in JS rather than SQL GROUP BY.
     const rows = this.db
       .select({
         topicId: problemAttempts.topicId,
         mistakeTag: problemAttempts.mistakeTag,
-        count: sql<number>`count(*)`,
       })
       .from(problemAttempts)
       .where(gte(problemAttempts.solvedAt, since))
-      .groupBy(problemAttempts.topicId, problemAttempts.mistakeTag)
       .all();
 
     const byTopic = new Map<string, Record<string, number>>();
     for (const row of rows) {
       if (!row.topicId || !row.mistakeTag) continue;
       const counts = byTopic.get(row.topicId) ?? {};
-      counts[row.mistakeTag] = row.count;
+      for (const tag of parseMistakeTags(row.mistakeTag)) {
+        counts[tag] = (counts[tag] ?? 0) + 1;
+      }
       byTopic.set(row.topicId, counts);
     }
     return byTopic;

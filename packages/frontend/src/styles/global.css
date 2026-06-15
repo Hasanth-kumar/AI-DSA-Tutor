@@ -3196,6 +3196,17 @@ button:focus-visible,
 .mistake-tag-btn {
   font-size: 0.82rem;
 }
+.mistake-tag-btn--active {
+  border-color: var(--accent);
+  background: var(--accent-ring);
+  color: var(--accent);
+}
+.mistake-capture-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
 
 /* ─── Warm-up card (3.1) ─────────────────── */
 .warmup-card {

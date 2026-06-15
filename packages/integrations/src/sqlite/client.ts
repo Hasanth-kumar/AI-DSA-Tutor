@@ -28,6 +28,7 @@ const MIGRATIONS = [
   "0007_attempts_notes_conflicts.sql",
   "0008_problem_status_notion.sql",
   "0009_sm2_state.sql",
+  "0010_drop_mistake_note.sql",
 ] as const;
 
 export function runMigrations(sqlitePath: string): void {
@@ -41,7 +42,11 @@ export function runMigrations(sqlitePath: string): void {
       sqlite.exec(migrationSql);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (!message.includes("duplicate column name")) {
+      // Tolerate re-running idempotent column add/drop migrations.
+      if (
+        !message.includes("duplicate column name") &&
+        !message.includes("no such column")
+      ) {
         throw err;
       }
     }
