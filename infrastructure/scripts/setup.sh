@@ -14,4 +14,4 @@ pnpm install
 pnpm build
 
 mkdir -p data/sqlite
-echo "Setup complete. Run: pnpm docker:up && pnpm dev"
+echo "Setup complete. Run: pnpm study (or pnpm dev:all)"

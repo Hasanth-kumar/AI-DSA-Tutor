@@ -16,7 +16,7 @@ DSA Mastery OS turns a personal Notion DSA setup into a study system that plans 
 | **Weakness detection** | Multi-signal analysis of mistake patterns, stagnation, and confidence gaps |
 | **Adaptive difficulty** | Recommends problem difficulty based on topic mastery and recent performance |
 | **Roadmap enforcement** | DAG-based prerequisite graph with violation detection |
-| **AI coaching** | Hints, session debriefs, and free-form chat via OpenRouter or local Ollama |
+| **AI coaching** | Hints, session debriefs, and free-form chat via OpenRouter |
 | **Analytics** | Streaks, mastery velocity, weakness trends, and difficulty breakdowns |
 | **Web dashboard** | Today view, overview charts, knowledge graph, activity heatmap, live session timer, and coach chat |
 | **WhatsApp bot** *(optional)* | `plan`, `done`, `hint`, `debrief`, and scheduled digests via Meta Cloud API |
@@ -37,7 +37,6 @@ flowchart LR
     API[Fastify API]
     Intel[Intelligence engines]
     Mirror[(SQLite mirror)]
-    Redis[(Redis)]
   end
 
   subgraph clients [Clients]
@@ -47,21 +46,18 @@ flowchart LR
 
   subgraph ai [AI]
     OR[OpenRouter]
-    OL[Ollama]
   end
 
   Notion <-->|sync| API
   API --> Intel
   API --> Mirror
-  API --> Redis
   LC --> API
   Web --> API
   WA --> API
   API --> OR
-  API --> OL
 ```
 
-**Data flow:** Notion remains the canonical store for topics, problems, and sessions. The backend mirrors that data locally in SQLite for fast queries and offline intelligence. Session and problem updates flow back to Notion on a bidirectional sync cycle (BullMQ scheduler or manual trigger).
+**Data flow:** Notion remains the canonical store for topics, problems, and sessions. The backend mirrors that data locally in SQLite for fast queries and offline intelligence. Session and problem updates flow back to Notion on a sync cycle (in-process cron or manual trigger).
 
 **Intelligence layer:** Five pure TypeScript engines (`@dsa/intelligence`) — topic priority, revision (SM-2), weakness, difficulty, and roadmap — are orchestrated without I/O. The backend feeds them snapshot data and persists the results.
 
@@ -72,22 +68,22 @@ flowchart LR
 | Layer | Technologies |
 |-------|--------------|
 | Monorepo | pnpm workspaces, TypeScript 5, ESLint, Vitest |
-| API | Fastify, BullMQ, Pino |
+| API | Fastify, Pino |
 | Database | SQLite + Drizzle ORM |
-| Cache / jobs | Redis |
+| Cache / jobs | In-process TTL cache + node-cron |
 | Integrations | Notion API, Meta WhatsApp Cloud API, LeetCode GraphQL |
-| AI | OpenRouter (default) or Ollama |
+| AI | OpenRouter |
 | Frontend | React 19, Vite, D3.js |
-| Infrastructure | Docker Compose (Redis, Ollama), optional nginx |
+| Infrastructure | optional Docker Compose (n8n), optional nginx |
 
 ---
 
 ## Prerequisites
 
 - **Node.js** ≥ 20 and **pnpm** 9 (`corepack enable`)
-- **Docker** (for Redis and Ollama)
 - A **Notion** integration token and three database IDs (topics, problems, sessions)
-- *(Optional)* OpenRouter API key, Meta WhatsApp app credentials, LeetCode username, GitHub token
+- **OpenRouter** API key for AI coaching
+- *(Optional)* Docker (only for the n8n add-on), Meta WhatsApp app credentials, LeetCode username, GitHub token
 
 ---
 
@@ -100,7 +96,7 @@ From a cold machine to studying:
 ```bash
 pnpm setup          # first time only — .env, install, build
 # Edit .env with your Notion credentials, then:
-pnpm study          # Docker + API + dashboard + sync + open browser
+pnpm study          # API + dashboard + sync + open browser
 ```
 
 Stop study mode with `pnpm study:stop`.
@@ -111,7 +107,6 @@ Stop study mode with `pnpm study:stop`.
 pnpm setup
 # Fill in infrastructure/.env.example values in .env
 
-pnpm docker:up      # Redis + Ollama
 pnpm dev:all        # API on :3000, dashboard on :5173
 pnpm db:seed        # optional — initial Notion → SQLite sync
 ```
@@ -126,7 +121,7 @@ curl http://localhost:3000/health
 bash infrastructure/scripts/health-check.sh
 ```
 
-Returns overall status plus per-service checks (SQLite, Redis, Notion, LLM).
+Returns overall status plus per-service checks (SQLite, Notion, LLM).
 
 ---
 
@@ -137,13 +132,13 @@ Copy `infrastructure/.env.example` to `.env` at the repo root (or run `pnpm setu
 | Group | Variables | Purpose |
 |-------|-----------|---------|
 | Notion | `NOTION_TOKEN`, `NOTION_*_DB_ID` | Source databases |
-| LLM | `LLM_PROVIDER`, `OPENROUTER_*`, `OLLAMA_*` | Coaching, hints, debriefs |
+| LLM | `OPENROUTER_*`, `COACH_LLM_MODEL` | Coaching, hints, debriefs |
 | WhatsApp | `WHATSAPP_*`, `WHATSAPP_NOTIFY_SECRET` | Bot commands and cron notifications |
 | Intelligence | `WEIGHT_*` | Topic priority scoring weights |
-| Schedulers | `ENABLE_SCHEDULERS`, `*_CRON`, `SCHEDULER_TIMEZONE` | BullMQ jobs (plan, sync, digest) |
+| Schedulers | `ENABLE_SCHEDULERS`, `WEEKLY_DIGEST_CRON`, `SCHEDULER_TIMEZONE` | In-process cron (weekly digest) |
 | External | `LEETCODE_USERNAME`, `GITHUB_*` | Profile stats and solution linking |
 
-OpenRouter is used when `OPENROUTER_API_KEY` is set unless `LLM_PROVIDER=ollama`. Scheduler-based WhatsApp notifications and n8n workflows overlap — enable one path, not both, unless you want duplicate messages.
+Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_COACH_API_KEY` / `COACH_LLM_MODEL`) for AI coaching. Scheduler-based WhatsApp notifications and n8n workflows overlap — enable one path, not both, unless you want duplicate messages.
 
 WhatsApp setup details: [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
 
@@ -186,10 +181,11 @@ pnpm --filter @dsa/integrations db:seed
 
 ### Docker profiles
 
+The default dev flow needs no Docker — the cache and scheduler run in-process. Docker is only for optional add-ons:
+
 ```bash
-pnpm docker:up                              # Redis + Ollama (default)
-docker compose -f infrastructure/docker-compose.yml --profile n8n up -d   # + n8n
-docker compose -f infrastructure/docker-compose.yml --profile full up -d  # + containerized backend
+docker compose -f infrastructure/docker-compose.yml --profile n8n up -d   # n8n
+docker compose -f infrastructure/docker-compose.yml --profile full up -d  # containerized backend
 ```
 
 ### Production

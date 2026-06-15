@@ -1,16 +1,8 @@
-# Dev overrides: run backend locally with hot reload; only infra in Docker.
+# Dev overrides: run backend locally with hot reload; only opt-in add-ons in Docker.
 services:
   backend:
     profiles:
       - full
-
-  redis:
-    ports:
-      - "6379:6379"
-
-  ollama:
-    ports:
-      - "11434:11434"
 
   n8n:
     profiles:

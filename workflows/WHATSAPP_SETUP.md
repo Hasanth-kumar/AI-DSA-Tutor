@@ -55,13 +55,13 @@ Start the API: `pnpm dev`
 | AI hint | `hint Coin Change` |
 | Help | `help` |
 
-## 5. Scheduled messages (7 AM / 9 PM)
+## 5. Scheduled messages
 
-**Option A — BullMQ (built-in)**  
-If `ENABLE_SCHEDULERS=true` and WhatsApp env vars are set, schedulers send plan/revision messages automatically.
+**Option A — in-process scheduler (built-in)**  
+If `ENABLE_SCHEDULERS=true` and WhatsApp env vars are set, the backend sends the weekly digest automatically via node-cron (`WEEKLY_DIGEST_CRON`, `SCHEDULER_TIMEZONE`). Daily plan / revision pushes were removed in favor of on-demand use.
 
 **Option B — n8n**  
-Import `daily-plan.workflow.json` and `revision-check.workflow.json`. Set n8n env `WHATSAPP_NOTIFY_SECRET`. Adjust cron timezone in n8n if needed.
+For daily plan / revision pushes, import `daily-plan.workflow.json` and `revision-check.workflow.json`. Set n8n env `WHATSAPP_NOTIFY_SECRET`. Adjust cron timezone in n8n if needed.
 
 Manual test:
 
@@ -74,10 +74,6 @@ curl -X POST http://localhost:3000/api/notifications/daily-plan \
 
 Outside the 24-hour customer care window, proactive messages may require **approved message templates** in Meta Business Manager. For personal use, message yourself at least once every 24h, or use templates for cron pushes.
 
-## 7. Ollama hints
+## 7. OpenRouter hints
 
-Ensure Ollama is running (`pnpm docker:up`) and `OLLAMA_MODEL` is pulled:
-
-```bash
-ollama pull llama3.1:8b
-```
+Ensure `OPENROUTER_API_KEY` is set in `.env` and the model in `OPENROUTER_MODEL` is available on your OpenRouter account.

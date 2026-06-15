@@ -16,8 +16,9 @@ Personal cron jobs for a single user — thin orchestration only; business logic
 
 Incoming messages (`plan`, `done`, `hint`, …) go to **Meta webhook** → `POST /webhooks/whatsapp` (no n8n needed).
 
-Import into n8n at `http://localhost:5678` after `pnpm docker:up`.
+Import into n8n at `http://localhost:5678` after starting it with
+`docker compose -f infrastructure/docker-compose.yml --profile n8n up -d`.
 
 See [WHATSAPP_SETUP.md](./WHATSAPP_SETUP.md) for Meta app, webhook, and env configuration.
 
-**Note:** BullMQ schedulers can send the same notifications if `ENABLE_SCHEDULERS=true` — use n8n or schedulers, not both, unless you want duplicate messages.
+**Note:** the in-process scheduler can send the weekly digest if `ENABLE_SCHEDULERS=true` — use n8n or the scheduler, not both, unless you want duplicate messages.

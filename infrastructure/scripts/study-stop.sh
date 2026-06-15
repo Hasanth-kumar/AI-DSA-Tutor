@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# Graceful shutdown for study mode (1.6): backs up SQLite, stops dev servers
-# and Docker services.
+# Graceful shutdown for study mode (1.6): backs up SQLite and stops dev servers.
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="$REPO_ROOT/infrastructure/docker-compose.yml"
 RUN_DIR="$REPO_ROOT/.study"
 API_URL="${API_URL:-http://localhost:3000}"
 
@@ -40,10 +38,5 @@ for port in 3000 5173; do
     echo "  ✓ Freed port $port"
   fi
 done
-
-# 3. Stop Docker services
-docker compose -f "$COMPOSE_FILE" stop redis ollama >/dev/null 2>&1 \
-  && echo "  ✓ Stopped Redis + Ollama" \
-  || echo "  ⚠ Docker services not running"
 
 echo "✓ Everything shut down. See you next session."

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Autonomous DSA learning intelligence layer over Notion, Ollama, n8n, and WhatsApp",
+  "description": "Autonomous DSA learning intelligence layer over Notion, OpenRouter, n8n, and WhatsApp",
   "scripts": {
     "build": "pnpm --filter @dsa/database build && pnpm -r --filter '!@dsa/database' build",
     "dev": "pnpm --filter @dsa/integrations build && pnpm --filter @dsa/integrations dev & pnpm --filter @dsa/backend dev",

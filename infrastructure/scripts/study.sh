@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 # "Press play" mode (1.6): one command to go from cold machine to studying.
-#   1. Starts Redis + Ollama (Docker) if they're down
-#   2. Starts backend + frontend dev servers
-#   3. Runs a Notion sync once the API is up
-#   4. Opens the Today view in the browser
+#   1. Starts backend + frontend dev servers
+#   2. Runs a Notion sync once the API is up
+#   3. Opens the Today view in the browser
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-COMPOSE_FILE="$REPO_ROOT/infrastructure/docker-compose.yml"
 RUN_DIR="$REPO_ROOT/.study"
 API_URL="${API_URL:-http://localhost:3000}"
 WEB_URL="${WEB_URL:-http://localhost:5173}"
@@ -21,15 +19,7 @@ port_open() {
 
 echo "▶ DSA Mastery OS — study mode"
 
-# 1. Docker services (Redis + Ollama only; n8n is an optional profile now)
-if port_open 6379 && port_open 11434; then
-  echo "  ✓ Redis + Ollama already running"
-else
-  echo "  • Starting Redis + Ollama via Docker…"
-  docker compose -f "$COMPOSE_FILE" up -d redis ollama
-fi
-
-# 2. Backend + frontend
+# 1. Backend + frontend (no external services — cache and scheduler run in-process)
 if port_open 3000; then
   echo "  ✓ Backend already running on :3000"
 else
@@ -46,7 +36,7 @@ else
    echo $! >"$RUN_DIR/frontend.pid")
 fi
 
-# 3. Wait for the API, then trigger a Notion sync (4.3: sync on startup)
+# 2. Wait for the API, then trigger a Notion sync (4.3: sync on startup)
 echo -n "  • Waiting for API"
 for _ in $(seq 1 60); do
   if curl -sf "$API_URL/health/live" >/dev/null 2>&1; then
@@ -69,7 +59,7 @@ else
   echo "  ⚠ API didn't come up in time — check $RUN_DIR/backend.log"
 fi
 
-# 4. Open the Today view
+# 3. Open the Today view
 case "$(uname)" in
   Darwin) open "$WEB_URL" ;;
   Linux) xdg-open "$WEB_URL" >/dev/null 2>&1 || true ;;
