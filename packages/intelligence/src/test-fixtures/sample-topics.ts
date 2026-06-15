@@ -6,9 +6,9 @@ const now = new Date("2025-01-15T12:00:00Z");
 export function makeTopic(
   overrides: Partial<TopicState> & Pick<TopicState, "id" | "name">,
 ): TopicState {
-  return {
-    difficulty: "Medium",
-    status: "In progress",
+  const merged = {
+    difficulty: "Medium" as const,
+    status: "In progress" as const,
     confidence: 50,
     revisionCount: 1,
     lastRevised: addDays(now, -7),
@@ -17,7 +17,7 @@ export function makeTopic(
     problemsSolved: 5,
     totalAttempts: 8,
     averageTimeTaken: 35,
-    prerequisites: [],
+    prerequisites: [] as string[],
     recentSessions: [
       {
         date: addDays(now, -7),
@@ -27,6 +27,13 @@ export function makeTopic(
       },
     ],
     ...overrides,
+  };
+  const revisionCount = merged.revisionCount;
+  return {
+    ...merged,
+    sm2Interval: merged.sm2Interval ?? (revisionCount >= 2 ? 6 : 1),
+    sm2Repetition: merged.sm2Repetition ?? revisionCount,
+    sm2Efactor: merged.sm2Efactor ?? 2.5,
   };
 }
 

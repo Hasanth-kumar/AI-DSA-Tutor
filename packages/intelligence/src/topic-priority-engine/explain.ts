@@ -8,6 +8,7 @@ export function explainPriorityScore(
   topicName: string;
   total: number;
   recommendation: PriorityScore["recommendation"];
+  memoryExecutionDivergence: boolean;
   breakdown: PriorityScore["breakdown"];
   weights: string;
   explanation: string[];
@@ -43,11 +44,18 @@ export function explainPriorityScore(
     `Difficulty weight: ${(b.difficulty * 100).toFixed(0)}% (${topic.difficulty}).`,
   ];
 
+  if (score.memoryExecutionDivergence) {
+    explanation.push(
+      "Memory/execution divergence: SM-2 says revision is not due, but solve-time and weakness signals are high — keep practicing so recallable topics do not drop off the plan.",
+    );
+  }
+
   return {
     topicId: topic.id,
     topicName: topic.name,
     total: score.total,
     recommendation: score.recommendation,
+    memoryExecutionDivergence: score.memoryExecutionDivergence,
     breakdown: score.breakdown,
     weights:
       "Composite = (W₁·urgency + W₂·weakness + W₃·confidence + W₄·prereq + W₅·recency) × difficulty",

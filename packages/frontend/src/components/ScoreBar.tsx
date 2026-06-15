@@ -28,6 +28,11 @@ export const ScoreBar = memo(function ScoreBar({ explanation, compact }: Props) 
 
   return (
     <div className="score-bar-wrap">
+      {explanation.memoryExecutionDivergence && (
+        <p className="divergence-callout">
+          Recall looks fine but execution is weak — SM-2 would not surface this topic soon.
+        </p>
+      )}
       <div className="score-bar" role="img" aria-label="Priority score breakdown">
         {parts.map(
           (p) =>

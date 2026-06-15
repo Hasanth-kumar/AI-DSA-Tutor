@@ -56,7 +56,18 @@ function computeStreak(counts: Map<string, number>, end: Date): number {
   return streak;
 }
 
-function formatCellDetail(key: string, count: number): string {
+function formatCountLabel(count: number, source: Props["source"]): string {
+  if (source === "leetcode") {
+    return `${count} accepted submission${count !== 1 ? "s" : ""}`;
+  }
+  return `${count} problem${count !== 1 ? "s" : ""} solved`;
+}
+
+function formatCellDetail(
+  key: string,
+  count: number,
+  source: Props["source"],
+): string {
   const date = new Date(`${key}T12:00:00Z`);
   const formatted = date.toLocaleDateString(undefined, {
     month: "short",
@@ -64,7 +75,7 @@ function formatCellDetail(key: string, count: number): string {
     year: "numeric",
     timeZone: "UTC",
   });
-  return `${formatted} · ${count} problem${count !== 1 ? "s" : ""} solved`;
+  return `${formatted} · ${formatCountLabel(count, source)}`;
 }
 
 export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayClick }: Props) {
@@ -118,8 +129,8 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
 
   const sourceLabel =
     source === "leetcode" && leetcodeUsername
-      ? `Data from LeetCode · @${leetcodeUsername}`
-      : "Data from logged sessions";
+      ? `Accepted submissions from LeetCode · @${leetcodeUsername}`
+      : "Problems solved from logged sessions";
 
   const selectCell = (cell: { key: string; count: number }) => {
     if (cell.count <= 0) return;
@@ -141,7 +152,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
           title="No activity in the last 26 weeks"
           hint={
             source === "leetcode"
-              ? "Solve a problem on LeetCode and it will show up here."
+              ? "Get an accepted submission on LeetCode and it will show up here."
               : "Log your first session and it will show up here."
           }
         />
@@ -159,7 +170,9 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
       <div className="heatmap-stats">
         <div className="heatmap-stat">
           <span className="heatmap-stat-value">{totalProblems}</span>
-          <span className="heatmap-stat-label">problems in 26 weeks</span>
+          <span className="heatmap-stat-label">
+            {source === "leetcode" ? "submissions in 26 weeks" : "problems in 26 weeks"}
+          </span>
         </div>
         <div className="heatmap-stat">
           <span className="heatmap-stat-value">{activeDays}</span>
@@ -212,7 +225,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
                   key={cell.key}
                   type="button"
                   className="heatmap-cell heatmap-cell--interactive"
-                  aria-label={formatCellDetail(cell.key, cell.count)}
+                  aria-label={formatCellDetail(cell.key, cell.count, source)}
                   onMouseEnter={() => selectCell(cell)}
                   onMouseLeave={() => setHovered(null)}
                   onFocus={() => selectCell(cell)}
@@ -221,7 +234,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
                   {...tipProps}
                 >
                   <span className="heatmap-cell-tooltip" aria-hidden="true">
-                    {formatCellDetail(cell.key, cell.count)}
+                    {formatCellDetail(cell.key, cell.count, source)}
                   </span>
                 </button>
               ) : (

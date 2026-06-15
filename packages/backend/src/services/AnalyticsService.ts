@@ -11,6 +11,7 @@ import {
   type TopicState,
   type TopicVelocity,
   type WeaknessTrendPoint,
+  computePriorityScore,
 } from "@dsa/intelligence";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type { SessionRepository } from "../repositories/SessionRepository.js";
@@ -28,6 +29,8 @@ export interface WeeklySummary {
   currentStreakDays: number;
   longestStreakDays: number;
   weakTopics: { id: string; name: string; score: number }[];
+  /** Recall-strong / execution-weak topics that SM-2 would not surface soon. */
+  divergentTopics: { id: string; name: string }[];
   masteredTopics: number;
   inProgressTopics: number;
   intelligenceSummary: string;
@@ -152,6 +155,14 @@ export class AnalyticsService {
       return { id: w.topicId, name: topic?.name ?? w.topicId, score: w.score };
     });
 
+    const topicsMap = new Map(topicStates.map((t) => [t.id, t]));
+    const divergentTopics = topicStates
+      .map((t) => ({ topic: t, score: computePriorityScore(t, topicsMap) }))
+      .filter((s) => s.score.memoryExecutionDivergence)
+      .sort((a, b) => b.score.total - a.score.total)
+      .slice(0, 5)
+      .map((s) => ({ id: s.topic.id, name: s.topic.name }));
+
     const streak = this.engine.getStreakInfo(sessions, now);
     const velocity = this.engine.getMasteryVelocity(sessions, 2, now);
     const weaknessTrend = this.engine.getWeaknessTrend(
@@ -195,6 +206,7 @@ export class AnalyticsService {
       currentStreakDays: streak.currentStreakDays,
       longestStreakDays: streak.longestStreakDays,
       weakTopics,
+      divergentTopics,
       masteredTopics: topicStates.filter((t) => t.status === "Mastered").length,
       inProgressTopics: topicStates.filter((t) => t.status === "In progress")
         .length,
@@ -250,6 +262,9 @@ function topicToInput(topic: TopicState): AnalyticsTopicInput {
     isWeakArea: topic.isWeakArea ? 1 : 0,
     prerequisites:
       topic.prerequisites.length > 0 ? JSON.stringify(topic.prerequisites) : null,
+    sm2Interval: topic.sm2Interval,
+    sm2Repetition: topic.sm2Repetition,
+    sm2Efactor: topic.sm2Efactor,
   };
 }
 

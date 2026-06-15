@@ -201,6 +201,7 @@ export const api = {
     productivityScore?: number;
     pushToNotion?: boolean;
     mistakeTag?: string | null;
+    warmupGraded?: boolean;
   }) =>
     request<SessionResult>("/api/session", {
       method: "POST",

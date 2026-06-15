@@ -14,6 +14,20 @@ export const DEFAULT_WEIGHTS: PriorityWeights = {
   recency: 0.1,
 };
 
+/** SM-2 says not due; execution says struggling. */
+export const DIVERGENCE_URGENCY_MAX = 0.1;
+export const DIVERGENCE_WEAKNESS_MIN = 0.4;
+const DIVERGENCE_SCORE_BOOST = 12;
+
+export function isMemoryExecutionDivergent(
+  breakdown: PriorityScore["breakdown"],
+): boolean {
+  return (
+    breakdown.urgency < DIVERGENCE_URGENCY_MAX &&
+    breakdown.weakness >= DIVERGENCE_WEAKNESS_MIN
+  );
+}
+
 export function urgencyScore(topic: TopicState, now: Date): number {
   if (!topic.lastRevised) return 1.0;
   if (!topic.nextRevisionAt) return 0.8;
@@ -68,7 +82,9 @@ export function difficultyWeight(difficulty: TopicDifficulty): number {
 
 export function classifyRecommendation(
   breakdown: PriorityScore["breakdown"],
+  memoryExecutionDivergence = false,
 ): PriorityScore["recommendation"] {
+  if (memoryExecutionDivergence) return "Practice more";
   if (breakdown.urgency > 0.5 && breakdown.weakness > 0.4) return "Study now";
   if (breakdown.urgency > 0.5) return "Review soon";
   if (breakdown.weakness > 0.3 || breakdown.confidence > 0.5) return "Practice more";
@@ -90,7 +106,9 @@ export function computePriorityScore(
     difficulty: difficultyWeight(topic.difficulty),
   };
 
-  const total = Math.min(
+  const memoryExecutionDivergence = isMemoryExecutionDivergent(breakdown);
+
+  let total = Math.min(
     100,
     (weights.urgency * breakdown.urgency +
       weights.weakness * breakdown.weakness +
@@ -101,10 +119,15 @@ export function computePriorityScore(
       100,
   );
 
+  if (memoryExecutionDivergence) {
+    total = Math.min(100, total + DIVERGENCE_SCORE_BOOST);
+  }
+
   return {
     topicId: topic.id,
     total,
     breakdown,
-    recommendation: classifyRecommendation(breakdown),
+    memoryExecutionDivergence,
+    recommendation: classifyRecommendation(breakdown, memoryExecutionDivergence),
   };
 }

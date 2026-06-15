@@ -24,6 +24,8 @@ export {
   isProblemNotStarted,
   formatLocalDate,
   PROBLEM_PROPERTIES,
+  TOPIC_SCHEDULE_PROPERTIES,
+  TOPIC_SCHEDULE_SCHEMA,
   PROBLEM_STATUSES,
 } from "./notion/problem-fields.js";
 export type {

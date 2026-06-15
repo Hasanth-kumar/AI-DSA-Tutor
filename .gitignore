@@ -9,3 +9,6 @@ data/sqlite/*.db-*
 .DS_Store
 coverage/
 .turbo/
+data/backups/*.db
+
+IMPLEMENTATION_CHECKLIST.md

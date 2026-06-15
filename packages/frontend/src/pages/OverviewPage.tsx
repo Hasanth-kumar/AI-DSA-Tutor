@@ -105,6 +105,12 @@ export function OverviewPage() {
           <h3 className="card-section-title">Weakness trend</h3>
           <WeaknessChart data={weakness} />
           <WeaknessDrilldown weakTopics={summary?.weakTopics ?? []} />
+          {(summary?.divergentTopics?.length ?? 0) > 0 && (
+            <p className="divergence-callout muted text-sm mt-3 mb-0">
+              Recall ≠ execution (not due per SM-2, but weak when solving):{" "}
+              {summary!.divergentTopics!.map((t) => t.name).join(", ")}.
+            </p>
+          )}
         </div>
 
         <div className="grid grid-2">

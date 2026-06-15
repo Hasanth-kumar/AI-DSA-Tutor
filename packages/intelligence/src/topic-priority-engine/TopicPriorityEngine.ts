@@ -63,7 +63,10 @@ export class TopicPriorityEngine {
     const [primary, ...rest] = scored;
     const maxRevision = options.maxRevisionTopics ?? 2;
     const revisionTopics = rest
-      .filter((s) => s.score.breakdown.urgency > 0.5)
+      .filter(
+        (s) =>
+          s.score.breakdown.urgency > 0.5 || s.score.memoryExecutionDivergence,
+      )
       .slice(0, maxRevision)
       .map((s) => s.topic);
 
@@ -90,7 +93,10 @@ export class TopicPriorityEngine {
     const [primary, ...rest] = scored;
     const maxRevision = options.maxRevisionTopics ?? 2;
     const revisionTopics = rest
-      .filter((s) => s.score.breakdown.urgency > 0.5)
+      .filter(
+        (s) =>
+          s.score.breakdown.urgency > 0.5 || s.score.memoryExecutionDivergence,
+      )
       .slice(0, maxRevision)
       .map((s) => s.topic);
 
@@ -143,6 +149,11 @@ export class TopicPriorityEngine {
       `Primary focus: ${primary.topic.name} (score ${primary.score.total.toFixed(0)}/100, ${primary.score.recommendation}).`,
       `Drivers: urgency ${(b.urgency * 100).toFixed(0)}%, weakness ${(b.weakness * 100).toFixed(0)}%, confidence gap ${(b.confidence * 100).toFixed(0)}%.`,
     ];
+    if (primary.score.memoryExecutionDivergence) {
+      parts.push(
+        "Recall looks fine but execution is weak — practice anyway despite a far-out review date.",
+      );
+    }
     if (revisionTopics.length > 0) {
       parts.push(
         `Revision: ${revisionTopics.map((t) => t.name).join(", ")}.`,

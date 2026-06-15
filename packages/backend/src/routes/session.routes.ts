@@ -82,6 +82,7 @@ export async function sessionRoutes(
       pushToNotion?: boolean;
       problemId?: string;
       mistakeTag?: string | null;
+      warmupGraded?: boolean;
     };
   }>("/session", async (request, reply) => {
     const {
@@ -92,6 +93,7 @@ export async function sessionRoutes(
       pushToNotion,
       problemId,
       mistakeTag,
+      warmupGraded,
     } = request.body;
 
     if (!topicId || studyDuration == null) {
@@ -111,6 +113,7 @@ export async function sessionRoutes(
         pushToNotion,
         problemId,
         mistakeTag,
+        warmupGraded,
       });
       ctx.events.publish("session");
       return reply.status(201).send(serializeForJson(result));

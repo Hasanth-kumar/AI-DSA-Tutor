@@ -20,7 +20,14 @@ export function TodayPlan({ plan }: Props) {
       <h3 className="card-section-title">Today&apos;s plan</h3>
 
       <div className="plan-topic">
-        {plan.primaryTopic.name}
+        <span className="plan-topic-name-row">
+          {plan.primaryTopic.name}
+          {plan.memoryExecutionDivergence && (
+            <span className="divergence-chip" title="Recall looks fine but execution is weak">
+              Recall ≠ execution
+            </span>
+          )}
+        </span>
         <span className="plan-duration">~{plan.estimatedDuration} min</span>
       </div>
 
@@ -46,6 +53,13 @@ export function TodayPlan({ plan }: Props) {
             </li>
           ))}
         </ul>
+      )}
+
+      {plan.divergentTopics && plan.divergentTopics.length > 0 && (
+        <p className="divergence-callout muted text-sm mt-3 mb-0">
+          Also weak on execution despite far-out reviews:{" "}
+          {plan.divergentTopics.map((t) => t.name).join(", ")}.
+        </p>
       )}
 
       {plan.revisionTopics.length > 0 && (

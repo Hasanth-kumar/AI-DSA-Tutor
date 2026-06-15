@@ -116,6 +116,8 @@ export function TodayPage({ onOpenCoach }: Props) {
   const [celebrateAt, setCelebrateAt] = useState<number | null>(null);
   // Which problem's Done button is mid confirm-pulse.
   const [pulseId, setPulseId] = useState<string | null>(null);
+  /** True when today's warm-up was graded — session log must not reschedule. */
+  const [warmupGraded, setWarmupGraded] = useState(false);
 
   useEffect(() => {
     if (celebrateAt == null) return;
@@ -189,6 +191,7 @@ export function TodayPage({ onOpenCoach }: Props) {
         topicId: plan.primaryTopic.id,
         problemId,
         studyDuration: minutes,
+        warmupGraded,
       });
       const next = { ...starts };
       delete next[problemId];
@@ -341,7 +344,17 @@ export function TodayPage({ onOpenCoach }: Props) {
             <div className="today-topic-row">
               <div>
                 <div className="today-topic-label">Today&apos;s topic</div>
-                <div className="today-topic-name">{plan.primaryTopic.name}</div>
+                <div className="today-topic-name-row">
+                  <span className="today-topic-name">{plan.primaryTopic.name}</span>
+                  {plan.memoryExecutionDivergence && (
+                    <span
+                      className="divergence-chip"
+                      title="Recall looks fine but execution is weak"
+                    >
+                      Recall ≠ execution
+                    </span>
+                  )}
+                </div>
                 <p className="plan-reasoning" style={{ margin: "0.4rem 0 0" }}>
                   {plan.reasoning}
                 </p>
@@ -370,6 +383,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                 className="btn btn-primary today-start-btn"
                 onClick={() => {
                   setCelebrateAt(null);
+                  setWarmupGraded(false);
                   setFlow({ kind: "warmup" });
                 }}
               >
@@ -383,7 +397,8 @@ export function TodayPage({ onOpenCoach }: Props) {
             <WarmupCard
               topicId={plan.primaryTopic.id}
               topicName={plan.primaryTopic.name}
-              onComplete={() => {
+              onComplete={(graded) => {
+                setWarmupGraded(graded);
                 setFlow({ kind: "idle" });
                 const first = plan.suggestedProblems[0];
                 if (first && !starts[first.problemId]) startProblem(first.problemId);

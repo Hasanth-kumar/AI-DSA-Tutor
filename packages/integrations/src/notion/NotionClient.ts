@@ -10,6 +10,8 @@ import {
   formatLocalDate,
   PROBLEM_PROPERTIES,
   resolveSchemaPropertyName,
+  TOPIC_SCHEDULE_PROPERTIES,
+  TOPIC_SCHEDULE_SCHEMA,
   toNotionProblemStatus,
   toNotionTopicDifficulty,
 } from "./problem-fields.js";
@@ -43,6 +45,40 @@ export class NotionClient {
 
   async ping(): Promise<void> {
     await this.requestQueue.add(() => this.client.users.me({}));
+  }
+
+  /**
+   * Add schedule mirror columns to the Topics DB if absent so pushes are visible
+   * in Notion (Next Review, SM-2 Interval, Ease Factor).
+   */
+  async ensureTopicScheduleProperties(): Promise<string[]> {
+    const dbId = this.config.topicsDbId;
+    const schema = await this.getDatabaseProperties(dbId);
+    const propertiesToAdd: Record<
+      string,
+      { date: Record<string, never> } | { number: { format: "number" } }
+    > = {};
+    const created: string[] = [];
+
+    for (const spec of TOPIC_SCHEDULE_SCHEMA) {
+      const aliases = TOPIC_SCHEDULE_PROPERTIES[spec.key];
+      if (resolveSchemaPropertyName(schema, aliases)) continue;
+
+      propertiesToAdd[spec.name] =
+        spec.type === "date" ? { date: {} } : { number: { format: "number" } };
+      created.push(spec.name);
+    }
+
+    if (Object.keys(propertiesToAdd).length === 0) return [];
+
+    await this.requestQueue.add(() =>
+      this.client.databases.update({
+        database_id: dbId,
+        properties: propertiesToAdd,
+      }),
+    );
+    this.propertiesByDb.delete(dbId);
+    return created;
   }
 
   async queryDatabase(
@@ -106,6 +142,36 @@ export class NotionClient {
           propType === "multi_select"
             ? { multi_select: [{ name: notionDifficulty }] }
             : { select: { name: notionDifficulty } };
+      }
+    }
+
+    if (update.nextRevisionAt !== undefined) {
+      const nextReviewProp = resolveSchemaPropertyName(
+        schema,
+        TOPIC_SCHEDULE_PROPERTIES.NextReview,
+      );
+      if (nextReviewProp) {
+        properties[nextReviewProp] = update.nextRevisionAt
+          ? { date: { start: formatLocalDate(update.nextRevisionAt) } }
+          : { date: null };
+      }
+    }
+    if (update.sm2Interval != null) {
+      const intervalProp = resolveSchemaPropertyName(
+        schema,
+        TOPIC_SCHEDULE_PROPERTIES.Sm2Interval,
+      );
+      if (intervalProp) {
+        properties[intervalProp] = { number: update.sm2Interval };
+      }
+    }
+    if (update.sm2Efactor != null) {
+      const easeProp = resolveSchemaPropertyName(
+        schema,
+        TOPIC_SCHEDULE_PROPERTIES.Sm2EaseFactor,
+      );
+      if (easeProp) {
+        properties[easeProp] = { number: update.sm2Efactor };
       }
     }
 

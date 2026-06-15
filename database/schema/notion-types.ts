@@ -14,6 +14,11 @@ export interface NotionTopic {
   confidence?: number;
   isWeakArea?: boolean;
   prerequisites?: string[];
+  /** Optional Notion mirror — local wins on merge when a row already exists. */
+  nextRevisionAt?: Date | null;
+  sm2Interval?: number;
+  sm2Repetition?: number;
+  sm2Efactor?: number;
 }
 
 export interface NotionProblem {

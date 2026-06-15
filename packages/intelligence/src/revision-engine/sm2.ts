@@ -1,15 +1,29 @@
 import type { SessionSnapshot, SM2State, TopicState } from "../types.js";
 import { addDays } from "../utils/dates.js";
 
+/** Read persisted SM-2 state from a topic (falls back to SM-2 defaults). */
+export function readSM2State(topic: TopicState, now: Date = new Date()): SM2State {
+  return {
+    interval: topic.sm2Interval ?? 1,
+    repetition: topic.sm2Repetition ?? 0,
+    efactor: topic.sm2Efactor ?? 2.5,
+    nextRevisionAt: topic.nextRevisionAt ?? topic.lastRevised ?? now,
+  };
+}
+
 /** SM-2 quality: 0–5 (0 = blackout, 5 = perfect). */
-export function sm2Update(state: SM2State, quality: number): SM2State {
+export function sm2Update(
+  state: SM2State,
+  quality: number,
+  now: Date = new Date(),
+): SM2State {
   if (quality < 3) {
     return {
       ...state,
       interval: 1,
       repetition: 0,
       efactor: Math.max(1.3, state.efactor - 0.2),
-      nextRevisionAt: addDays(new Date(), 1),
+      nextRevisionAt: addDays(now, 1),
     };
   }
 
@@ -27,7 +41,7 @@ export function sm2Update(state: SM2State, quality: number): SM2State {
     interval: newInterval,
     repetition: state.repetition + 1,
     efactor: newEfactor,
-    nextRevisionAt: addDays(new Date(), newInterval),
+    nextRevisionAt: addDays(now, newInterval),
   };
 }
 

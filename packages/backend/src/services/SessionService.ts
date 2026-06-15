@@ -1,4 +1,4 @@
-import type { IntelligenceOrchestrator, SessionSnapshot } from "@dsa/intelligence";
+import type { IntelligenceOrchestrator, SessionSnapshot, SM2State } from "@dsa/intelligence";
 import {
   deriveProductivityFromDuration,
   deriveTopicDifficultyFromConfidence,
@@ -13,15 +13,26 @@ import type {
   SessionRow,
   UpdateSessionInput,
 } from "../repositories/SessionRepository.js";
+import type { SyncMetaRepository } from "../repositories/SyncMetaRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 import type { NotionSyncService, TopicSyncSnapshot } from "./NotionSyncService.js";
 import type { PlanService } from "./PlanService.js";
+import {
+  clearWarmupSrsFlag,
+  markWarmupSrsApplied,
+  wasWarmupSrsAppliedToday,
+} from "./warmupSrs.js";
 
 export interface CompleteSessionInput extends CreateSessionInput {
   pushToNotion?: boolean;
   problemId?: string;
   /** One-tap mistake taxonomy tag captured with (or after) the log. */
   mistakeTag?: string | null;
+  /**
+   * When true, warm-up already drove SRS for this topic today — session logging
+   * must not reschedule (confidence / weakness still update).
+   */
+  warmupGraded?: boolean;
 }
 
 export interface SessionResult {
@@ -52,6 +63,7 @@ export class SessionService {
     private readonly problemRepo: ProblemRepository,
     private readonly planService: PlanService,
     private readonly notionSync: NotionSyncService,
+    private readonly syncMetaRepo: SyncMetaRepository,
     private readonly attemptRepo?: AttemptRepository,
   ) {}
 
@@ -97,7 +109,20 @@ export class SessionService {
       duration: sessionRow.studyDuration ?? 0,
     };
 
-    const update = this.intelligence.updateAfterSession(topic, sessionSnapshot);
+    const skipScheduling =
+      input.warmupGraded === true ||
+      wasWarmupSrsAppliedToday(this.syncMetaRepo, input.topicId);
+
+    // Branch explicitly so the SM-2 result is only typed/available on the
+    // schedule-owning path (warm-up skipped). The execution-only path returns
+    // weakness signals without `sm2`.
+    const fullUpdate = skipScheduling
+      ? null
+      : this.intelligence.updateAfterSession(topic, sessionSnapshot);
+    const weaknessUpdate = fullUpdate
+      ? fullUpdate.weaknessUpdate
+      : this.intelligence.updateExecutionAfterSession(topic, sessionSnapshot)
+          .weaknessUpdate;
 
     const confidenceBoost = Math.min(
       100,
@@ -107,16 +132,23 @@ export class SessionService {
     const nextStatus = deriveTopicStatusAfterSession(
       topic.status,
       confidenceBoost,
-      update.weaknessUpdate.isWeak,
+      weaknessUpdate.isWeak,
     );
     const nextDifficulty = deriveTopicDifficultyFromConfidence(confidenceBoost);
 
+    const nextRevisionAt = fullUpdate
+      ? fullUpdate.sm2.nextRevisionAt
+      : topic.nextRevisionAt;
+    const nextRevisionCount = skipScheduling
+      ? topic.revisionCount
+      : topic.revisionCount + 1;
+
     const topicSnapshot: TopicSyncSnapshot = {
       confidence: confidenceBoost,
-      revisionCount: topic.revisionCount + 1,
+      revisionCount: nextRevisionCount,
       lastRevised: sessionSnapshot.date,
-      nextRevisionAt: update.sm2.nextRevisionAt,
-      isWeakArea: update.weaknessUpdate.isWeak,
+      nextRevisionAt,
+      isWeakArea: weaknessUpdate.isWeak,
       status: nextStatus,
       difficulty: nextDifficulty,
     };
@@ -126,11 +158,16 @@ export class SessionService {
       revisionCount: topicSnapshot.revisionCount,
       lastRevised: topicSnapshot.lastRevised,
       nextRevisionAt: topicSnapshot.nextRevisionAt,
+      ...(fullUpdate ? sm2TopicPatch(fullUpdate.sm2) : {}),
       isWeakArea: topicSnapshot.isWeakArea,
-      priorityScore: update.weaknessUpdate.score,
+      priorityScore: weaknessUpdate.score,
       status: topicSnapshot.status,
       difficulty: topicSnapshot.difficulty,
     });
+
+    if (skipScheduling) {
+      clearWarmupSrsFlag(this.syncMetaRepo, input.topicId);
+    }
 
     this.notionSync.markTopicDirty(input.topicId, topicSnapshot);
 
@@ -208,8 +245,9 @@ export class SessionService {
     this.topicRepo.update(topicId, {
       revisionCount: topic.revisionCount + 1,
       lastRevised: now,
-      nextRevisionAt: sm2.nextRevisionAt,
+      ...sm2TopicPatch(sm2),
     });
+    markWarmupSrsApplied(this.syncMetaRepo, topicId);
     this.notionSync.markTopicDirty(topicId);
 
     return {
@@ -249,4 +287,13 @@ export class SessionService {
       productivityScore: session.productivityScore ?? 0,
     });
   }
+}
+
+function sm2TopicPatch(sm2: SM2State) {
+  return {
+    sm2Interval: sm2.interval,
+    sm2Repetition: sm2.repetition,
+    sm2Efactor: sm2.efactor,
+    nextRevisionAt: sm2.nextRevisionAt,
+  };
 }

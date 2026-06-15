@@ -1,4 +1,10 @@
 import { useEffect, useState } from "react";
+import {
+  gradeWarmup,
+  initWarmupQueue,
+  warmupAverageQuality,
+  type WarmupQueueState,
+} from "@dsa/intelligence";
 import { api } from "../api/client.js";
 import type { WarmupQuestions } from "../types/api.js";
 
@@ -20,12 +26,12 @@ const GRADES: { label: string; quality: number; hint: string }[] = [
 /**
  * Active recall warm-up (3.1): 3 quick questions before coding, inline in the
  * session-start flow. Per-question self-grades average into one SM-2 quality.
+ * Forgot re-queues at end of queue (ADR Decision C); see warmupQueue reducer.
  */
 export function WarmupCard({ topicId, topicName, onComplete }: Props) {
   const [data, setData] = useState<WarmupQuestions | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [index, setIndex] = useState(0);
-  const [grades, setGrades] = useState<number[]>([]);
+  const [queue, setQueue] = useState<WarmupQueueState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -34,7 +40,10 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
     api
       .getWarmupQuestions(topicId)
       .then((res) => {
-        if (!cancelled) setData(res);
+        if (!cancelled) {
+          setData(res);
+          setQueue(initWarmupQueue(res.questions.length));
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -46,14 +55,13 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
     };
   }, [topicId]);
 
-  const finish = async (allGrades: number[]) => {
+  const finish = async (finalQueue: WarmupQueueState) => {
     setSubmitting(true);
     try {
-      const quality =
-        allGrades.reduce((sum, q) => sum + q, 0) / Math.max(1, allGrades.length);
-      const res = await api.gradeWarmup(topicId, Math.round(quality));
+      const quality = Math.round(warmupAverageQuality(finalQueue));
+      const res = await api.gradeWarmup(topicId, quality);
       setResult(
-        `Recall graded ${Math.round(quality)}/5 — next ${topicName} review in ${res.intervalDays} day${res.intervalDays === 1 ? "" : "s"}.`,
+        `Recall graded ${quality}/5 — next ${topicName} review in ${res.intervalDays} day${res.intervalDays === 1 ? "" : "s"}.`,
       );
       setTimeout(() => onComplete(true), 1600);
     } catch (err) {
@@ -63,12 +71,10 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
   };
 
   const grade = (quality: number) => {
-    if (!data || submitting) return;
-    const next = [...grades, quality];
-    setGrades(next);
-    if (index + 1 < data.questions.length) {
-      setIndex(index + 1);
-    } else {
+    if (!data || !queue || submitting) return;
+    const next = gradeWarmup(queue, quality);
+    setQueue(next);
+    if (next.done) {
       void finish(next);
     }
   };
@@ -92,7 +98,7 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
     );
   }
 
-  if (!data) {
+  if (!data || !queue) {
     return (
       <div className="warmup-card card">
         <p className="muted m-0">
@@ -109,17 +115,19 @@ export function WarmupCard({ topicId, topicName, onComplete }: Props) {
     );
   }
 
+  const questionIndex = queue.currentIndex;
+
   return (
     <div className="warmup-card card">
       <div className="warmup-header">
         <span className="warmup-title">5-minute recall warm-up</span>
         <span className="warmup-progress">
-          {index + 1} / {data.questions.length}
+          {questionIndex + 1} / {data.questions.length}
           {data.source === "notes" ? " · from your notes" : ""}
         </span>
       </div>
 
-      <p className="warmup-question">{data.questions[index]}</p>
+      <p className="warmup-question">{data.questions[questionIndex]}</p>
       <p className="muted text-xs mt-0 mb-3">
         Answer out loud or in your head, then grade your recall.
       </p>

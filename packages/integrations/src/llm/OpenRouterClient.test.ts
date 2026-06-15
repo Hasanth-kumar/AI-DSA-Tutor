@@ -1,18 +1,34 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOpenRouterClient } from "./OpenRouterClient.js";
 
+/** Build a streaming (SSE) response body emitting one `delta` per content chunk. */
+function sseStreamResponse(chunks: string[]): { ok: true; body: ReadableStream<Uint8Array> } {
+  const encoder = new TextEncoder();
+  const lines = chunks.map(
+    (content) =>
+      `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`,
+  );
+  lines.push("data: [DONE]\n\n");
+  return {
+    ok: true,
+    body: new ReadableStream({
+      start(controller) {
+        for (const line of lines) controller.enqueue(encoder.encode(line));
+        controller.close();
+      },
+    }),
+  };
+}
+
 describe("OpenRouterClient", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("posts chat completions to OpenRouter", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        choices: [{ message: { content: "Hello from Gemma" } }],
-      }),
-    });
+  it("posts streaming chat completions to OpenRouter", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(sseStreamResponse(["Hello from ", "Gemma"]));
     vi.stubGlobal("fetch", fetchMock);
 
     const client = createOpenRouterClient({
@@ -38,7 +54,7 @@ describe("OpenRouterClient", () => {
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     expect(body.model).toBe("google/gemma-4-31b-it:free");
-    expect(body.stream).toBe(false);
+    expect(body.stream).toBe(true);
   });
 
   it("throws on API errors", async () => {
@@ -69,12 +85,7 @@ describe("OpenRouterClient", () => {
         status: 429,
         json: async () => ({ error: { message: "Rate limit exceeded" } }),
       })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: "Recovered reply" } }],
-        }),
-      });
+      .mockResolvedValueOnce(sseStreamResponse(["Recovered reply"]));
     vi.stubGlobal("fetch", fetchMock);
 
     const client = createOpenRouterClient({

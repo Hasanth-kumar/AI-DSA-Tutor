@@ -9,6 +9,10 @@ export interface TopicNotionUpdate {
   isWeakArea?: boolean;
   status?: TopicStatus;
   difficulty?: TopicDifficulty;
+  /** Optional transparency mirrors — not authoritative for scheduling. */
+  nextRevisionAt?: Date | null;
+  sm2Interval?: number;
+  sm2Efactor?: number;
 }
 
 export interface SessionNotionCreate {

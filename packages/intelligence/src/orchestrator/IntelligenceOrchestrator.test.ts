@@ -33,4 +33,16 @@ describe("IntelligenceOrchestrator", () => {
     expect(update.sm2.repetition).toBeGreaterThan(topic.revisionCount);
     expect(update.weaknessUpdate.topicId).toBe("t");
   });
+
+  it("updateExecutionAfterSession returns weakness only (no SM-2)", () => {
+    const topic = makeTopic({ id: "t", name: "T" });
+    const update = orchestrator.updateExecutionAfterSession(topic, {
+      date: FIXED_NOW,
+      problemsSolved: 2,
+      productivityScore: 75,
+      duration: 50,
+    });
+    expect(update.weaknessUpdate.topicId).toBe("t");
+    expect("sm2" in update).toBe(false);
+  });
 });

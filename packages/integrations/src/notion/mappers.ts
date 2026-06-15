@@ -9,6 +9,7 @@ import {
   normalizeDifficulty,
   normalizeProblemStatus,
   PROBLEM_PROPERTIES,
+  TOPIC_SCHEDULE_PROPERTIES,
 } from "./problem-fields.js";
 
 function getTitle(page: PageObjectResponse): string {
@@ -73,6 +74,12 @@ function getCheckbox(page: PageObjectResponse, name: string): boolean {
 
 function getDate(page: PageObjectResponse, name: string): Date | null {
   const prop = page.properties[name];
+  return getDateFromProp(prop);
+}
+
+function getDateFromProp(
+  prop: PageObjectResponse["properties"][string] | undefined,
+): Date | null {
   if (prop?.type === "date" && prop.date?.start) {
     return new Date(prop.date.start);
   }
@@ -109,6 +116,15 @@ export function mapTopicPage(page: PageObjectResponse): NotionTopic {
     isWeakArea: getCheckbox(page, "Weak Area"),
     prerequisites: getRelationIdsFromProp(
       findPageProperty(page, ["Prerequisites"]),
+    ),
+    nextRevisionAt: getDateFromProp(
+      findPageProperty(page, TOPIC_SCHEDULE_PROPERTIES.NextReview),
+    ),
+    sm2Interval: getNumberProp(
+      findPageProperty(page, TOPIC_SCHEDULE_PROPERTIES.Sm2Interval),
+    ),
+    sm2Efactor: getNumberProp(
+      findPageProperty(page, TOPIC_SCHEDULE_PROPERTIES.Sm2EaseFactor),
     ),
   };
 }

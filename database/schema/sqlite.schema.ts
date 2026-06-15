@@ -11,6 +11,9 @@ export const topics = sqliteTable("topics", {
   isWeakArea: integer("is_weak_area").default(0),
   priorityScore: real("priority_score"),
   nextRevisionAt: integer("next_revision_at"),
+  sm2Interval: integer("sm2_interval").default(1),
+  sm2Repetition: integer("sm2_repetition").default(0),
+  sm2Efactor: real("sm2_efactor").default(2.5),
   prerequisites: text("prerequisites"),
   updatedAt: integer("updated_at").notNull(),
 });
@@ -47,6 +50,7 @@ export const syncMeta = sqliteTable("sync_meta", {
 /**
  * Per-problem attempt log — survives Notion pulls (which wipe/rebuild
  * topics/problems/sessions). Holds local-only signals like mistake tags.
+ * Topic pulls use merge (not wipe) for schedule-critical fields — see sync.ts.
  */
 export const problemAttempts = sqliteTable("problem_attempts", {
   id: text("id").primaryKey(),

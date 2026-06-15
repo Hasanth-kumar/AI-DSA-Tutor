@@ -10,6 +10,9 @@ export interface PendingTopicFields {
   revisionCount?: number;
   lastRevised?: number | null;
   nextRevisionAt?: number | null;
+  sm2Interval?: number;
+  sm2Repetition?: number;
+  sm2Efactor?: number;
   isWeakArea?: number;
   status?: string;
   difficulty?: string;

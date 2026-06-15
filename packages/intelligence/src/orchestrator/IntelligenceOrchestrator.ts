@@ -72,11 +72,25 @@ export class IntelligenceOrchestrator {
     session: SessionSnapshot,
   ): IntelligenceUpdate {
     const sm2 = this.revision.updateAfterSession(topic, session);
-    const weaknessUpdate = this.weakness.analyzeWeakness({
+    const weaknessUpdate = this.analyzeWeaknessAfterSession(topic, session);
+    return { sm2, weaknessUpdate };
+  }
+
+  /**
+   * Execution-only path when warm-up already drove SRS for this topic today.
+   * Updates weakness signals without touching SM-2 / nextRevisionAt.
+   */
+  updateExecutionAfterSession(topic: TopicState, session: SessionSnapshot) {
+    return {
+      weaknessUpdate: this.analyzeWeaknessAfterSession(topic, session),
+    };
+  }
+
+  private analyzeWeaknessAfterSession(topic: TopicState, session: SessionSnapshot) {
+    return this.weakness.analyzeWeakness({
       ...topic,
       recentSessions: [...topic.recentSessions, session],
     });
-    return { sm2, weaknessUpdate };
   }
 
   getRevisionQueue(topics: TopicState[]): TopicState[] {

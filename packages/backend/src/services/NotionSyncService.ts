@@ -26,6 +26,9 @@ export interface TopicSyncSnapshot {
   revisionCount: number;
   lastRevised: Date | null;
   nextRevisionAt: Date | null;
+  sm2Interval?: number;
+  sm2Repetition?: number;
+  sm2Efactor?: number;
   isWeakArea: boolean;
   status: TopicStatus;
   difficulty: TopicDifficulty;
@@ -36,6 +39,8 @@ export interface SyncStatus extends SyncResult {
   direction: "pull" | "push" | "bidirectional";
   replayedTopics: number;
   replayedProblems: number;
+  /** Schedule mirror columns added to the Notion Topics DB on this sync. */
+  notionColumnsCreated?: string[];
 }
 
 export class NotionSyncService {
@@ -92,16 +97,22 @@ export class NotionSyncService {
     const pendingTopics = this.syncMeta.getPendingTopics();
     const pendingProblems = this.syncMeta.getPendingProblems();
 
+    let notionColumnsCreated: string[] = [];
+    try {
+      notionColumnsCreated = await this.getClient().ensureTopicScheduleProperties();
+    } catch {
+      // Best-effort — sync still works; pushes skip fields when columns are missing.
+    }
+
     const result = await syncNotionToSqlite(
       this.getClient(),
       this.config.sqlite.path,
     );
     this.mirrorCache.invalidate();
 
-    // Conflict detection (5.2): the pull just replaced local rows with Notion's
-    // version. Where a pending (locally-edited) record's fields disagree with
-    // what Notion held, record both versions instead of silently letting the
-    // replay below win.
+    // Conflict detection (5.2): merge pull may have updated mirrored fields from
+    // Notion while preserving local schedule. Where a pending (locally-edited)
+    // record's fields disagree with what Notion held, record both versions.
     this.detectConflicts(pendingTopics, pendingProblems);
 
     let replayedTopics = 0;
@@ -142,6 +153,7 @@ export class NotionSyncService {
       direction: "pull",
       replayedTopics,
       replayedProblems,
+      notionColumnsCreated,
     };
   }
 
@@ -159,6 +171,9 @@ export class NotionSyncService {
         revisionCount: remote.revisionCount,
         lastRevised: remote.lastRevised?.getTime() ?? null,
         nextRevisionAt: remote.nextRevisionAt?.getTime() ?? null,
+        sm2Interval: remote.sm2Interval,
+        sm2Repetition: remote.sm2Repetition,
+        sm2Efactor: remote.sm2Efactor,
         isWeakArea: remote.isWeakArea ? 1 : 0,
         status: remote.status,
         difficulty: remote.difficulty,
@@ -265,6 +280,9 @@ export class NotionSyncService {
       isWeakArea: topic.isWeakArea,
       status,
       difficulty,
+      nextRevisionAt: topic.nextRevisionAt,
+      sm2Interval: topic.sm2Interval,
+      sm2Efactor: topic.sm2Efactor,
     });
   }
 
@@ -293,6 +311,9 @@ export class NotionSyncService {
       revisionCount: topic.revisionCount,
       lastRevised: topic.lastRevised?.getTime() ?? null,
       nextRevisionAt: topic.nextRevisionAt?.getTime() ?? null,
+      sm2Interval: topic.sm2Interval,
+      sm2Repetition: topic.sm2Repetition,
+      sm2Efactor: topic.sm2Efactor,
       isWeakArea: topic.isWeakArea ? 1 : 0,
       status: topic.status,
       difficulty: topic.difficulty,

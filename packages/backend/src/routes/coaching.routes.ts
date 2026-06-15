@@ -1,3 +1,4 @@
+import type { ServerResponse } from "node:http";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
@@ -10,12 +11,12 @@ function parseHintLevel(raw: string | undefined): 1 | 2 | 3 | 4 | undefined {
     : undefined;
 }
 
-function writeSseEvent(reply: { raw: NodeJS.WritableStream }, event: ChatStreamEvent): void {
+function writeSseEvent(reply: { raw: ServerResponse }, event: ChatStreamEvent): void {
   reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
 }
 
 async function streamChatEvents(
-  reply: { raw: NodeJS.WritableStream },
+  reply: { raw: ServerResponse },
   generator: AsyncGenerator<ChatStreamEvent>,
 ): Promise<void> {
   reply.raw.writeHead(200, {

@@ -4,6 +4,7 @@ import type {
   StudyPlan,
   TopicState,
 } from "@dsa/intelligence";
+import { computePriorityScore } from "@dsa/intelligence";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 import { formatDateKey } from "../lib/json.js";
@@ -85,6 +86,20 @@ export class PlanService {
     }
 
     const estimatedDuration = this.estimateDuration(primaryTopic, scored);
+    const topicsMap = new Map(topics.map((t) => [t.id, t]));
+    const primaryScore = computePriorityScore(primaryTopic, topicsMap);
+    const divergentTopics = topics
+      .map((t) => ({ topic: t, score: computePriorityScore(t, topicsMap) }))
+      .filter((s) => s.score.memoryExecutionDivergence)
+      .sort((a, b) => b.score.total - a.score.total)
+      .slice(0, 5)
+      .map((s) => ({ id: s.topic.id, name: s.topic.name }));
+
+    let reasoning = selection.reasoning;
+    if (primaryScore.memoryExecutionDivergence) {
+      reasoning +=
+        " Recall looks fine but execution is weak — practice anyway despite a far-out review date.";
+    }
 
     return {
       date: new Date(),
@@ -92,10 +107,12 @@ export class PlanService {
       revisionTopics: scored,
       suggestedProblems,
       estimatedDuration,
-      reasoning: selection.reasoning,
+      reasoning,
       curriculum: this.curriculumService.toProgress(selection),
       revisionTotalDue: queue.length,
       revisionDeferred: deferred.length,
+      memoryExecutionDivergence: primaryScore.memoryExecutionDivergence,
+      divergentTopics,
     };
   }
 

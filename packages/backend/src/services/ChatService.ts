@@ -111,7 +111,7 @@ export class ChatService {
     }
 
     const { thread, history, learningContext, coachOptions } =
-      await this.prepareTurn(input, message);
+      await this.prepareTurn(input);
 
     const reply = await this.llm.generateChatReply(
       learningContext,
@@ -142,7 +142,7 @@ export class ChatService {
 
     try {
       const { thread, history, learningContext, coachOptions } =
-        await this.prepareTurn(input, message);
+        await this.prepareTurn(input);
 
       const userMessage = this.chatRepo.addMessage(thread.id, "user", message);
       yield { type: "meta", threadId: thread.id, userMessage: toMessageDto(userMessage) };
@@ -461,7 +461,7 @@ export class ChatService {
     }
   }
 
-  private async prepareTurn(input: SendChatInput, message: string) {
+  private async prepareTurn(input: SendChatInput) {
     const thread =
       input.threadId != null ? this.chatRepo.findThreadById(input.threadId) : null;
     const activeThread = thread ?? this.chatRepo.createThread();

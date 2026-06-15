@@ -21,6 +21,7 @@ export interface PriorityScore {
   topicId: string;
   total: number;
   recommendation: string;
+  memoryExecutionDivergence?: boolean;
 }
 
 export interface Problem {
@@ -84,6 +85,8 @@ export interface StudyPlan {
   curriculum?: CurriculumProgress;
   revisionTotalDue?: number;
   revisionDeferred?: number;
+  memoryExecutionDivergence?: boolean;
+  divergentTopics?: { id: string; name: string }[];
 }
 
 export type MistakeTag =
@@ -127,6 +130,7 @@ export interface ScoreExplanation {
   topicName: string;
   total: number;
   recommendation: string;
+  memoryExecutionDivergence?: boolean;
   breakdown: {
     urgency: number;
     weakness: number;
@@ -221,6 +225,7 @@ export interface WeeklySummary {
   currentStreakDays: number;
   longestStreakDays: number;
   weakTopics?: { id: string; name: string; score: number }[];
+  divergentTopics?: { id: string; name: string }[];
   masteredTopics: number;
   inProgressTopics: number;
   velocityTrend: "up" | "down" | "stable";

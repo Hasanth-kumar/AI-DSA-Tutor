@@ -12,6 +12,12 @@ export interface TopicState {
   revisionCount: number;
   lastRevised: Date | null;
   nextRevisionAt: Date | null;
+  /** Persisted SM-2 interval in days (source of truth for scheduling math). */
+  sm2Interval: number;
+  /** Persisted SM-2 repetition count (successful reviews). */
+  sm2Repetition: number;
+  /** Persisted SM-2 ease factor. */
+  sm2Efactor: number;
   isWeakArea: boolean;
   problemsSolved: number;
   totalAttempts: number;
@@ -64,6 +70,11 @@ export interface PriorityScore {
     difficulty: number;
   };
   recommendation: "Study now" | "Review soon" | "Practice more" | "Maintain";
+  /**
+   * Recall looks fine (SM-2 not due) but execution signals are weak —
+   * "recallable but unsolvable."
+   */
+  memoryExecutionDivergence: boolean;
 }
 
 export interface ProblemSuggestion {
@@ -100,6 +111,10 @@ export interface StudyPlan {
   revisionTotalDue?: number;
   /** Topics pushed forward by catch-up compression on this plan. */
   revisionDeferred?: number;
+  /** Primary topic has recall-strong / execution-weak divergence. */
+  memoryExecutionDivergence?: boolean;
+  /** Other topics with the same divergence signal (dashboard surfacing). */
+  divergentTopics?: { id: string; name: string }[];
 }
 
 export interface PlanOptions {

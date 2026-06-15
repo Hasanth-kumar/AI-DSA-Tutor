@@ -12,6 +12,20 @@ export const PROBLEM_PROPERTIES = {
   Notes: ["Notes"],
 } as const;
 
+/** Optional topic schedule mirrors for Notion dashboard transparency. */
+export const TOPIC_SCHEDULE_PROPERTIES = {
+  NextReview: ["Next Review", "NextReview"],
+  Sm2Interval: ["SM-2 Interval", "SM2 Interval", "Sm2 Interval"],
+  Sm2EaseFactor: ["Ease Factor", "SM-2 Ease Factor", "SM2 Ease Factor"],
+} as const;
+
+/** Canonical property names created on the Topics DB when missing. */
+export const TOPIC_SCHEDULE_SCHEMA = [
+  { key: "NextReview" as const, name: "Next Review", type: "date" as const },
+  { key: "Sm2Interval" as const, name: "SM-2 Interval", type: "number" as const },
+  { key: "Sm2EaseFactor" as const, name: "Ease Factor", type: "number" as const },
+];
+
 export const PROBLEM_STATUSES = [
   "Not started",
   "Solved",

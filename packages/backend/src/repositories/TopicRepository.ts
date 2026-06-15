@@ -9,6 +9,9 @@ export interface TopicUpdate {
   revisionCount?: number;
   lastRevised?: Date | null;
   nextRevisionAt?: Date | null;
+  sm2Interval?: number;
+  sm2Repetition?: number;
+  sm2Efactor?: number;
   isWeakArea?: boolean;
   status?: string;
   difficulty?: string;
@@ -48,6 +51,9 @@ export class TopicRepository {
                 : null,
             }
           : {}),
+        ...(patch.sm2Interval != null ? { sm2Interval: patch.sm2Interval } : {}),
+        ...(patch.sm2Repetition != null ? { sm2Repetition: patch.sm2Repetition } : {}),
+        ...(patch.sm2Efactor != null ? { sm2Efactor: patch.sm2Efactor } : {}),
         ...(patch.isWeakArea != null ? { isWeakArea: patch.isWeakArea ? 1 : 0 } : {}),
         ...(patch.status != null ? { status: patch.status } : {}),
         ...(patch.difficulty != null ? { difficulty: patch.difficulty } : {}),
@@ -66,6 +72,9 @@ export class TopicRepository {
       revisionCount?: number;
       lastRevised?: number | null;
       nextRevisionAt?: number | null;
+      sm2Interval?: number;
+      sm2Repetition?: number;
+      sm2Efactor?: number;
       isWeakArea?: number;
       status?: string;
       difficulty?: string;
@@ -82,6 +91,9 @@ export class TopicRepository {
         ...(fields.nextRevisionAt !== undefined
           ? { nextRevisionAt: fields.nextRevisionAt }
           : {}),
+        ...(fields.sm2Interval != null ? { sm2Interval: fields.sm2Interval } : {}),
+        ...(fields.sm2Repetition != null ? { sm2Repetition: fields.sm2Repetition } : {}),
+        ...(fields.sm2Efactor != null ? { sm2Efactor: fields.sm2Efactor } : {}),
         ...(fields.isWeakArea != null ? { isWeakArea: fields.isWeakArea } : {}),
         ...(fields.status != null ? { status: fields.status } : {}),
         ...(fields.difficulty != null ? { difficulty: fields.difficulty } : {}),

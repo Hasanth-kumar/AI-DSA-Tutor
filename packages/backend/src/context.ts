@@ -112,6 +112,7 @@ export function createAppContext(
     problemRepo,
     planService,
     notionSync,
+    syncMetaRepo,
     attemptRepo,
   );
   const analyticsService = new AnalyticsService(

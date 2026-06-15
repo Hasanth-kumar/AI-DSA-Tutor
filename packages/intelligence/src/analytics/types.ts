@@ -27,6 +27,9 @@ export interface AnalyticsTopicInput {
   nextRevisionAt: number | null;
   isWeakArea: number;
   prerequisites: string | null;
+  sm2Interval?: number | null;
+  sm2Repetition?: number | null;
+  sm2Efactor?: number | null;
 }
 
 export interface StreakInfo {

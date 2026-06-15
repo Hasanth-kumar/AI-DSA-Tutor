@@ -27,10 +27,10 @@ export type {
 export { MISTAKE_TAGS, MISTAKE_TAG_LABELS } from "./types.js";
 export { MISTAKE_TAG_ADVICE } from "./weakness-engine/signals.js";
 
-export { DEFAULT_WEIGHTS, computePriorityScore } from "./topic-priority-engine/scoring.js";
+export { DEFAULT_WEIGHTS, computePriorityScore, isMemoryExecutionDivergent } from "./topic-priority-engine/scoring.js";
 export { explainPriorityScore } from "./topic-priority-engine/explain.js";
 export { TopicPriorityEngine } from "./topic-priority-engine/TopicPriorityEngine.js";
-export { sm2Update, topicToSM2Quality } from "./revision-engine/sm2.js";
+export { sm2Update, readSM2State, topicToSM2Quality } from "./revision-engine/sm2.js";
 export { RevisionEngine } from "./revision-engine/RevisionEngine.js";
 export { WeaknessEngine } from "./weakness-engine/WeaknessEngine.js";
 export { DifficultyEngine } from "./difficulty-engine/DifficultyEngine.js";
@@ -46,6 +46,14 @@ export {
   createIntelligenceOrchestrator,
   IntelligenceOrchestrator,
 } from "./orchestrator/IntelligenceOrchestrator.js";
+
+export {
+  gradeWarmup,
+  initWarmupQueue,
+  warmupAverageQuality,
+  type WarmupQueueOptions,
+  type WarmupQueueState,
+} from "./warmup/warmupQueue.js";
 
 export {
   DEFAULT_CURRICULUM_TOPICS,
