@@ -13,7 +13,6 @@ import type {
   WarmupQuestionContext,
 } from "../prompts/types.js";
 import type { LLMClient } from "./LLMClient.js";
-import { createOllamaClient } from "./OllamaClient.js";
 import { createOpenRouterClient } from "./OpenRouterClient.js";
 
 export interface ChatHistoryMessage {
@@ -21,14 +20,10 @@ export interface ChatHistoryMessage {
   content: string;
 }
 
-export type LLMProvider = "ollama" | "openrouter";
-
 export interface LLMServiceConfig {
-  provider: LLMProvider;
   model: string;
   timeoutMs?: number;
-  ollama?: { baseUrl: string };
-  openrouter?: {
+  openrouter: {
     apiKey: string;
     baseUrl?: string;
     siteUrl?: string;
@@ -38,26 +33,18 @@ export interface LLMServiceConfig {
 
 export class LLMService {
   private readonly client: LLMClient;
-  private readonly provider: LLMProvider;
 
   constructor(config: LLMServiceConfig, client?: LLMClient) {
-    this.provider = config.provider;
     this.client =
       client ??
-      (config.provider === "openrouter"
-        ? createOpenRouterClient({
-            apiKey: config.openrouter?.apiKey ?? "",
-            model: config.model,
-            baseUrl: config.openrouter?.baseUrl,
-            siteUrl: config.openrouter?.siteUrl,
-            siteName: config.openrouter?.siteName,
-            timeoutMs: config.timeoutMs,
-          })
-        : createOllamaClient({
-            baseUrl: config.ollama?.baseUrl ?? "http://localhost:11434",
-            model: config.model,
-            timeoutMs: config.timeoutMs,
-          }));
+      createOpenRouterClient({
+        apiKey: config.openrouter.apiKey,
+        model: config.model,
+        baseUrl: config.openrouter.baseUrl,
+        siteUrl: config.openrouter.siteUrl,
+        siteName: config.openrouter.siteName,
+        timeoutMs: config.timeoutMs,
+      });
   }
 
   isConfigured(): boolean {
@@ -69,11 +56,11 @@ export class LLMService {
     try {
       const text = await this.client.generate(prompt);
       if (!text) {
-        return fallbackHint(ctx, this.provider);
+        return fallbackHint(ctx);
       }
       return `💡 Hint for ${ctx.problemName}\n\n${text}`;
     } catch {
-      return fallbackHint(ctx, this.provider);
+      return fallbackHint(ctx);
     }
   }
 
@@ -125,7 +112,7 @@ export class LLMService {
     options: ChatCoachOptions = {},
   ): Promise<string> {
     if (!this.isConfigured()) {
-      return fallbackChatReply(this.provider);
+      return fallbackChatReply();
     }
 
     const messages = this.buildChatMessages(learningContext, history, userMessage, options);
@@ -150,7 +137,7 @@ export class LLMService {
     signal?: AbortSignal,
   ): AsyncGenerator<string> {
     if (!this.isConfigured()) {
-      yield fallbackChatReply(this.provider);
+      yield fallbackChatReply();
       return;
     }
 
@@ -205,7 +192,7 @@ function parseQuestionArray(text: string | null, expected: number): string[] | n
   }
 }
 
-function fallbackHint(ctx: HintContext, provider: LLMProvider): string {
+function fallbackHint(ctx: HintContext): string {
   const depth =
     ctx.difficulty === "Easy"
       ? "Start with a brute-force approach and look for repeated work."
@@ -213,25 +200,13 @@ function fallbackHint(ctx: HintContext, provider: LLMProvider): string {
         ? "Identify the pattern, then optimize time or space."
         : "Break into subproblems; verify invariants before coding.";
 
-  const providerNote =
-    provider === "openrouter"
-      ? "LLM unavailable (check OpenRouter API key)."
-      : "Hint unavailable (is Ollama running?).";
-
-  return `💡 ${providerNote}\n\nFor ${ctx.problemName} (${ctx.difficulty}): focus on ${ctx.topicName}. ${depth}`;
+  return `💡 LLM unavailable (check OpenRouter API key).\n\nFor ${ctx.problemName} (${ctx.difficulty}): focus on ${ctx.topicName}. ${depth}`;
 }
 
-function fallbackChatReply(provider: LLMProvider): string {
-  if (provider === "openrouter") {
-    return (
-      "Coach is unavailable right now. Check your OpenRouter API key (`OPENROUTER_API_KEY`) " +
-      "and model (`OPENROUTER_MODEL`, e.g. `google/gemma-4-31b-it:free`)."
-    );
-  }
-
+function fallbackChatReply(): string {
   return (
-    "Coach is unavailable right now. Ensure Ollama is running (`pnpm docker:up`) " +
-    "and your model is pulled (e.g. `ollama pull qwen2.5-coder:3b`)."
+    "Coach is unavailable right now. Check your OpenRouter coach key (`OPENROUTER_COACH_API_KEY` " +
+    "or `OPENROUTER_API_KEY`) and model (`COACH_LLM_MODEL`, e.g. `deepseek/deepseek-r1:free`)."
   );
 }
 

@@ -37,7 +37,6 @@ export { syncNotionToSqlite, getMirrorCounts, type SyncResult } from "./sqlite/s
 export { createSqliteDb, runMigrations } from "./sqlite/client.js";
 export type { SqliteDb } from "./sqlite/client.js";
 export type { LLMChatMessage, LLMClient } from "./llm/LLMClient.js";
-export { OllamaClient, createOllamaClient, type OllamaConfig } from "./llm/OllamaClient.js";
 export {
   OpenRouterClient,
   createOpenRouterClient,
@@ -47,7 +46,6 @@ export {
   LLMService,
   createLLMService,
   type LLMServiceConfig,
-  type LLMProvider,
 } from "./llm/LLMService.js";
 export type {
   ChatCoachOptions,
