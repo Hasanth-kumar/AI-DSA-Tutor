@@ -21,6 +21,16 @@ import type { ProblemRow } from "../repositories/ProblemRepository.js";
 
 const LAST_SYNC_KEY = "last_sync_at";
 
+/** Per-push cap so a slow/unreachable Notion can never hang a shutdown flush. */
+const PUSH_TIMEOUT_MS = 4000;
+
+/** Outcome of a push-only flush — counts for logging by callers/scripts. */
+export interface FlushResult {
+  pushedTopics: number;
+  pushedProblems: number;
+  failed: number;
+}
+
 export interface TopicSyncSnapshot {
   confidence: number;
   revisionCount: number;
@@ -115,32 +125,8 @@ export class NotionSyncService {
     // record's fields disagree with what Notion held, record both versions.
     this.detectConflicts(pendingTopics, pendingProblems);
 
-    let replayedTopics = 0;
-    let replayedProblems = 0;
-
-    await this.mirrorCache.batchAsync(async () => {
-      for (const pending of pendingTopics) {
-        this.topicRepo.applyPendingFields(pending.id, pending.fields);
-        try {
-          await this.pushTopicToNotion(pending.id);
-          replayedTopics += 1;
-        } catch {
-          continue;
-        }
-        this.syncMeta.clearTopic(pending.id);
-      }
-
-      for (const pending of pendingProblems) {
-        this.problemRepo.update(pending.id, pending.fields);
-        try {
-          await this.pushProblemToNotion(pending.id);
-          replayedProblems += 1;
-        } catch {
-          continue;
-        }
-        this.syncMeta.clearProblem(pending.id);
-      }
-    });
+    const { pushedTopics: replayedTopics, pushedProblems: replayedProblems } =
+      await this.replayPending(pendingTopics, pendingProblems);
 
     this.mirrorCache.invalidate();
 
@@ -155,6 +141,75 @@ export class NotionSyncService {
       replayedProblems,
       notionColumnsCreated,
     };
+  }
+
+  /**
+   * Drain the pending push queue to Notion **without pulling**. Safe to call on
+   * shutdown / app-close: each push is time-bounded, and any failure stays
+   * queued (exactly like the best-effort session push) to replay on next sync.
+   * Pull deliberately stays on the startup path — a last-second pull here could
+   * overwrite freshly-edited local rows with stale Notion values.
+   */
+  async flushPendingToNotion(): Promise<FlushResult> {
+    if (!this.isConfigured()) {
+      return { pushedTopics: 0, pushedProblems: 0, failed: 0 };
+    }
+
+    const pendingTopics = this.syncMeta.getPendingTopics();
+    const pendingProblems = this.syncMeta.getPendingProblems();
+    if (pendingTopics.length === 0 && pendingProblems.length === 0) {
+      return { pushedTopics: 0, pushedProblems: 0, failed: 0 };
+    }
+
+    const result = await this.replayPending(pendingTopics, pendingProblems, {
+      timeoutMs: PUSH_TIMEOUT_MS,
+    });
+    this.mirrorCache.invalidate();
+    return result;
+  }
+
+  /**
+   * Replay queued local mutations to Notion. Re-applies each pending snapshot
+   * locally (a preceding pull may have overwritten it) then pushes; clears the
+   * queue entry only on success so failures replay next time. Shared by the
+   * pull replay loop and the push-only shutdown flush.
+   */
+  private async replayPending(
+    pendingTopics: ReturnType<SyncMetaRepository["getPendingTopics"]>,
+    pendingProblems: ReturnType<SyncMetaRepository["getPendingProblems"]>,
+    options: { timeoutMs?: number } = {},
+  ): Promise<FlushResult> {
+    let pushedTopics = 0;
+    let pushedProblems = 0;
+    let failed = 0;
+
+    await this.mirrorCache.batchAsync(async () => {
+      for (const pending of pendingTopics) {
+        this.topicRepo.applyPendingFields(pending.id, pending.fields);
+        try {
+          await withTimeout(this.pushTopicToNotion(pending.id), options.timeoutMs);
+        } catch {
+          failed += 1;
+          continue;
+        }
+        this.syncMeta.clearTopic(pending.id);
+        pushedTopics += 1;
+      }
+
+      for (const pending of pendingProblems) {
+        this.problemRepo.update(pending.id, pending.fields);
+        try {
+          await withTimeout(this.pushProblemToNotion(pending.id), options.timeoutMs);
+        } catch {
+          failed += 1;
+          continue;
+        }
+        this.syncMeta.clearProblem(pending.id);
+        pushedProblems += 1;
+      }
+    });
+
+    return { pushedTopics, pushedProblems, failed };
   }
 
   private detectConflicts(
@@ -335,6 +390,24 @@ export class NotionSyncService {
   async sync(): Promise<SyncStatus> {
     const result = await this.pullFromNotion();
     return { ...result, direction: "bidirectional" };
+  }
+}
+
+/**
+ * Resolve with the promise, or reject once `timeoutMs` elapses. A `timeoutMs`
+ * of `undefined` means "no cap" (used by the pull replay, which already runs
+ * under the sync request's own lifetime).
+ */
+async function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): Promise<T> {
+  if (!timeoutMs) return promise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Notion push timed out")), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

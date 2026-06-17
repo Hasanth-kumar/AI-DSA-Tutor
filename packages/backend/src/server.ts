@@ -28,7 +28,28 @@ async function main() {
   // Nightly SQLite backup with rotation (5.1).
   ctx.backupService.start((err) => app.log.warn({ err }, "SQLite backup failed"));
 
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    // Hard backstop: always exit even if a flush/close hangs past its own caps.
+    const deadline = setTimeout(() => process.exit(0), 8000);
+    deadline.unref();
+
+    // Flush pending local edits to Notion before closing the SQLite handle.
+    // Push-only (never pulls); failures stay queued and replay on next sync.
+    if (ctx.notionSync.isConfigured()) {
+      try {
+        const flushed = await ctx.notionSync.flushPendingToNotion();
+        app.log.info(
+          `Shutdown flush: pushed ${flushed.pushedTopics} topics / ${flushed.pushedProblems} problems, ${flushed.failed} queued for next sync`,
+        );
+      } catch (err) {
+        app.log.warn({ err }, "Shutdown flush failed — pending edits replay on next sync");
+      }
+    }
+
     await schedulers.close();
     await ctx.close();
     await app.close();

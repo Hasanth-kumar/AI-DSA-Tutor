@@ -23,6 +23,21 @@ export async function syncRoutes(app: FastifyInstance, ctx: AppContext): Promise
     }
   });
 
+  app.post("/sync/flush", async (request, reply) => {
+    if (!ctx.notionSync.isConfigured()) {
+      return reply.status(503).send({ error: "Notion is not configured" });
+    }
+    try {
+      const result = await ctx.notionSync.flushPendingToNotion();
+      return reply.send(result);
+    } catch (err) {
+      request.log.error(err);
+      return reply.status(502).send({
+        error: err instanceof Error ? err.message : "Flush failed",
+      });
+    }
+  });
+
   app.get("/sync/status", async (_request, reply) => {
     return reply.send(ctx.notionSync.getSyncHealth());
   });
