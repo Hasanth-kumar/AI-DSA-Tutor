@@ -8,8 +8,15 @@ API_URL="${API_URL:-http://localhost:3000}"
 
 echo "■ DSA Mastery OS — stopping"
 
-# 1. Backup SQLite while the API is still up (5.1)
+# 1. Flush + backup while the API is still up (order: flush → backup → kill).
 if curl -sf "$API_URL/health/live" >/dev/null 2>&1; then
+  # Flush pending local edits to Notion (push-only; queued on failure).
+  # The SIGTERM handler is the safety net if this curl is skipped.
+  echo "  • Flushing pending edits to Notion…"
+  curl -sf -X POST "$API_URL/api/sync/flush" >/dev/null 2>&1 \
+    && echo "  ✓ Flushed to Notion" \
+    || echo "  ⚠ Flush skipped (replays on next sync)"
+
   echo "  • Backing up SQLite…"
   curl -sf -X POST "$API_URL/api/backup" >/dev/null 2>&1 \
     && echo "  ✓ Backup written" \
