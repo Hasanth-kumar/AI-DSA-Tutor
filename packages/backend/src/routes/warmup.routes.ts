@@ -25,6 +25,25 @@ export async function warmupRoutes(
     },
   );
 
+  /** Factual model answer for one warm-up question (on Show Answer). */
+  app.post<{ Body: { topicId?: string; question?: string } }>(
+    "/warmup/answer",
+    async (request, reply) => {
+      const { topicId, question } = request.body ?? {};
+      if (!topicId || !question?.trim()) {
+        return reply.status(400).send({ error: "topicId and question are required" });
+      }
+      try {
+        const result = await ctx.warmupService.revealAnswer(topicId, question);
+        return reply.send(serializeForJson(result));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Answer failed";
+        const status = message.includes("not found") ? 404 : 500;
+        return reply.status(status).send({ error: message });
+      }
+    },
+  );
+
   /** Self-grade (0–5) → SM-2 quality, applied directly to the topic. */
   app.post<{ Body: { topicId?: string; quality?: number } }>(
     "/warmup/grade",

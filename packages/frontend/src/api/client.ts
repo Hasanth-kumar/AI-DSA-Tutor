@@ -22,6 +22,7 @@ import type {
   SyncConflict,
   SyncStatusInfo,
   Topic,
+  WarmupAnswer,
   WarmupQuestions,
   WeaknessEvidence,
   WeaknessTrendPoint,
@@ -251,6 +252,12 @@ export const api = {
 
   getWarmupQuestions: (topicId: string) =>
     request<WarmupQuestions>(`/api/warmup?topicId=${encodeURIComponent(topicId)}`),
+
+  revealWarmupAnswer: (topicId: string, question: string) =>
+    request<WarmupAnswer>("/api/warmup/answer", {
+      method: "POST",
+      body: JSON.stringify({ topicId, question }),
+    }),
 
   gradeWarmup: (topicId: string, quality: number) =>
     request<RecallGradeResult>("/api/warmup/grade", {

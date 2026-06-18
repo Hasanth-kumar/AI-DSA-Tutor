@@ -3,6 +3,8 @@ import {
   gradeWarmup,
   initWarmupQueue,
   warmupAverageQuality,
+  formatWarmupAnswer,
+  isWalkthroughWarmupAnswer,
   type WarmupQueueState,
 } from "@dsa/intelligence";
 import { api } from "../api/client.js";
@@ -19,6 +21,16 @@ interface Props {
   firstProblemUrl?: string | null;
   /** Called when the warm-up finishes or is skipped. */
   onComplete: (graded: boolean) => void;
+}
+
+function isUsableWarmupAnswer(answer?: string): boolean {
+  const trimmed = answer?.trim() ?? "";
+  if (!trimmed) return false;
+  if (/^(state|name|identify|compare|explain|describe|list|recall)\b/i.test(trimmed)) {
+    return false;
+  }
+  if (isWalkthroughWarmupAnswer(trimmed)) return false;
+  return formatWarmupAnswer(trimmed).length > 0;
 }
 
 /** Self-grade options mapped to SM-2 quality (0–5). */
@@ -50,6 +62,13 @@ export function WarmupCard({
   const [queue, setQueue] = useState<WarmupQueueState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [answerVisible, setAnswerVisible] = useState(false);
+  const [revealedAnswers, setRevealedAnswers] = useState<Record<number, string>>({});
+  const [answerUnavailable, setAnswerUnavailable] = useState<
+    Record<number, "coach_offline" | "generation_failed">
+  >({});
+  const [answerLoading, setAnswerLoading] = useState(false);
+  const [answerError, setAnswerError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +89,56 @@ export function WarmupCard({
       cancelled = true;
     };
   }, [topicId]);
+
+  useEffect(() => {
+    setAnswerVisible(false);
+    setAnswerError(null);
+  }, [queue?.currentIndex]);
+
+  const showAnswer = async (questionIndex: number, question: string, preloaded?: string) => {
+    const existing = revealedAnswers[questionIndex];
+    if (existing && formatWarmupAnswer(existing)) {
+      setAnswerVisible(true);
+      return;
+    }
+
+    const cached = preloaded?.trim() ?? "";
+    if (isUsableWarmupAnswer(cached)) {
+      setRevealedAnswers((prev) => ({ ...prev, [questionIndex]: formatWarmupAnswer(cached) }));
+      setAnswerUnavailable((prev) => {
+        const next = { ...prev };
+        delete next[questionIndex];
+        return next;
+      });
+      setAnswerVisible(true);
+      return;
+    }
+
+    setAnswerLoading(true);
+    setAnswerError(null);
+    try {
+      const res = await api.revealWarmupAnswer(topicId, question);
+      const answer = formatWarmupAnswer(res.answer);
+      if (answer) {
+        setRevealedAnswers((prev) => ({ ...prev, [questionIndex]: answer }));
+        setAnswerUnavailable((prev) => {
+          const next = { ...prev };
+          delete next[questionIndex];
+          return next;
+        });
+      } else {
+        setAnswerUnavailable((prev) => ({
+          ...prev,
+          [questionIndex]: res.unavailableReason ?? "generation_failed",
+        }));
+      }
+      setAnswerVisible(true);
+    } catch (err) {
+      setAnswerError(err instanceof Error ? err.message : "Failed to load answer");
+    } finally {
+      setAnswerLoading(false);
+    }
+  };
 
   const finish = async (finalQueue: WarmupQueueState) => {
     setSubmitting(true);
@@ -134,6 +203,14 @@ export function WarmupCard({
   }
 
   const questionIndex = queue.currentIndex;
+  const currentQuestion = data.questions[questionIndex];
+  const displayedAnswer = revealedAnswers[questionIndex];
+  const formattedAnswer = formatWarmupAnswer(displayedAnswer ?? "");
+  const unavailableReason = answerUnavailable[questionIndex];
+  const answerHint =
+    unavailableReason === "coach_offline"
+      ? "Coach isn’t connected — add your OpenRouter API key to see model answers."
+      : "Couldn’t generate a concise answer — grade your recall from memory.";
 
   return (
     <div className="warmup-card card">
@@ -145,10 +222,34 @@ export function WarmupCard({
         </span>
       </div>
 
-      <p className="warmup-question">{data.questions[questionIndex]}</p>
+      <p className="warmup-question">{currentQuestion.question}</p>
       <p className="muted text-xs mt-0 mb-3">
         Answer out loud or in your head, then grade your recall.
       </p>
+
+      {!answerVisible ? (
+        <button
+          type="button"
+          className="btn btn-ghost warmup-show-answer-btn"
+          disabled={submitting || answerLoading}
+          onClick={() => void showAnswer(questionIndex, currentQuestion.question, currentQuestion.answer)}
+        >
+          {answerLoading ? "Loading answer…" : "Show Answer"}
+        </button>
+      ) : (
+        <div className="warmup-answer">
+          <span className="warmup-answer-label">Answer</span>
+          {formattedAnswer ? (
+            <p className="warmup-answer-text">{formattedAnswer}</p>
+          ) : (
+            <p className="warmup-answer-text warmup-answer-text--empty">{answerHint}</p>
+          )}
+        </div>
+      )}
+
+      {answerError ? (
+        <p className="error-banner warmup-answer-error">{answerError}</p>
+      ) : null}
 
       <div className="warmup-grades">
         {GRADES.map((g) => (

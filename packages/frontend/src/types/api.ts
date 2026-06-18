@@ -120,10 +120,20 @@ export interface ProblemNote {
   updatedAt: string;
 }
 
+export interface WarmupAnswer {
+  answer: string;
+  unavailableReason?: "coach_offline" | "generation_failed";
+}
+
+export interface WarmupQuestion {
+  question: string;
+  answer: string;
+}
+
 export interface WarmupQuestions {
   topicId: string;
   topicName: string;
-  questions: string[];
+  questions: WarmupQuestion[];
   source: "notes" | "generic" | "fallback";
 }
 

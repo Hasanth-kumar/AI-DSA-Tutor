@@ -3399,6 +3399,64 @@ button:focus-visible,
   font-size: 1.02rem;
   margin: 0 0 0.35rem;
 }
+.warmup-show-answer-btn {
+  margin-bottom: 0.75rem;
+}
+.warmup-answer {
+  margin: 0.15rem 0 0.85rem;
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--border-soft);
+  background: transparent;
+}
+.warmup-answer-label {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  color: var(--text-subtle);
+  margin-bottom: 0.45rem;
+}
+.warmup-answer-label::after {
+  content: "";
+  display: block;
+  width: 1.75rem;
+  height: 1px;
+  margin-top: 0.4rem;
+  background: linear-gradient(
+    90deg,
+    rgba(201, 184, 150, 0.55),
+    rgba(201, 184, 150, 0.08)
+  );
+}
+.warmup-answer-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  font-weight: 400;
+  line-height: 1.62;
+  color: var(--text);
+  letter-spacing: -0.012em;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.warmup-answer-text--empty {
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-style: normal;
+  color: var(--text-muted);
+  -webkit-line-clamp: unset;
+  display: block;
+}
+.warmup-answer-error {
+  margin: 0 0 0.75rem;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.82rem;
+}
 .warmup-grades {
   display: flex;
   gap: 0.45rem;
