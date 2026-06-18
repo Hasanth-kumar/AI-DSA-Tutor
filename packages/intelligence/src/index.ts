@@ -58,6 +58,7 @@ export {
   type WarmupQueueOptions,
   type WarmupQueueState,
 } from "./warmup/warmupQueue.js";
+export { formatWarmupAnswer, isUnavailableWarmupAnswer, isWalkthroughWarmupAnswer } from "./warmup/formatAnswer.js";
 
 export {
   DEFAULT_CURRICULUM_TOPICS,
