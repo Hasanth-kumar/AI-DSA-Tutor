@@ -59,7 +59,11 @@ export { buildDebriefPrompt } from "./prompts/debrief.prompt.js";
 export { buildChatSystemPrompt } from "./prompts/chat.prompt.js";
 export {
   buildWarmupPrompt,
+  buildWarmupAnswerPrompt,
+  buildWarmupAnswerRetryPrompt,
   fallbackWarmupQuestions,
+  isWeakWarmupAnswer,
+  type WarmupItem,
 } from "./prompts/warmup.prompt.js";
 export {
   ObsidianVault,
