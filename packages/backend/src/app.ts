@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
 import Fastify from "fastify";
 import type { AppConfig } from "@dsa/shared";
 import type { AppContext } from "./context.js";
@@ -38,7 +40,19 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
-  app.get("/", async () => ({
+  // Production: this same process serves the built frontend (one Node server
+  // instead of the Vite + tsx dev servers). Off if the build is missing.
+  const serveFrontend =
+    config.web.serveFrontend && existsSync(config.web.frontendDist);
+  if (config.web.serveFrontend && !serveFrontend) {
+    app.log.warn(
+      `SERVE_FRONTEND is on but ${config.web.frontendDist} is missing — run \`pnpm build\`. Serving API only.`,
+    );
+  }
+
+  // Root: API index in dev; the SPA owns "/" when the frontend is served.
+  if (!serveFrontend)
+    app.get("/", async () => ({
     name: "DSA Mastery OS API",
     version: "0.2.0",
     health: "/health",
@@ -78,6 +92,7 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       },
       warmup: {
         questions: "GET /api/warmup?topicId=<id>",
+        answer: "POST /api/warmup/answer",
         grade: "POST /api/warmup/grade",
       },
       attempts: "PATCH /api/attempts/:id/mistake",
@@ -92,6 +107,7 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
         githubSync: "POST /api/sync/github",
       },
       sync: "POST /api/sync",
+      syncFlush: "POST /api/sync/flush",
       notifications: {
         dailyPlan: "POST /api/notifications/daily-plan",
         revisionCheck: "POST /api/notifications/revision-check",
@@ -131,6 +147,29 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
   app.register(async (instance) => {
     await whatsappWebhookRoutes(instance, ctx);
   }, { prefix: "/webhooks" });
+
+  // Serve the built SPA from this process. The frontend talks to /api on the
+  // same origin (no CORS hop), so this is all it takes.
+  if (serveFrontend) {
+    void app.register(fastifyStatic, {
+      root: config.web.frontendDist,
+      wildcard: false,
+    });
+    // SPA fallback: a browser navigation that isn't a real file or an
+    // API/health/webhook route gets index.html; API misses stay JSON 404s.
+    app.setNotFoundHandler((request, reply) => {
+      const path = request.url.split("?")[0] ?? "/";
+      if (
+        request.method === "GET" &&
+        !path.startsWith("/api") &&
+        !path.startsWith("/health") &&
+        !path.startsWith("/webhooks")
+      ) {
+        return reply.sendFile("index.html");
+      }
+      return reply.code(404).send({ error: "Not Found", path });
+    });
+  }
 
   return app;
 }
