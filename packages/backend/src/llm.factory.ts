@@ -17,6 +17,23 @@ export function createAppLLMService(config: AppConfig): LLMService {
   return createLLMService(toLLMServiceConfig(config));
 }
 
+export function toWarmupLLMServiceConfig(config: AppConfig): LLMServiceConfig {
+  return {
+    model: config.warmupLlm.model,
+    openrouter: {
+      apiKey: config.warmupLlm.openrouter.apiKey ?? "",
+      baseUrl: config.warmupLlm.openrouter.baseUrl,
+      siteUrl: config.warmupLlm.openrouter.siteUrl,
+      siteName: config.warmupLlm.openrouter.siteName,
+    },
+  };
+}
+
+/** Warm-up quiz LLM — honors WARMUP_LLM_MODEL. */
+export function createWarmupLLMService(config: AppConfig): LLMService {
+  return createLLMService(toWarmupLLMServiceConfig(config));
+}
+
 /** Coaching/hint/debrief LLM — honors COACH_LLM_MODEL for a stronger coach model. */
 export function toCoachLLMServiceConfig(config: AppConfig): LLMServiceConfig {
   return {

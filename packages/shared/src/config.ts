@@ -22,12 +22,17 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
+  /** Serve the built frontend (packages/frontend/dist) from the API process.
+   *  Unset → defaults on when NODE_ENV=production, off otherwise. */
+  SERVE_FRONTEND: z.enum(["true", "false"]).optional(),
   NOTION_TOKEN: z.string().optional(),
   NOTION_TOPICS_DB_ID: z.string().optional(),
   NOTION_PROBLEMS_DB_ID: z.string().optional(),
   NOTION_SESSIONS_DB_ID: z.string().optional(),
   /** Model override for the coach (defaults to OPENROUTER_MODEL). */
   COACH_LLM_MODEL: z.string().optional(),
+  /** Model for warm-up quizzes (defaults to OPENROUTER_MODEL). */
+  WARMUP_LLM_MODEL: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   /** Separate OpenRouter key for coach paths (falls back to OPENROUTER_API_KEY). */
   OPENROUTER_COACH_API_KEY: z.string().optional(),
@@ -85,6 +90,12 @@ export type AppConfig = {
   nodeEnv: string;
   port: number;
   logLevel: string;
+  web: {
+    /** Whether this process serves the built frontend at "/". */
+    serveFrontend: boolean;
+    /** Absolute path to packages/frontend/dist. */
+    frontendDist: string;
+  };
   notion: {
     token?: string;
     topicsDbId?: string;
@@ -92,6 +103,16 @@ export type AppConfig = {
     sessionsDbId?: string;
   };
   llm: {
+    model: string;
+    openrouter: {
+      apiKey?: string;
+      baseUrl: string;
+      siteUrl: string;
+      siteName: string;
+    };
+  };
+  /** Warm-up quiz LLM — may use a lighter/faster model than the coach. */
+  warmupLlm: {
     model: string;
     openrouter: {
       apiKey?: string;
@@ -158,10 +179,17 @@ export function loadConfig(envPath?: string): AppConfig {
     ? env.SQLITE_PATH
     : resolve(repoRoot, env.SQLITE_PATH);
 
+  const frontendDist = resolve(repoRoot, "packages/frontend/dist");
+  const serveFrontend =
+    env.SERVE_FRONTEND !== undefined
+      ? env.SERVE_FRONTEND === "true"
+      : env.NODE_ENV === "production";
+
   cached = {
     nodeEnv: env.NODE_ENV,
     port: env.PORT,
     logLevel: env.LOG_LEVEL,
+    web: { serveFrontend, frontendDist },
     notion: {
       token: env.NOTION_TOKEN,
       topicsDbId: env.NOTION_TOPICS_DB_ID,
@@ -172,6 +200,15 @@ export function loadConfig(envPath?: string): AppConfig {
       model: env.OPENROUTER_MODEL,
       openrouter: {
         apiKey: env.OPENROUTER_API_KEY,
+        baseUrl: env.OPENROUTER_BASE_URL,
+        siteUrl: env.OPENROUTER_SITE_URL,
+        siteName: env.OPENROUTER_SITE_NAME,
+      },
+    },
+    warmupLlm: {
+      model: env.WARMUP_LLM_MODEL ?? env.OPENROUTER_MODEL,
+      openrouter: {
+        apiKey: coachOpenRouterKey(env),
         baseUrl: env.OPENROUTER_BASE_URL,
         siteUrl: env.OPENROUTER_SITE_URL,
         siteName: env.OPENROUTER_SITE_NAME,
@@ -229,12 +266,16 @@ export function loadConfig(envPath?: string): AppConfig {
 
 type ParsedEnv = z.infer<typeof envSchema>;
 
+function coachOpenRouterKey(env: ParsedEnv): string | undefined {
+  return env.OPENROUTER_COACH_API_KEY ?? env.OPENROUTER_API_KEY;
+}
+
 /**
  * The coach can use a stronger model than the general LLM via COACH_LLM_MODEL.
  */
 function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
   const model = env.COACH_LLM_MODEL ?? env.OPENROUTER_MODEL;
-  const apiKey = env.OPENROUTER_COACH_API_KEY ?? env.OPENROUTER_API_KEY;
+  const apiKey = coachOpenRouterKey(env);
   const models = buildCoachModels(env, { model, apiKey });
 
   return {
@@ -278,7 +319,13 @@ function buildCoachModels(
   };
 
   add(coach);
-  if (coach.model !== env.OPENROUTER_MODEL) {
+  if (env.WARMUP_LLM_MODEL && env.WARMUP_LLM_MODEL !== coach.model) {
+    add({ model: env.WARMUP_LLM_MODEL, apiKey: coachOpenRouterKey(env) });
+  }
+  if (
+    env.OPENROUTER_MODEL !== coach.model &&
+    env.OPENROUTER_MODEL !== env.WARMUP_LLM_MODEL
+  ) {
     add({ model: env.OPENROUTER_MODEL, apiKey: env.OPENROUTER_API_KEY });
   }
 

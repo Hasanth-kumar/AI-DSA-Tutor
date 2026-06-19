@@ -5,7 +5,7 @@ import {
 import { createSqliteDb, runMigrations } from "@dsa/integrations";
 import type { LLMService } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
-import { createAppLLMService } from "./llm.factory.js";
+import { createAppLLMService, createCoachLLMService, createWarmupLLMService } from "./llm.factory.js";
 import { TopicRepository } from "./repositories/TopicRepository.js";
 import { AttemptRepository } from "./repositories/AttemptRepository.js";
 import { ConflictRepository } from "./repositories/ConflictRepository.js";
@@ -122,7 +122,7 @@ export function createAppContext(
     problemRepo,
   );
   // Coaching paths (debrief/hint/chat) build their own LLM from coachLlm config (3.3).
-  const coachLlm = options.coachLlm;
+  const coachLlm = options.coachLlm ?? createCoachLLMService(config);
   const debriefService = new DebriefService(
     config,
     intelligence,
@@ -150,7 +150,7 @@ export function createAppContext(
     topicRepo,
     sessionService,
     noteRepo,
-    coachLlm,
+    [createWarmupLLMService(config), coachLlm, llm],
   );
   const leetcodeService = new LeetCodeService(config, syncMetaRepo);
   const githubSync = new GitHubSyncService(config, problemRepo, mirrorCache);
