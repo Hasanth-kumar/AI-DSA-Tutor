@@ -106,3 +106,102 @@ export const chatMessages = sqliteTable("chat_messages", {
   content: text("content").notNull(),
   createdAt: integer("created_at").notNull(),
 });
+
+/**
+ * Flashcards (Rev 2). One row per card. Content fields (type/front/back, plus
+ * concept tags via `card_concepts`) are Notion-authoritative; the FSRS runtime
+ * state is local-authoritative and pushed to Notion as a write-only mirror
+ * (design §8). Per-card FSRS (§7) — NOT the legacy topic-level SM-2 on `topics`.
+ * Primary key is an app-generated UUID; `notion_page_id` is only a mapping.
+ */
+export const cards = sqliteTable("cards", {
+  id: text("id").primaryKey(),
+  topicId: text("topic_id").references(() => topics.id),
+  /** plain-recall | pattern-trigger | cloze | predict-complexity | predict-output | mistake-derived | confusion-pair */
+  type: text("type").notNull(),
+  front: text("front").notNull(),
+  back: text("back").notNull(),
+  noteRef: text("note_ref"),
+  suspended: integer("suspended").notNull().default(0),
+  leech: integer("leech").notNull().default(0),
+  // Per-card FSRS state (ts-fsrs Card shape).
+  stability: real("stability"),
+  difficulty: real("difficulty"),
+  due: integer("due"),
+  lastReview: integer("last_review"),
+  reps: integer("reps").notNull().default(0),
+  lapses: integer("lapses").notNull().default(0),
+  /** FSRS state enum: 0=New, 1=Learning, 2=Review, 3=Relearning. */
+  state: integer("state").notNull().default(0),
+  elapsedDays: integer("elapsed_days").notNull().default(0),
+  scheduledDays: integer("scheduled_days").notNull().default(0),
+  learningSteps: integer("learning_steps").notNull().default(0),
+  // Provenance (§8). generation_confidence / quality_score deliberately absent.
+  origin: text("origin").notNull().default("manual"),
+  sourceHash: text("source_hash"),
+  modelVersion: text("model_version"),
+  promptVersion: text("prompt_version"),
+  noteVersion: text("note_version"),
+  seedVersion: integer("seed_version"),
+  // Sync + generation-trigger bookkeeping.
+  notionPageId: text("notion_page_id"),
+  dirty: integer("dirty").notNull().default(1),
+  syncedAt: integer("synced_at"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+/**
+ * Normalized concept tagging (§4). The closed vocabulary lives in
+ * version-controlled concepts.yaml per topic; this junction only references
+ * existing concept ids. Coverage = distinct concept_id with >=1 card.
+ */
+export const cardConcepts = sqliteTable("card_concepts", {
+  cardId: text("card_id")
+    .notNull()
+    .references(() => cards.id),
+  conceptId: text("concept_id").notNull(),
+});
+
+/**
+ * Append-only event log alongside the mutable card rows (§9). NOT event
+ * sourcing — state is never rebuilt by replay. Types: CardReviewed,
+ * CardGenerated, CardEdited, CardSuspended, CardDeleted, CardMerged,
+ * LeechDetected.
+ */
+export const cardEvents = sqliteTable("card_events", {
+  id: text("id").primaryKey(),
+  cardId: text("card_id").notNull(),
+  type: text("type").notNull(),
+  /** JSON payload: rating, response_ms, prev/next FSRS state, etc. */
+  payload: text("payload"),
+  createdAt: integer("created_at").notNull(),
+});
+
+/** Closed card-type vocabulary (§3). Generation may use these types only. */
+export const CARD_TYPES = [
+  "plain-recall",
+  "pattern-trigger",
+  "cloze",
+  "predict-complexity",
+  "predict-output",
+  "mistake-derived",
+  "confusion-pair",
+] as const;
+export type CardType = (typeof CARD_TYPES)[number];
+
+/** Card origin — how the card entered the bank (provenance, §8). */
+export const CARD_ORIGINS = ["seed", "generated", "manual"] as const;
+export type CardOrigin = (typeof CARD_ORIGINS)[number];
+
+/** Append-only event-log types (§9). */
+export const CARD_EVENT_TYPES = [
+  "CardReviewed",
+  "CardGenerated",
+  "CardEdited",
+  "CardSuspended",
+  "CardDeleted",
+  "CardMerged",
+  "LeechDetected",
+] as const;
+export type CardEventType = (typeof CARD_EVENT_TYPES)[number];

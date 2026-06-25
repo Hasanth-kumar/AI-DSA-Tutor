@@ -33,7 +33,7 @@
 - [ ] **Predict-the-complexity / predict-the-output** card type supported.
 - [ ] **Mistake-derived** cards generated from the `## Mistakes` section of a note.
 - [ ] **Confusion-pair** discrimination cards supported, sourced via the embedding store.
-- [ ] **Card type is a stored attribute** so generation/sampling/analytics can distinguish them.
+- [x] **Card type is a stored attribute** so generation/sampling/analytics can distinguish them.
 
 ## §4 Concept inventory (coverage + dedup backbone)
 
@@ -87,7 +87,7 @@
 - [ ] **Field ownership enforced — content fields (front, back, concept tags) are Notion-authoritative.**
 - [ ] **SR runtime state (stability, difficulty, due, reps, lapses, last_review) is local-authoritative**, pushed to Notion as a write-only mirror.
 - [ ] **Provenance stored per generated card:** `source_hash` + `model_version` + `prompt_version` (and `note_version` if notes go git-backed).
-- [ ] **`generation_confidence` and `quality_score` are NOT stored** — deferred, derivable from the event log later.
+- [x] **`generation_confidence` and `quality_score` are NOT stored** — deferred, derivable from the event log later.
 - [ ] **Code-heavy content lives in the card body / page blocks**, not Notion property fields (avoids length/formatting limits) — or such cards are kept local-authoritative.
 - [ ] **Primary key is an app-generated UUID**, stored as a Notion property — the app never keys on Notion's internal `page_id`.
 - [ ] **Sync pushes only dirty deltas** (tracked via `updated_at` + dirty flag); first upload may be a one-time batch.
@@ -98,9 +98,9 @@
 
 ## §9 Event log & analytics
 
-- [ ] **Append-only event log table exists alongside the mutable rows.**
+- [x] **Append-only event log table exists alongside the mutable rows.**
 - [ ] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`.
-- [ ] **State is NOT rebuilt by replaying events** — live SR/FSRS state stays in its own table (not event-sourced).
+- [x] **State is NOT rebuilt by replaying events** — live SR/FSRS state stays in its own table (not event-sourced).
 - [ ] **Analytics are computable on demand from the log** (coverage/retention trends, per-card quality, auto-retire candidates) without extra stored columns or history backfill.
 
 ## §10 Cost / longevity hedge
@@ -156,7 +156,7 @@
 
 > Confirms the build followed the intended sequence and each stage's artifact exists.
 
-- [ ] **1.** Card + concept-tag + per-card FSRS schema, provenance fields, and append-only event-log table exist as a migration in `database/migrations`.
+- [x] **1.** Card + concept-tag + per-card FSRS schema, provenance fields, and append-only event-log table exist as a migration in `database/migrations`.
 - [ ] **2.** `concepts.yaml` per topic (closed vocabulary + prerequisite edges) and seed cards for the first few topics exist in `database/seeds`.
 - [ ] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
 - [ ] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
