@@ -8,6 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { BrandLogoMark } from "./components/BrandLogo.js";
 import { SkeletonPage } from "./components/Skeleton.js";
 import { useLiveEvents } from "./hooks/useLiveEvents.js";
 
@@ -269,9 +270,7 @@ export function App() {
       }}
       onKeyDown={onBrandIconKeyDown}
     >
-      <svg viewBox="0 0 16 16">
-        <path d="M8 1L2 4.5v5L8 13l6-3.5v-5L8 1zm0 2.2l3.8 2.2L8 7.6 4.2 5.4 8 3.2zM3.5 6.8L7 8.7V11L3.5 9V6.8zm5 4.2V8.7l3.5-1.9V9L8.5 11z" />
-      </svg>
+      <BrandLogoMark />
     </div>
   );
 

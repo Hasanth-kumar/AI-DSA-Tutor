@@ -10,7 +10,7 @@ describe("loadConfig", () => {
     process.env.OPENROUTER_API_KEY = "main-key";
     process.env.OPENROUTER_COACH_API_KEY = "coach-key";
     process.env.OPENROUTER_MODEL = "google/gemma-4-31b-it:free";
-    process.env.WARMUP_LLM_MODEL = "qwen/qwen3-coder:free";
+    process.env.WARMUP_LLM_MODEL = "openai/gpt-oss-20b:free";
     process.env.COACH_LLM_MODEL = "openai/gpt-oss-120b:free";
     resetConfigCache();
 
@@ -23,7 +23,7 @@ describe("loadConfig", () => {
       routed.coachLlm.models.map((m) => [m.model, m.apiKey]),
     );
     expect(byModel["openai/gpt-oss-120b:free"]).toBe("coach-key");
-    expect(byModel["qwen/qwen3-coder:free"]).toBe("coach-key");
+    expect(byModel["openai/gpt-oss-20b:free"]).toBe("coach-key");
     expect(byModel["google/gemma-4-31b-it:free"]).toBe("main-key");
 
     delete process.env.OPENROUTER_API_KEY;

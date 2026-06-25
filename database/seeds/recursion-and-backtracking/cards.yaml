@@ -1,0 +1,176 @@
+# Curated baseline seed cards (10–15 per topic). Version-controlled; LLM tops up from notes.
+topic_id: fa29e7cd-c8e2-4e4c-81e6-8a19d6356c3a
+topic_name: Recursion & Backtracking
+seed_version: 1
+
+cards:
+  # --- From vault: BackTracking - Basic Stuff ---
+  - id: 7c3a1f20-8b4e-4d91-9f2a-1e0b5c6d7a81
+    type: plain-recall
+    concepts: [backtracking-blueprint]
+    note_ref: Topics/BackTracking/BackTracking - Basic Stuff.md
+    front: What are the three pillars of the backtracking framework?
+    back: |
+      **Goal** — when have we reached a complete valid solution?
+      **Choices** — what options can we try at this step?
+      **Constraints** — which choices are legal given the goal?
+
+  - id: a2f8c4d1-6e3b-4a90-b1c7-9d0e2f3a4b52
+    type: cloze
+    concepts: [state-copy-on-save, backtracking-blueprint]
+    note_ref: Topics/BackTracking/BackTracking - Basic Stuff.md
+    front: |
+      When recording a valid backtracking solution, why is this line required?
+      ```java
+      result.add(___);
+      ```
+    back: |
+      `new ArrayList<>(currentState)` — must **deep-copy** the path.
+      `currentState` is mutated in place; storing the reference would make every result entry point at the same (eventually empty) list.
+
+  # --- From vault: Subsets Problem ---
+  - id: b5e1d9c3-7f2a-4b81-9c0d-3e4f5a6b7c83
+    type: pattern-trigger
+    concepts: [start-index-subsets, choose-explore-unchoose]
+    note_ref: Topics/BackTracking/Subsets Problem.md
+    front: Distinct integers — return the power set (all subsets). What backtracking shape?
+    back: |
+      **Pattern:** start-index + choose / explore / unchoose.
+      Snapshot `currentState` at every node (`result.add(copy)`), then for `i` from `start`: add `nums[i]`, recurse with `i+1`, remove last.
+      **Time:** O(n · 2ⁿ).
+
+  - id: c8f2a6d4-1b3e-4c90-8d7a-5e6f7b8c9d04
+    type: confusion-pair
+    concepts: [choose-explore-unchoose, include-exclude-subsets]
+    note_ref: Topics/BackTracking/Subsets Problem.md
+    front: Subsets — how does the for-loop "choose-explore-unchoose" approach differ from include/exclude branching?
+    back: |
+      **Choose-explore-unchoose (for-loop):** ~2ⁿ recursive calls; typically faster in practice.
+      **Include/exclude (two recursive calls, no loop):** 2ⁿ⁺¹ − 1 calls.
+      Same output; the for-loop version is the usual interview default.
+
+  # --- From vault: Subsets II Problem ---
+  - id: d1a4e7b9-2c5f-4d83-9e1b-6a7c8d9e0f15
+    type: mistake-derived
+    concepts: [duplicate-skip-sorted]
+    note_ref: Topics/BackTracking/Subsets II Problem.md
+    front: Subsets II — you used `if (!result.contains(currState))` to drop duplicates. Why is that slow?
+    back: |
+      You still **generate every duplicate branch**, then scan the entire result list to reject them (`contains` is O(result size) per check).
+      **Fix:** sort `nums`, then at each level skip `nums[i] == nums[i-1]` when `i > start` — prune before recursing, not after.
+
+  - id: e4b7c0d2-3f8a-4e96-b2c4-7d8e9f0a1b26
+    type: cloze
+    concepts: [duplicate-skip-sorted, start-index-subsets]
+    note_ref: Topics/BackTracking/Subsets II Problem.md
+    front: |
+      Subsets II — fill in the duplicate-pruning guard (array is sorted):
+      ```java
+      if (___) continue;
+      ```
+    back: |
+      `i > start && nums[i] == nums[i-1]`
+      Only skip duplicates at the **same decision level** — the first occurrence at this level is still valid.
+
+  # --- From vault: Permutation Problem ---
+  - id: f7c0d3e5-4a9b-4f07-c5d6-8e9f0a1b2c37
+    type: pattern-trigger
+    concepts: [permutation-used-array]
+    note_ref: Topics/BackTracking/Permutation Problem.md
+    front: Distinct integers — return all permutations. What extra state beyond the current path?
+    back: |
+      A `boolean[] used` (or equivalent) — unlike subsets, **order matters** and every unused element is a valid next choice.
+      Base case: `currState.size() == nums.length` → snapshot and return.
+      Loop all indices; skip if `used[i]`, else mark used → add → recurse → undo both.
+
+  # --- From vault: Letter Combinations of a Phone Number ---
+  - id: 0a3d6e8f-5b0c-4a18-d6e7-9f0a1b2c3d48
+    type: mistake-derived
+    concepts: [recursion-depth-loop-breadth]
+    note_ref: Topics/BackTracking/Letter Combinations of a Phone Number.md
+    front: Phone-number letter combos — why must you NOT loop over digits inside the recursive function?
+    back: |
+      **Recursion = depth** (advance to the next digit via `start + 1`).
+      **Loop = breadth** (pick among letters for the *current* digit).
+      A digit loop inside recursion conflates movement with choice and double-counts positions.
+
+  - id: 1b4e7f9a-6c1d-4b29-e7f8-0a1b2c3d4e59
+    type: mistake-derived
+    concepts: [mutable-state-undo, recursion-depth-loop-breadth]
+    note_ref: Topics/BackTracking/Letter Combinations of a Phone Number.md
+    front: Phone-number combos with StringBuilder — what must happen after each recursive branch?
+    back: |
+      `currString.deleteCharAt(currString.length() - 1)` — **manual undo**.
+      StringBuilder is mutable; without undo, later branches inherit polluted state.
+      (Immutable `String` copies avoid undo but cost more allocations.)
+
+  # --- From vault: Palindrome Partitioning ---
+  - id: 2c5f8a0b-7d2e-4c3a-f809-1b2c3d4e5f6a
+    type: mistake-derived
+    concepts: [goal-base-case-only]
+    note_ref: Topics/BackTracking/Palindrome Partitioning.md
+    front: Palindrome Partitioning — you added `result.add(copy)` both at the base case AND after it. Why is the second one wrong?
+    back: |
+      Unlike subsets, only **complete partitions** (consumed the whole string) are valid outputs.
+      Adding on every call dumps partial / invalid states into the result. Snapshot **only** when `start == s.length()`.
+
+  # --- From vault: Word Search ---
+  - id: 3d6a9b1c-8e3f-4d4b-091a-2c3d4e5f6a7b
+    type: mistake-derived
+    concepts: [return-boolean-recursion]
+    note_ref: Topics/BackTracking/Word Search.md
+    front: Word Search — why does `void backtrack(..., boolean result)` with `result = true` inside never work in Java?
+    back: |
+      Primitives are **pass-by-value** — assigning `result` inside the helper does not update the caller's variable.
+      Return `boolean` from the helper; propagate with `if (backtrack(...)) return true`.
+
+  - id: 4e7b0c2d-9f40-4e5c-1a2b-3d4e5f6a7b8c
+    type: plain-recall
+    concepts: [mark-explore-unmark, boundary-guard-clauses]
+    note_ref: Topics/BackTracking/Word Search.md
+    front: Word Search / grid DFS backtracking — name the three-step "sandwich" on each cell.
+    back: |
+      1. **Mark** — `used[r][c] = true` (including the starting cell).
+      2. **Explore** — recurse to valid neighbors for the next character.
+      3. **Unmark** — `used[r][c] = false` before backtracking to try another branch.
+      Guard boundaries with **OR** (`row < 0 || col < 0 || ...`), not AND.
+
+  # --- Generated (no vault note): Combination Sum ---
+  - id: 5f8c1d3e-0a51-4f6d-2b3c-4e5f6a7b8c9d
+    type: pattern-trigger
+    concepts: [combination-sum-reuse, start-index-subsets]
+    front: Sorted distinct positives, reuse allowed — find all combos summing to `target`. Key backtracking detail?
+    back: |
+      **Pattern:** combination search with **reusable elements**.
+      Pass the same `start` index into the next call (not `i+1`) so the same number can be picked again.
+      Prune when `remaining < 0` (sorted array → can also break early when `nums[i] > remaining`).
+
+  # --- Generated (no vault note): N-Queens ---
+  - id: 6a9d2e4f-1b62-407e-3c4d-5f6a7b8c9d0e
+    type: pattern-trigger
+    concepts: [n-queens-placement]
+    front: N-Queens — how is the search space structured, and what do you check before placing?
+    back: |
+      **One queen per row** — recurse on `row + 1`.
+      For each column, verify no conflict in same **column**, both **diagonals** (use column / diag arrays or a set of occupied positions).
+      Base case: `row == n` → snapshot board.
+
+  # --- Generated (no vault note): Permutations II ---
+  - id: 7b0e3f5a-2c73-418f-4d5e-6a7b8c9d0e1f
+    type: predict-complexity
+    concepts: [permutation-used-array, duplicate-skip-sorted]
+    front: Permutations II (may contain duplicates) — what two techniques combine the standard permutation template with duplicate handling?
+    back: |
+      1. `boolean[] used` (or freq map) for building the path.
+      2. **Sort** + skip `nums[i] == nums[i-1]` when `!used[i-1]` (or equivalent) so equal values aren't swapped at the same level.
+      Prune at generation time, not with `result.contains`.
+
+  # --- Generated (no vault note): Sudoku Solver ---
+  - id: 8c1f4a6b-3d84-4290-5e6f-7a8b9c0d1e2f
+    type: pattern-trigger
+    concepts: [sudoku-constraint-check, backtracking-blueprint]
+    front: Sudoku Solver — what is the backtracking loop over, and what makes a placement valid?
+    back: |
+      Find the next empty cell (`'.'`); try digits `1–9`.
+      **Valid iff** no duplicate in the same **row**, **column**, or **3×3 box** (bitmasks or boolean arrays per unit).
+      Place → recurse → clear cell on failure. Solved when no empties remain.

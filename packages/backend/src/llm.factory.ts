@@ -1,6 +1,8 @@
 import { createLLMService, type LLMService, type LLMServiceConfig } from "@dsa/integrations";
 import type { AppConfig, CoachModelOption } from "@dsa/shared";
 
+const WARMUP_TIMEOUT_MS = 180_000;
+
 export function toLLMServiceConfig(config: AppConfig): LLMServiceConfig {
   return {
     model: config.llm.model,
@@ -20,6 +22,7 @@ export function createAppLLMService(config: AppConfig): LLMService {
 export function toWarmupLLMServiceConfig(config: AppConfig): LLMServiceConfig {
   return {
     model: config.warmupLlm.model,
+    timeoutMs: WARMUP_TIMEOUT_MS,
     openrouter: {
       apiKey: config.warmupLlm.openrouter.apiKey ?? "",
       baseUrl: config.warmupLlm.openrouter.baseUrl,

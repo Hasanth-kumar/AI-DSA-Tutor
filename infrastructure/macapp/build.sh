@@ -8,6 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 APP="${1:-/Applications/DSA Mastery OS.app}"
 ICON_SRC="$REPO_ROOT/infrastructure/app-icon.icns"
+# Regenerate from sidebar brand tile: bash infrastructure/macapp/generate-icon.sh
 
 echo "▶ Building: $APP"
 rm -rf "$APP"

@@ -1,0 +1,84 @@
+# Closed concept vocabulary for Recursion & Backtracking.
+# LLM generation may assign cards to these IDs only — never invent new tags.
+topic_id: fa29e7cd-c8e2-4e4c-81e6-8a19d6356c3a
+topic_name: Recursion & Backtracking
+
+concepts:
+  - id: backtracking-blueprint
+    parent: fundamentals
+    description: Goal check → loop choices → apply constraints → choose / recurse / unchoose
+
+  - id: state-copy-on-save
+    parent: fundamentals
+    requires: [backtracking-blueprint]
+    description: Snapshot the current path with a deep copy when recording a valid solution
+
+  - id: recursion-depth-loop-breadth
+    parent: fundamentals
+    requires: [backtracking-blueprint]
+    description: Recursion advances position (depth); the for-loop picks among choices at that level
+
+  - id: mutable-state-undo
+    parent: fundamentals
+    requires: [backtracking-blueprint]
+    description: Mutable containers (StringBuilder, path list) need an explicit undo after each branch
+
+  - id: goal-base-case-only
+    parent: fundamentals
+    requires: [backtracking-blueprint]
+    description: Collect results only when the goal is reached — not on every recursive call
+
+  - id: start-index-subsets
+    parent: subsets-combinations
+    requires: [backtracking-blueprint]
+    description: Pass a start index so subsets/combinations avoid reordering the same elements
+
+  - id: choose-explore-unchoose
+    parent: subsets-combinations
+    requires: [start-index-subsets]
+    description: For-loop variant — add element, recurse from i+1, remove element
+
+  - id: include-exclude-subsets
+    parent: subsets-combinations
+    requires: [backtracking-blueprint]
+    description: Binary-branch variant — recurse with element included, then excluded (no for-loop)
+
+  - id: duplicate-skip-sorted
+    parent: duplicates
+    requires: [start-index-subsets]
+    description: Sort first, then skip nums[i]==nums[i-1] when i > start to avoid duplicate branches
+
+  - id: permutation-used-array
+    parent: permutations
+    requires: [backtracking-blueprint]
+    description: Track which elements are already placed with a boolean[] used (or equivalent)
+
+  - id: combination-sum-reuse
+    parent: subsets-combinations
+    requires: [start-index-subsets]
+    description: Reuse the same start index when an element may be picked multiple times toward a target
+
+  - id: mark-explore-unmark
+    parent: grid-search
+    requires: [backtracking-blueprint]
+    description: Mark cell as visited, explore neighbors, unmark before trying the next branch
+
+  - id: return-boolean-recursion
+    parent: grid-search
+    requires: [mark-explore-unmark]
+    description: Return true/false from the recursive helper — never mutate a boolean parameter
+
+  - id: boundary-guard-clauses
+    parent: grid-search
+    requires: [backtracking-blueprint]
+    description: Fail fast on out-of-bounds or invalid state with early returns (use OR, not AND)
+
+  - id: n-queens-placement
+    parent: constraint-satisfaction
+    requires: [backtracking-blueprint]
+    description: Place one queen per row; check column and diagonal conflicts before recursing
+
+  - id: sudoku-constraint-check
+    parent: constraint-satisfaction
+    requires: [backtracking-blueprint]
+    description: Try digits 1–9 on empty cells; validate row, column, and 3×3 box before recursing
