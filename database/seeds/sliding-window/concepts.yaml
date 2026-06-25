@@ -1,0 +1,57 @@
+# Closed concept vocabulary for Sliding Window.
+# LLM generation may assign cards to these IDs only — never invent new tags.
+# New concepts are added by a deliberate human edit to this file (design §4).
+topic_id: 46509ec0-cbc1-4a22-acbd-12e7c7b4b438
+topic_name: Sliding Window
+
+concepts:
+  - id: fixed-window
+    parent: fundamentals
+    description: A window of constant size k slides one element at a time across the array
+
+  - id: variable-window
+    parent: fundamentals
+    description: Right pointer expands the window; left pointer contracts it on demand
+
+  - id: two-pointer-window
+    parent: fundamentals
+    requires: [variable-window]
+    description: A sliding window is two same-direction pointers bounding a contiguous range
+
+  - id: frequency-counting
+    parent: bookkeeping
+    description: Maintain per-element counts (hashmap or fixed array) for the current window
+
+  - id: window-invariant
+    parent: fundamentals
+    requires: [variable-window]
+    description: The single condition the window must always satisfy (e.g. no repeats, sum <= target)
+
+  - id: shrink-while-invalid
+    parent: fundamentals
+    requires: [variable-window, window-invariant]
+    description: While the invariant is violated, advance left (and undo its bookkeeping) until valid
+
+  - id: expand-contract-update-answer
+    parent: fundamentals
+    requires: [variable-window]
+    description: After restoring validity, update the best answer from the current window size
+
+  - id: distinct-count-window
+    parent: bookkeeping
+    requires: [frequency-counting, variable-window]
+    description: Longest substring without repeats — shrink left until the new char is unique
+
+  - id: at-most-k-trick
+    parent: counting
+    requires: [variable-window, frequency-counting]
+    description: exactly(K) subarrays = atMost(K) - atMost(K-1) to turn a hard count into two easy ones
+
+  - id: monotonic-deque-window
+    parent: extremes
+    requires: [fixed-window]
+    description: Sliding-window maximum — a decreasing deque of indices gives the max in O(1) per step
+
+  - id: prefix-vs-window
+    parent: fundamentals
+    description: Subarray-sum with negatives needs prefix-sum + hashmap; windows assume monotonic growth

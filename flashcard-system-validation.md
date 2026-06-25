@@ -20,35 +20,35 @@
 
 - [ ] **Notes are source of truth for content.** Cards are derived from notes; no card content is invented without a note source.
 - [ ] **LLM runs in batch, offline from hot path** — triggered only on note change / mastery triggers, never on review/warm-up.
-- [ ] **Local question bank per topic exists** — prebuilt + cached cards persisted locally, accumulating over time.
+- [x] **Local question bank per topic exists** — prebuilt + cached cards persisted locally, accumulating over time.
 - [ ] **Bank size is coverage-driven, not a fixed target.** No hard-coded "30–50 cards/topic" (or similar) count anywhere in generation logic.
-- [ ] **Curated baseline seeded** — 10–15 high-quality, version-controlled cards per topic exist in `database/seeds`.
+- [x] **Curated baseline seeded** — 10–15 high-quality, version-controlled cards per topic exist in `database/seeds`.
 - [ ] **LLM tops up from notes** beyond the seed baseline rather than replacing it.
 
 ## §3 Card types
 
-- [ ] **Plain recall** card type supported (atomic fact: complexity, definition).
-- [ ] **Pattern-trigger** card type supported (front = problem signal, back = pattern name).
-- [ ] **Cloze on canonical code** card type supported (single blanked line).
-- [ ] **Predict-the-complexity / predict-the-output** card type supported.
+- [x] **Plain recall** card type supported (atomic fact: complexity, definition).
+- [x] **Pattern-trigger** card type supported (front = problem signal, back = pattern name).
+- [x] **Cloze on canonical code** card type supported (single blanked line).
+- [x] **Predict-the-complexity / predict-the-output** card type supported.
 - [ ] **Mistake-derived** cards generated from the `## Mistakes` section of a note.
 - [ ] **Confusion-pair** discrimination cards supported, sourced via the embedding store.
 - [x] **Card type is a stored attribute** so generation/sampling/analytics can distinguish them.
 
 ## §4 Concept inventory (coverage + dedup backbone)
 
-- [ ] **Cards carry one or more concept tags** from a per-topic vocabulary.
-- [ ] **`concepts.yaml` exists per topic** and is version-controlled.
+- [x] **Cards carry one or more concept tags** from a per-topic vocabulary.
+- [x] **`concepts.yaml` exists per topic** and is version-controlled.
 - [ ] **Vocabulary is closed.** The LLM assigns cards to existing concepts only — it can never invent a new tag. Verify generation rejects/strips unknown tags.
-- [ ] **New concepts are added only by a human edit to `concepts.yaml`**, not by any automated path.
-- [ ] **Tags are flat IDs**, not dotted/hierarchical strings (no `arrays.hashmap.lookup`).
-- [ ] **Optional `topic`/`parent` field** in YAML provides roll-up coverage without encoding hierarchy in the tag string.
-- [ ] **Static `requires` prerequisite edges** are stored in `concepts.yaml` (e.g. `sliding-window requires: [two-pointers, frequency-counting]`).
-- [ ] **Prerequisite edges are static/authored only** — no learned or dynamically mutated graph.
+- [x] **New concepts are added only by a human edit to `concepts.yaml`**, not by any automated path.
+- [x] **Tags are flat IDs**, not dotted/hierarchical strings (no `arrays.hashmap.lookup`).
+- [x] **Optional `topic`/`parent` field** in YAML provides roll-up coverage without encoding hierarchy in the tag string.
+- [x] **Static `requires` prerequisite edges** are stored in `concepts.yaml` (e.g. `sliding-window requires: [two-pointers, frequency-counting]`).
+- [x] **Prerequisite edges are static/authored only** — no learned or dynamically mutated graph.
 - [ ] **Repeated lapses resurface prerequisites** instead of random review.
-- [ ] **Coverage = concept tags with ≥1 card**, computed deterministically and auditable (e.g. "Two Sum: 8/11 concepts covered").
+- [x] **Coverage = concept tags with ≥1 card**, computed deterministically and auditable (e.g. "Two Sum: 8/11 concepts covered").
 - [ ] **Generation prompt targets uncovered concepts** ("produce cards only for these untagged concepts: …"), not "generate N questions."
-- [ ] **Per-concept card cap enforced** (2–3 angles max) to keep the bank lean.
+- [x] **Per-concept card cap enforced** (2–3 angles max) to keep the bank lean.
 
 ## §5 Generation pipeline
 
@@ -157,7 +157,7 @@
 > Confirms the build followed the intended sequence and each stage's artifact exists.
 
 - [x] **1.** Card + concept-tag + per-card FSRS schema, provenance fields, and append-only event-log table exist as a migration in `database/migrations`.
-- [ ] **2.** `concepts.yaml` per topic (closed vocabulary + prerequisite edges) and seed cards for the first few topics exist in `database/seeds`.
+- [x] **2.** `concepts.yaml` per topic (closed vocabulary + prerequisite edges) and seed cards for the first few topics exist in `database/seeds`.
 - [ ] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
 - [ ] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
 - [ ] **5.** Batch generation pipeline exists (dirty-flag trigger → coverage-gap → generate → dedup → store, with provenance).

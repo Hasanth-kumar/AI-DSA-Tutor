@@ -1,0 +1,134 @@
+# Curated baseline seed cards (10–15 per topic). Version-controlled; LLM tops up from notes.
+# Every `concepts:` tag must exist in concepts.yaml (closed vocabulary, design §4).
+topic_id: 46509ec0-cbc1-4a22-acbd-12e7c7b4b438
+topic_name: Sliding Window
+seed_version: 1
+
+cards:
+  - id: 48450d3d-8288-4c84-8734-0e9ef792a243
+    type: pattern-trigger
+    concepts: [variable-window, window-invariant, shrink-while-invalid]
+    note_ref: Topics/Sliding Window/Sliding Window - Basics.md
+    front: |
+      Trigger phrase: "longest/shortest contiguous subarray satisfying some condition."
+      What's the variable-window template?
+    back: |
+      Expand `right` one step (add `nums[right]` to the window's bookkeeping);
+      **while the invariant is violated**, advance `left` and undo its bookkeeping;
+      then update the answer from the now-valid window.
+      Each index enters and leaves at most once → **O(n)**.
+
+  - id: 0e0a66ae-ec8c-442b-831f-8f8f589eaad9
+    type: confusion-pair
+    concepts: [fixed-window, variable-window]
+    note_ref: Topics/Sliding Window/Sliding Window - Basics.md
+    front: Fixed-size window vs variable-size window — what signals which one a problem wants?
+    back: |
+      **Fixed:** the size `k` is given ("max sum of k consecutive", "averages of size k") — slide by adding the entering and removing the leaving element.
+      **Variable:** you optimise the size against a condition ("longest substring with ≤2 distinct") — expand right, shrink left while invalid.
+
+  - id: b118782f-d6f2-4138-9e19-66ca031b686b
+    type: cloze
+    concepts: [distinct-count-window, frequency-counting]
+    note_ref: Topics/Sliding Window/Longest Substring Without Repeating.md
+    front: |
+      Longest substring without repeating characters — fill the shrink step:
+      ```java
+      while (count.get(c) > 1) {
+        char left = s.charAt(l);
+        ___;            // bookkeeping
+        l++;
+      }
+      ```
+    back: |
+      `count.merge(left, -1, Integer::sum)` (decrement `left`'s count).
+      You must undo the leaving char's count as `l` advances, or the frequency map drifts and the invariant check breaks.
+
+  - id: ca7d3d35-1376-461c-9b37-4c09f4e90c56
+    type: predict-output
+    concepts: [fixed-window]
+    note_ref: Topics/Sliding Window/Max Sum Size K.md
+    front: |
+      Fixed window, k=3, slide by add-entering/remove-leaving:
+      ```java
+      int sum = nums[0]+nums[1]+nums[2], best = sum;
+      for (int r = 3; r < n; r++) { sum += nums[r] - nums[r-3]; best = max(best, sum); }
+      ```
+      For `nums=[2,1,5,1,3,2]`, what is `best`?
+    back: |
+      **9** — the window `[5,1,3]`. Windows are `2+1+5=8`, `1+5+1=7`, `5+1+3=9`, `1+3+2=6`. The slide updates in O(1), so the scan is O(n).
+
+  - id: 9fe6fc05-f959-4eec-a2dc-ca5ef01bc9ac
+    type: plain-recall
+    concepts: [fixed-window]
+    note_ref: Topics/Sliding Window/Sliding Window - Basics.md
+    front: When sliding a fixed window by one, what two O(1) updates keep the running aggregate correct?
+    back: |
+      **Add** the entering element (`nums[right]`) and **remove** the leaving element (`nums[right-k]`). This recomputes sum/count incrementally instead of re-summing the whole window — O(1) per slide, O(n) total.
+
+  - id: af1e9d58-1e1a-4fe4-9b29-6a0fe4e8730b
+    type: pattern-trigger
+    concepts: [monotonic-deque-window]
+    note_ref: Topics/Sliding Window/Sliding Window Maximum.md
+    front: Maximum of every size-k window. What structure gets you O(n), and what does it hold?
+    back: |
+      A **monotonic decreasing deque of indices**. Before pushing `r`, pop smaller tail values; pop the head when it falls outside the window (`head <= r-k`). The head is always the current window max → **O(n)** total, each index pushed/popped once.
+
+  - id: 17a60138-e81d-48f8-81b5-39fa4a074668
+    type: mistake-derived
+    concepts: [shrink-while-invalid, window-invariant]
+    note_ref: Topics/Sliding Window/Longest Substring Without Repeating.md
+    front: Variable window — you shrank with `if (invalid) left++` once per expand. Why does that break?
+    back: |
+      A single step may leave the window **still invalid** (e.g. you added a char already seen 3 times). Use a **`while`** loop to shrink until the invariant holds again. It's still O(n) amortised because `left` only ever moves forward.
+
+  - id: 0b3d24d3-45fa-4ecf-8283-1161663aa232
+    type: pattern-trigger
+    concepts: [at-most-k-trick, frequency-counting]
+    note_ref: Topics/Sliding Window/Subarrays With K Distinct.md
+    front: Count subarrays with **exactly** K distinct integers. Why is the direct count awkward, and the trick?
+    back: |
+      "Exactly K" has no clean monotonic window. Use **`exactly(K) = atMost(K) − atMost(K−1)`**, where `atMost(m)` counts subarrays with ≤ m distinct via a standard variable window (each valid right contributes `right-left+1`). Two O(n) passes.
+
+  - id: a02a4e20-c8b2-4195-8bee-28ebcbdb7622
+    type: cloze
+    concepts: [at-most-k-trick]
+    note_ref: Topics/Sliding Window/Subarrays With K Distinct.md
+    front: |
+      `atMost(k)` window — fill in how many new subarrays the current valid window contributes:
+      ```java
+      // window [left..right] valid (<= k distinct)
+      result += ___;
+      ```
+    back: |
+      `right - left + 1` — every subarray **ending at `right`** and starting anywhere in `[left, right]` is valid, and there are `right-left+1` of them.
+
+  - id: 71dcddba-09df-486f-8ac0-104c95e7df3d
+    type: predict-complexity
+    concepts: [two-pointer-window]
+    note_ref: Topics/Sliding Window/Sliding Window - Basics.md
+    front: |
+      A variable-window scan where `right` runs 0..n-1 and the inner `while` only ever advances `left`:
+      ```java
+      for (right = 0; right < n; right++)
+        while (invalid) left++;
+      ```
+      Worst-case time?
+    back: |
+      **O(n)**, not O(n²). It looks nested, but `left` and `right` each advance at most `n` times total across the whole run (amortised) — every index enters and leaves the window once.
+
+  - id: 36183f55-a7d3-46b0-b489-39866f229411
+    type: confusion-pair
+    concepts: [prefix-vs-window, variable-window]
+    note_ref: Topics/Sliding Window/Sliding Window - Basics.md
+    front: Subarray sum equals K — when does sliding window fail and prefix-sum + hashmap win?
+    back: |
+      Sliding window assumes growth is **monotonic** (adding an element only increases the metric), which holds for **all-positive** arrays. With **negatives**, shrinking/expanding no longer moves the sum predictably → use **prefix sums + hashmap** of seen prefixes (count `prefix[j]-prefix[i]==K`).
+
+  - id: 003ab88b-8fbb-4dd2-9205-b2329b8c074f
+    type: plain-recall
+    concepts: [expand-contract-update-answer, window-invariant]
+    note_ref: Topics/Sliding Window/Minimum Window Substring.md
+    front: For a **minimum**-length valid window (e.g. min window substring), when do you record the answer?
+    back: |
+      Record **while the window is valid, before/just after shrinking** — for a minimum you update the best each time the invariant holds and then try to shrink further. (For a *maximum*-length window you instead update after restoring validity.) Direction of the update depends on whether you're minimising or maximising the size.

@@ -1,0 +1,62 @@
+# Closed concept vocabulary for Two Pointers.
+# LLM generation may assign cards to these IDs only — never invent new tags.
+# New concepts are added by a deliberate human edit to this file (design §4).
+topic_id: 2b76bbab-0d71-4171-9b11-803641e093f9
+topic_name: Two Pointers
+
+concepts:
+  - id: opposite-ends-pointers
+    parent: fundamentals
+    description: Start lo=0 and hi=n-1 and move them inward until they cross
+
+  - id: sorted-precondition
+    parent: fundamentals
+    description: Opposite-ends pair search only works when the input is sorted (monotonic)
+
+  - id: same-direction-pointers
+    parent: fundamentals
+    description: Slow and fast pointers both advance from the left (read/write or window)
+
+  - id: sum-comparison-move
+    parent: pair-sum
+    requires: [opposite-ends-pointers, sorted-precondition]
+    description: If pair sum < target move lo right, if sum > target move hi left
+
+  - id: container-area-greedy
+    parent: pair-sum
+    requires: [opposite-ends-pointers]
+    description: Max-area / container — always move the pointer at the shorter wall inward
+
+  - id: three-pointer-triplet
+    parent: pair-sum
+    requires: [sum-comparison-move]
+    description: Fix index i, then two-pointer the remaining suffix (3Sum family)
+
+  - id: skip-duplicates-triplet
+    parent: pair-sum
+    requires: [three-pointer-triplet]
+    description: Skip equal neighbours for i and after a hit to avoid duplicate triplets
+
+  - id: in-place-overwrite
+    parent: in-place
+    requires: [same-direction-pointers]
+    description: A lagging write pointer overwrites in place while the read pointer scans ahead
+
+  - id: dedup-sorted-inplace
+    parent: in-place
+    requires: [in-place-overwrite, sorted-precondition]
+    description: Remove duplicates from a sorted array by writing only when nums[r] != nums[w-1]
+
+  - id: partition-pivot
+    parent: in-place
+    requires: [same-direction-pointers]
+    description: Move-zeroes / Dutch-flag — swap to push a class of elements to one side
+
+  - id: palindrome-check
+    parent: string
+    requires: [opposite-ends-pointers]
+    description: Compare s[lo] and s[hi] moving inward, optionally skipping non-alphanumerics
+
+  - id: two-pointer-vs-binary-search
+    parent: fundamentals
+    description: Two-pointer scans linearly from both ends; binary search halves one range

@@ -1,0 +1,138 @@
+# Curated baseline seed cards (10–15 per topic). Version-controlled; LLM tops up from notes.
+# Every `concepts:` tag must exist in concepts.yaml (closed vocabulary, design §4).
+topic_id: 2b76bbab-0d71-4171-9b11-803641e093f9
+topic_name: Two Pointers
+seed_version: 1
+
+cards:
+  - id: 2826511e-bb1f-4a30-aa5f-e3822c6b70ea
+    type: pattern-trigger
+    concepts: [opposite-ends-pointers, sum-comparison-move]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: Sorted array, find two numbers that sum to a target. What pattern, and how do the pointers move?
+    back: |
+      **Pattern:** opposite-ends two pointers (`lo=0`, `hi=n-1`).
+      If `nums[lo]+nums[hi] < target` → `lo++` (need more); if `> target` → `hi--` (need less); if equal → found.
+      **Time:** O(n), **space:** O(1) — beats the hash-map O(n) space when the array is already sorted.
+
+  - id: dde2905a-e2e3-4949-833b-6025fc71cd6c
+    type: plain-recall
+    concepts: [sorted-precondition]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: What precondition does the opposite-ends two-pointer pair search require, and why?
+    back: |
+      The array must be **sorted**. Moving `lo`/`hi` based on the sum comparison only narrows the search correctly if values are monotonic — on unsorted input a discarded side could still contain the answer.
+
+  - id: a2fedb1c-9786-4d12-ad61-ddb421320b1b
+    type: cloze
+    concepts: [sum-comparison-move]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: |
+      Two-sum on a sorted array — fill in the pointer moves:
+      ```java
+      if (sum < target) ___;
+      else if (sum > target) ___;
+      ```
+    back: |
+      `lo++` when the sum is too small, `hi--` when the sum is too large.
+      Smallest+largest framing: raising `lo` only increases the sum, lowering `hi` only decreases it.
+
+  - id: efcd758f-90f8-4eed-a792-806276537c7f
+    type: predict-complexity
+    concepts: [opposite-ends-pointers]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: |
+      Given a sorted array, this runs to completion:
+      ```java
+      int lo = 0, hi = n - 1;
+      while (lo < hi) { /* O(1) work */ lo++ or hi--; }
+      ```
+      Time complexity?
+    back: |
+      **O(n).** Each iteration moves exactly one pointer inward and they never move apart, so the total moves are bounded by `n`. Space O(1).
+
+  - id: 3b2617e2-2a5d-4413-be8c-fd4cfaa4d484
+    type: pattern-trigger
+    concepts: [container-area-greedy]
+    note_ref: Topics/Two Pointers/Container With Most Water.md
+    front: Heights array, pick two lines forming the largest water container. Which pointer do you move and why?
+    back: |
+      **Move the pointer at the shorter wall inward.** Area = `min(h[lo], h[hi]) * (hi - lo)`. Width only shrinks, so the only chance to improve is a taller wall — and the taller side can never improve while paired with the current shorter one. **O(n)** greedy.
+
+  - id: 205c7cc5-c230-416a-a264-b46a132549a3
+    type: pattern-trigger
+    concepts: [three-pointer-triplet, skip-duplicates-triplet]
+    note_ref: Topics/Two Pointers/3Sum.md
+    front: Return all unique triplets that sum to zero. What's the shape?
+    back: |
+      Sort, then **fix `i`** and run an opposite-ends two-pointer (`lo=i+1`, `hi=n-1`) on the suffix.
+      Skip duplicate `nums[i]`, and after recording a hit skip equal `lo`/`hi` neighbours.
+      **Time:** O(n²), **space:** O(1) extra.
+
+  - id: 7cfadf7d-a0c3-426e-a11e-91b3fda1ae63
+    type: mistake-derived
+    concepts: [skip-duplicates-triplet]
+    note_ref: Topics/Two Pointers/3Sum.md
+    front: 3Sum — you deduped triplets with a HashSet of results. Why is that the wrong fix?
+    back: |
+      It hides the bug instead of pruning it: you still explore every duplicate branch and pay hashing/equality cost per triplet, plus O(k) extra space.
+      **Fix:** skip `nums[i]==nums[i-1]` for the fixed index, and after a hit advance past equal `nums[lo]`/`nums[hi]`. Prune duplicates at the source.
+
+  - id: d2491f0b-dbdf-4cf5-9b2e-e9e7099e09af
+    type: cloze
+    concepts: [dedup-sorted-inplace, in-place-overwrite, same-direction-pointers]
+    note_ref: Topics/Two Pointers/Remove Duplicates Sorted.md
+    front: |
+      Remove duplicates from a sorted array in place. Fill the guard for the write step:
+      ```java
+      int w = 1;
+      for (int r = 1; r < n; r++) {
+        if (___) nums[w++] = nums[r];
+      }
+      return w;
+      ```
+    back: |
+      `nums[r] != nums[w - 1]` — write only when the current value differs from the last kept value.
+      `w` (write pointer) lags `r` (read pointer); `w` is the new length.
+
+  - id: a8fb4b1b-d42e-4d09-a031-080f788376b1
+    type: predict-output
+    concepts: [partition-pivot, in-place-overwrite]
+    note_ref: Topics/Two Pointers/Move Zeroes.md
+    front: |
+      Move-zeroes with a write pointer:
+      ```java
+      int w = 0;
+      for (int r = 0; r < nums.length; r++)
+        if (nums[r] != 0) nums[w++] = nums[r];
+      while (w < nums.length) nums[w++] = 0;
+      ```
+      Input `[0,1,0,3,12]` → output?
+    back: |
+      `[1,3,12,0,0]`. Non-zeros are compacted left in order, then the tail is zero-filled. O(n) time, O(1) space, order preserved.
+
+  - id: 29f141fa-7b02-444b-bb7d-e17948d1f0af
+    type: plain-recall
+    concepts: [palindrome-check]
+    note_ref: Topics/Two Pointers/Valid Palindrome.md
+    front: How do two pointers test whether a string is a palindrome, and what's the cost?
+    back: |
+      `lo=0`, `hi=n-1`; while `lo < hi`, compare `s[lo]` and `s[hi]`, then `lo++`, `hi--`. Mismatch → not a palindrome. For "valid palindrome" variants, skip non-alphanumerics and lowercase. **O(n)** time, **O(1)** space.
+
+  - id: 01e69c4a-fe91-43fd-abe7-d11ef42b4cb5
+    type: confusion-pair
+    concepts: [two-pointer-vs-binary-search, sorted-precondition]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: Both two-pointer and binary search exploit a sorted array — when do you reach for which?
+    back: |
+      **Binary search:** locate one value / boundary in a *static* sorted array — halves a single range, O(log n).
+      **Two pointers:** relate a *pair/window* of elements (sum, area, dedup) by sweeping from both ends or both forward — O(n).
+      Pair/relationship over the whole array → two pointers; single-target lookup → binary search.
+
+  - id: ec16c7d1-8b98-4b69-a7bf-159285e4a5d2
+    type: mistake-derived
+    concepts: [opposite-ends-pointers]
+    note_ref: Topics/Two Pointers/Two Pointers - Basics.md
+    front: Opposite-ends loop — you wrote `while (lo <= hi)` for pair-sum and got a wrong/duplicate answer. Why?
+    back: |
+      `lo == hi` pairs an element **with itself**, which isn't a valid distinct pair (and can double-count). Use `while (lo < hi)` so the two pointers always reference different indices.

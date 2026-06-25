@@ -17,6 +17,7 @@
     "test": "vitest run --passWithNoTests",
     "lint": "eslint src",
     "db:seed": "tsx src/scripts/from-notion.ts",
+    "db:seed-cards": "tsx src/scripts/seed-cards.ts",
     "db:dedupe-problems": "tsx src/scripts/dedupe-notion-problems.ts"
   },
   "dependencies": {
@@ -27,6 +28,7 @@
     "better-sqlite3": "^11.8.1",
     "chokidar": "^4.0.3",
     "drizzle-orm": "^0.39.3",
+    "js-yaml": "^4.1.0",
     "p-queue": "^8.1.0"
   },
   "devDependencies": {

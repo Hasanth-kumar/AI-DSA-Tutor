@@ -3,7 +3,112 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 5 / 103 boxes passing.**
+**Validation status: 21 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-25 (b) — Build-order Stage 2: concepts.yaml + seed cards + validated loader (§2, §3, §4, §15.2)
+
+### What landed
+- **Two new seed topics** under `database/seeds` (joining the pre-existing
+  `recursion-and-backtracking`), each with a closed-vocabulary `concepts.yaml`
+  (flat ids, `parent` roll-up field, static `requires` edges) and a curated
+  `cards.yaml`:
+  - **`two-pointers/`** — 12 concepts, 12 cards (full 12/12 coverage).
+  - **`sliding-window/`** — 11 concepts, 12 cards (full 11/11 coverage).
+  - Between them the baseline now exercises **all 7 card types** (§3),
+    including `predict-output`, which the recursion seed lacked.
+- **`packages/integrations/src/seeds/`** — the loader/validator stack:
+  - **`concept-vocabulary.ts`** — the single closed-vocabulary enforcement
+    point reused by the seed loader now and the generation pipeline later (§5):
+    `buildVocabulary` (rejects dotted ids, dup ids, dangling `requires` edges),
+    `assertClosedVocabulary` (throws on unknown tags) and `filterToVocabulary`
+    (strip variant). `isFlatConceptId` enforces flat-id-only.
+  - **`seed-loader.ts`** — pure parse + validate (`js-yaml` only): closed
+    vocabulary, flat ids, resolvable `requires`, per-concept cap
+    (`MAX_CARDS_PER_CONCEPT = 3`), known card types, unique card ids
+    (per-topic and globally). `topicCoverage` gives the deterministic
+    "covered / total" meter. Aggregates **all** problems into one
+    `SeedValidationError` so a bad file is fixed in a single pass.
+  - **`seed-store.ts`** — `buildSeedRows` (pure: validated topics → flat card +
+    concept rows with `origin='seed'`, `seed_version`, content `source_hash`
+    provenance, FSRS **New** state, due-now) and `seedTopics` (INSERT OR IGNORE
+    on the card UUID → **idempotent and non-destructive**; a re-seed never
+    resets a reviewed card's FSRS state). Talks to a tiny `SeedDb` interface
+    satisfied by both better-sqlite3 (prod) and `node:sqlite` (tests); imports
+    no sync target (§10).
+- **`scripts/seed-cards.ts`** + `db:seed-cards` script (root + integrations):
+  runs migrations, loads/validates seeds, prints per-topic coverage, seeds.
+- **Dependency:** added `js-yaml` (pure-JS, already in the pnpm store as a
+  transitive dep) to `@dsa/integrations` + a minimal local `js-yaml.d.ts`
+  ambient type (avoids needing `@types/js-yaml`). Lockfile importer updated.
+- **Tests:** `seeds/seed-loader.test.ts` (pure — vocabulary rules, real-seed
+  coverage/type-diversity/UUID checks, closed-vocab rejection via a temp bad
+  fixture) and `seeds/seed-store.test.ts` (`node:sqlite`-gated — seeds into a
+  migrated in-memory DB, asserts origin/FSRS-new/provenance, coverage GROUP BY,
+  idempotency + state preservation).
+
+### Verification (observed, not eyeballed)
+- `@dsa/database` and `@dsa/integrations` **typecheck clean** (`tsc`, incl. the
+  new tests); edited sources **lint clean** (`eslint`).
+- Compiled the loader and ran it over the **real** seed files: 3 topics load,
+  coverage 16/16, 12/12, 11/11; `buildSeedRows` → 40 cards / 63 concept links,
+  all `origin=seed`, `seed_version=1`, 64-char `source_hash`, due==created.
+- Closed-vocabulary rejection **observed**: a card referencing an invented tag
+  throws `SeedValidationError` naming the offender.
+- Seeded into a migrated `node:sqlite` DB: 40 cards / 63 links, all FSRS-New
+  with provenance; coverage GROUP BY returns 16 / 11 / 12 per topic; re-seed
+  inserts 0 and preserves a card whose `reps` was bumped to 5.
+- **Test-runner caveat (unchanged from Stage 1):** the repo's `node_modules` is
+  a macOS install; in the Linux sandbox both `better-sqlite3` and vitest's
+  rollup binary fail to load, so `vitest` was **not** run in-sandbox. Logic was
+  verified by compiling with `tsc` and executing against `node:sqlite` (the same
+  path the committed tests use). On macOS run:
+  `pnpm install` (to link `js-yaml`) then
+  `pnpm --filter @dsa/database build && pnpm --filter @dsa/integrations test`,
+  and `pnpm db:seed-cards` to populate `data/sqlite/dsa.db`.
+  Note `seed-store.test.ts` is `node:sqlite`-gated, so it only runs on Node ≥
+  22.5 (the repo `.nvmrc` pins 20 → it skips there; `seed-loader.test.ts` runs
+  everywhere).
+
+### Validation boxes flipped to `[x]` this run (16 → 21/103 total)
+- §2 — local question bank per topic exists (prebuilt cards persisted locally);
+  curated 10–15-card baseline seeded in `database/seeds`.
+- §3 — plain-recall, pattern-trigger, cloze, predict-complexity/predict-output
+  card types supported (real validated instances now persist with type intact).
+- §4 — cards carry concept tags; `concepts.yaml` per topic & version-controlled;
+  new concepts human-only (no automated write path); flat ids; `parent` roll-up
+  field; static `requires` edges stored; edges static/authored only;
+  deterministic auditable coverage; per-concept cap enforced.
+- §15.2 — Stage-2 artifact (concepts.yaml per topic + seed cards) exists.
+
+Deliberately left `[ ]`: §4 "vocabulary is closed — verify **generation**
+rejects unknown tags" (the enforcement primitive `assertClosedVocabulary` is
+built and tested, but the LLM generation path it guards is Stage 5);
+mistake-derived / confusion-pair §3 boxes (their design definition binds them to
+the note `## Mistakes` section / the embedding store, both later stages);
+§4 lapses-resurface-prereqs and generation-prompt-targets-uncovered (Stages 8 / 5).
+
+### Design vs. existing code — conflicts & resolutions
+- **No conflicts this run.** The pre-existing `recursion-and-backtracking` seed
+  already matched the Stage-1 schema and the design's concept-tag shape, so the
+  loader validates it unchanged (16 cards — one over the "10–15" guidance, kept
+  as-is since it is curated and within tolerance; the loader cap is 16).
+- **`js-yaml`, not a hand-rolled parser:** seeds use block scalars and fenced
+  code, so a real YAML parser is required. Chose `js-yaml` because it is pure-JS
+  (no native binding) and already resolved in the workspace store.
+- **Seeding does not create `topics` rows:** topic rows are Notion-owned
+  (single-writer field ownership, §8). `seedTopics` assumes they exist (they do
+  in `data/sqlite/dsa.db` — 49 topics); the tests insert them as a precondition
+  because `node:sqlite` enforces foreign keys by default (better-sqlite3 does not).
+
+### Next
+- **Stage 3:** Card repository + `CardService`; rewire `WarmupService` to read
+  due **cards** locally with the fallback order (today's-topic due → any due →
+  non-counting preview) and drop the live LLM from the hot path. Retire the
+  topic-level SM-2 path (`0009`, `SessionService.applyRecallQuality`) in favour
+  of per-card FSRS via `ts-fsrs`. This is where the §1 hot-path boxes and most
+  of §11 become verifiable (disable network, confirm warm-up still works).
 
 ---
 

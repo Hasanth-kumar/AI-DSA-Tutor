@@ -12,6 +12,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "db:seed": "pnpm --filter @dsa/integrations db:seed",
+    "db:seed-cards": "pnpm --filter @dsa/integrations db:seed-cards",
     "db:dedupe-problems": "pnpm --filter @dsa/integrations db:dedupe-problems",
     "start": "NODE_ENV=production SERVE_FRONTEND=true node packages/backend/dist/server.js",
     "study": "bash infrastructure/scripts/study.sh",

@@ -36,6 +36,29 @@ export type {
 export { syncNotionToSqlite, getMirrorCounts, type SyncResult } from "./sqlite/sync.js";
 export { createSqliteDb, runMigrations } from "./sqlite/client.js";
 export type { SqliteDb } from "./sqlite/client.js";
+export {
+  isFlatConceptId,
+  buildVocabulary,
+  assertClosedVocabulary,
+  filterToVocabulary,
+  ConceptVocabularyError,
+  loadSeedTopic,
+  loadAllSeeds,
+  topicCoverage,
+  SeedValidationError,
+  MAX_CARDS_PER_CONCEPT,
+  buildSeedRows,
+  seedTopics,
+  cardSourceHash,
+  type ConceptDefinition,
+  type SeedCard,
+  type SeedTopic,
+  type SeedDb,
+  type SeedStatement,
+  type SeedCardRow,
+  type SeedConceptRow,
+  type SeedResult,
+} from "./seeds/index.js";
 export type { LLMChatMessage, LLMClient } from "./llm/LLMClient.js";
 export {
   OpenRouterClient,
