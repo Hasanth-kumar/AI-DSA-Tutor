@@ -5,9 +5,10 @@ import {
 import { createSqliteDb, runMigrations } from "@dsa/integrations";
 import type { LLMService } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
-import { createAppLLMService, createCoachLLMService, createWarmupLLMService } from "./llm.factory.js";
+import { createAppLLMService, createCoachLLMService } from "./llm.factory.js";
 import { TopicRepository } from "./repositories/TopicRepository.js";
 import { AttemptRepository } from "./repositories/AttemptRepository.js";
+import { CardRepository } from "./repositories/CardRepository.js";
 import { ConflictRepository } from "./repositories/ConflictRepository.js";
 import { NoteRepository } from "./repositories/NoteRepository.js";
 import { ProblemRepository } from "./repositories/ProblemRepository.js";
@@ -29,6 +30,7 @@ import { ObsidianNoteService } from "./services/ObsidianNoteService.js";
 import { CurriculumService } from "./services/CurriculumService.js";
 import { PlanService } from "./services/PlanService.js";
 import { SessionService } from "./services/SessionService.js";
+import { CardService } from "./services/CardService.js";
 import { WarmupService } from "./services/WarmupService.js";
 
 export interface AppContext {
@@ -40,6 +42,7 @@ export interface AppContext {
   sessionRepo: SessionRepository;
   syncMetaRepo: SyncMetaRepository;
   attemptRepo: AttemptRepository;
+  cardRepo: CardRepository;
   noteRepo: NoteRepository;
   conflictRepo: ConflictRepository;
   cache: CacheService;
@@ -48,6 +51,7 @@ export interface AppContext {
   curriculumService: CurriculumService;
   planService: PlanService;
   sessionService: SessionService;
+  cardService: CardService;
   analyticsService: AnalyticsService;
   debriefService: DebriefService;
   hintService: HintService;
@@ -79,6 +83,7 @@ export function createAppContext(
   const sessionRepo = new SessionRepository(db, mirrorCache);
   const syncMetaRepo = new SyncMetaRepository(db);
   const attemptRepo = new AttemptRepository(db, mirrorCache);
+  const cardRepo = new CardRepository(db, mirrorCache);
   const noteRepo = new NoteRepository(db, mirrorCache);
   const conflictRepo = new ConflictRepository(db);
   const cache = new CacheService();
@@ -145,13 +150,8 @@ export function createAppContext(
     attemptRepo,
     noteRepo,
   );
-  const warmupService = new WarmupService(
-    config,
-    topicRepo,
-    sessionService,
-    noteRepo,
-    [createWarmupLLMService(config), coachLlm, llm],
-  );
+  const cardService = new CardService(cardRepo, syncMetaRepo);
+  const warmupService = new WarmupService(topicRepo, cardService);
   const leetcodeService = new LeetCodeService(config, syncMetaRepo);
   const githubSync = new GitHubSyncService(config, problemRepo, mirrorCache);
   const backupService = new BackupService(config, sqlite);
@@ -165,6 +165,7 @@ export function createAppContext(
     sessionRepo,
     syncMetaRepo,
     attemptRepo,
+    cardRepo,
     noteRepo,
     conflictRepo,
     cache,
@@ -173,6 +174,7 @@ export function createAppContext(
     curriculumService,
     planService,
     sessionService,
+    cardService,
     analyticsService,
     debriefService,
     hintService,

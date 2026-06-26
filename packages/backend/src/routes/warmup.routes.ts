@@ -44,7 +44,7 @@ export async function warmupRoutes(
     },
   );
 
-  /** Self-grade (0–5) → SM-2 quality, applied directly to the topic. */
+  /** Self-grade (0–5) → per-card FSRS review of the cards served today (§7, §11). */
   app.post<{ Body: { topicId?: string; quality?: number } }>(
     "/warmup/grade",
     async (request, reply) => {
@@ -53,7 +53,7 @@ export async function warmupRoutes(
         return reply.status(400).send({ error: "topicId and quality (0–5) are required" });
       }
       try {
-        const result = ctx.sessionService.applyRecallQuality(topicId, quality);
+        const result = ctx.warmupService.grade(topicId, quality);
         ctx.events.publish("topic");
         return reply.send(serializeForJson(result));
       } catch (err) {

@@ -128,13 +128,20 @@ export interface WarmupAnswer {
 export interface WarmupQuestion {
   question: string;
   answer: string;
+  /** Source card id (warm-up cards are now drawn from the local SR bank). */
+  cardId?: string | null;
+  /** Card type (§3): plain-recall | pattern-trigger | cloze | … */
+  type?: string;
+  /** True = non-counting preview filler shown when nothing is due (§11). */
+  preview?: boolean;
 }
 
 export interface WarmupQuestions {
   topicId: string;
   topicName: string;
   questions: WarmupQuestion[];
-  source: "notes" | "generic" | "fallback";
+  /** `due` = real due cards; `preview` = filler only; `empty` = bank empty. */
+  source: "due" | "preview" | "empty";
 }
 
 export interface RecallGradeResult {

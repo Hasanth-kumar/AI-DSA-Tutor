@@ -9,9 +9,9 @@
 
 ## §1 Goals & constraints
 
-- [ ] **No live LLM on the hot path.** Warm-up, show-answer, and review complete with zero LLM/network calls. Verify by disabling network and confirming all three flows still work.
-- [ ] **Hot-path latency is near-zero.** Show-answer and warm-up card load read only from local store; no synchronous LLM chain invocation remains in `WarmupService`.
-- [ ] **The old live behavior is gone.** Confirm `WarmupService` no longer calls the LLM chain for question generation *or* answer reveal.
+- [x] **No live LLM on the hot path.** Warm-up, show-answer, and review complete with zero LLM/network calls. Verify by disabling network and confirming all three flows still work.
+- [x] **Hot-path latency is near-zero.** Show-answer and warm-up card load read only from local store; no synchronous LLM chain invocation remains in `WarmupService`.
+- [x] **The old live behavior is gone.** Confirm `WarmupService` no longer calls the LLM chain for question generation *or* answer reveal.
 - [ ] **Zero paid infrastructure.** No hosted vector DB, no paid LLM tier, no paid sync. Inspect dependencies/config and confirm every component is free-tier or local.
 - [ ] **Survives Notion pricing change.** App degrades gracefully (or swaps adapter) if Notion becomes paid — see §10.
 - [ ] **Single-user assumption holds.** No multi-user/auth complexity added that contradicts the single-user scope.
@@ -72,8 +72,8 @@
 
 ## §7 Spaced repetition
 
-- [ ] **Per-card FSRS implemented** (not topic-level SM-2). Each card stores `stability`, `difficulty`, `due`, `last_review`, `reps`, `lapses`, `state`.
-- [ ] **`ts-fsrs` (MIT) is the engine** used for scheduling.
+- [x] **Per-card FSRS implemented** (not topic-level SM-2). Each card stores `stability`, `difficulty`, `due`, `last_review`, `reps`, `lapses`, `state`.
+- [x] **`ts-fsrs` (MIT) is the engine** used for scheduling.
 - [ ] **No SM-2 / single-`ease` model remains** anywhere in scheduling.
 - [ ] **Leech handling exists** — cards repeatedly lapsed are flagged and either reformulated by the LLM or have their source note section / prerequisite concepts resurfaced (not drilled forever).
 - [ ] **Mastery-triggered generation** fires when a topic's cards are nearly all mature (high stability / long intervals), producing harder cards.
@@ -114,12 +114,12 @@
 
 ### Warm-up (gateway)
 
-- [ ] **Exactly 3 cards** (`QUESTION_COUNT = 3`), self-graded, instant answer reveal from local DB.
-- [ ] **Cards drawn from today's due queue, biased toward the about-to-solve topic** — they are the first reps of SR review, not extra work.
-- [ ] **Fallback order implemented:** due cards of today's topic → any due card → a few non-counting "preview" cards.
-- [ ] **Preview cards are never written back to SR.**
-- [ ] **Warm-up never reviews not-due cards** (must not break SR) and **never shows an empty screen.**
-- [ ] **Warm-up is skippable, shows zero stats, and never blocks the problem.**
+- [x] **Exactly 3 cards** (`QUESTION_COUNT = 3`), self-graded, instant answer reveal from local DB.
+- [x] **Cards drawn from today's due queue, biased toward the about-to-solve topic** — they are the first reps of SR review, not extra work.
+- [x] **Fallback order implemented:** due cards of today's topic → any due card → a few non-counting "preview" cards.
+- [x] **Preview cards are never written back to SR.**
+- [x] **Warm-up never reviews not-due cards** (must not break SR) and **never shows an empty screen.**
+- [x] **Warm-up is skippable, shows zero stats, and never blocks the problem.**
 
 ### Flashcard review (real SR engine)
 
@@ -131,7 +131,7 @@
 
 ### Shared behavior
 
-- [ ] **No double-counting** — a card used in warm-up leaves the review queue for that day.
+- [x] **No double-counting** — a card used in warm-up leaves the review queue for that day.
 - [ ] **Sampling differs by design:** warm-up = current topic (priming); review = interleaved (retention); both share the same SR data underneath.
 
 ## §12 Daily loop
@@ -141,7 +141,7 @@
 ## §13 The $0 stack
 
 - [ ] **Hot store = SQLite** at `data/dsa.db`.
-- [ ] **SR engine = `ts-fsrs`** (local, MIT).
+- [x] **SR engine = `ts-fsrs`** (local, MIT).
 - [ ] **Embeddings = local** (Ollama `nomic-embed-text` or transformers.js).
 - [ ] **Batch expansion = local Ollama (Llama 3.1 / Qwen2.5) or free cloud tier (Gemini / Groq)**, plugged into the existing `llm.factory` chain.
 - [ ] **Sync/backup = Notion free tier.**
@@ -158,7 +158,7 @@
 
 - [x] **1.** Card + concept-tag + per-card FSRS schema, provenance fields, and append-only event-log table exist as a migration in `database/migrations`.
 - [x] **2.** `concepts.yaml` per topic (closed vocabulary + prerequisite edges) and seed cards for the first few topics exist in `database/seeds`.
-- [ ] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
+- [x] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
 - [ ] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
 - [ ] **5.** Batch generation pipeline exists (dirty-flag trigger → coverage-gap → generate → dedup → store, with provenance).
 - [ ] **6.** `SyncTarget` interface + Notion adapter exist (delta sync, batched flush).

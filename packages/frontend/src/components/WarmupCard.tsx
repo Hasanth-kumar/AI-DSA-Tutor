@@ -218,7 +218,7 @@ export function WarmupCard({
         <span className="warmup-title">5-minute recall warm-up</span>
         <span className="warmup-progress">
           {questionIndex + 1} / {data.questions.length}
-          {data.source === "notes" ? " · from your notes" : ""}
+          {data.source === "due" ? " · due cards" : data.source === "preview" ? " · preview" : ""}
         </span>
       </div>
 

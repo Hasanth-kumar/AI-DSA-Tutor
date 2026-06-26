@@ -3,7 +3,126 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 21 / 103 boxes passing.**
+**Validation status: 35 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-26 — Build-order Stage 3: per-card FSRS + CardRepository/CardService + warm-up rewired off the LLM (§1, §7, §11, §15.3)
+
+### What landed
+- **`ts-fsrs` (5.4.1, MIT)** added to `@dsa/backend` (`package.json` +
+  `pnpm-lock.yaml`). Per-card FSRS, **not** topic-level SM-2 — the migration cost
+  was identical so the switch was made now (design §7).
+- **`packages/backend/src/services/fsrs.ts`** — the single, pure, DB-free FSRS
+  wrapper: `rowToFsrsCard` / `fsrsCardToPatch` (lossless `cards`-row ↔ ts-fsrs
+  `Card` round-trip, epoch-ms ↔ Date), `selfGradeToRating` (0–5 self-grade →
+  Again/Hard/Good/Easy), and `reviewRow` (one review → next-state patch +
+  interval + leech trigger at `LEECH_LAPSE_THRESHOLD = 8`). Fuzz disabled for
+  deterministic, testable scheduling.
+- **`packages/backend/src/services/cardTypes.ts`** — the binding-free
+  `CardStore` contract (`dueCards`, `previewCards`, `findById`, `findByFront`,
+  `applyReview`, `logEvent`) + `CardRow`/`ReviewPatch`/query types. Mirrors the
+  seed store's split so `CardService` never imports a native SQLite driver and
+  can run against a `node:sqlite` test double.
+- **`packages/backend/src/repositories/CardRepository.ts`** — the Drizzle/
+  better-sqlite3 `CardStore` implementation (indexed due-queue reads, dirty-flag
+  write-back for the later delta sync §8, mirror-cache invalidation, event-log
+  append). The only concrete persistence layer for the card hot path.
+- **`packages/backend/src/services/CardService.ts`** — the local, **no-LLM**
+  hot path. `buildWarmup` implements the §11 fallback order exactly (today's-topic
+  due → any due → non-counting preview), records the *counting* served ids in
+  `SyncMetaRepository` so grading drives their SR, and never returns empty unless
+  the bank is. `review` applies per-card FSRS, writes back, appends a
+  `CardReviewed` event, and flags+logs `LeechDetected` on threshold crossing
+  (§9). `warmupGrade` applies the averaged self-grade as a per-card FSRS review
+  to each served counting card, then consumes the served set (idempotent/day).
+  `findAnswer` reveals the card back locally.
+- **`WarmupService` fully rewired** — constructor is now `(topicRepo,
+  cardService)`; the LLM chain, `SessionService`, note excerpts and
+  `fallbackWarmupQuestions` are **gone** from the warm-up path. `generateQuestions`
+  serves due cards from the local bank, `revealAnswer` reads the stored back
+  locally, `grade` drives per-card FSRS. `warmup.routes.ts` `/warmup/grade` now
+  calls `warmupService.grade` instead of `sessionService.applyRecallQuality`.
+  Wired `CardRepository`/`CardService` into `context.ts`.
+- **Frontend** — `WarmupQuestion` gains optional `cardId`/`type`/`preview`;
+  `WarmupQuestions.source` is now `due | preview | empty`; the warm-up header
+  label reflects that. No grade-flow change needed — the served set is recorded
+  server-side, so the existing `gradeWarmup(topicId, quality)` call drives
+  per-card FSRS underneath.
+- **Tests:** `fsrs.test.ts` (pure — grade map, round-trip, advance/lapse/leech)
+  and `CardService.test.ts` (`node:sqlite`-gated — fallback order, preview never
+  written, review advances + logs + leaves the queue, grade idempotency,
+  local answer reveal).
+
+### Verification (observed, not eyeballed)
+- `@dsa/backend` and `@dsa/frontend` **typecheck clean** (`tsc --noEmit`, incl.
+  the new tests); all new/edited backend files **lint clean** (`eslint`).
+- Compiled the backend and ran the **real** `CardService`/`fsrs` against a
+  migrated `node:sqlite` DB: **23/23** assertions pass — fallback order, preview
+  cards carry no SR writes/events, a Good review advances `due`/`reps`/stability
+  and logs `CardReviewed`, the graded card leaves the day's due queue (no
+  double-count), `warmupGrade` is idempotent within a day, and the leech flag
+  fires at the threshold.
+- **§1 proven behaviourally:** ran the full warm-up → show-answer → grade path
+  with `globalThis.fetch` overridden to throw ("network disabled"); it completed
+  (served 1, revealed "A" locally, graded 1, reps→1). A grep confirms the
+  hot-path modules import no LLM/network/`fetch` and `WarmupService` no longer
+  references `LLMService`/`SessionService`/`fallbackWarmupQuestions`.
+- **Test-runner caveat (unchanged):** the mounted `node_modules` is a macOS
+  install, so `better-sqlite3` and vitest's rollup binary can't load in the
+  Linux sandbox — `vitest` was not run here. Logic was verified by `tsc` +
+  executing the compiled service against `node:sqlite` (the same path the
+  committed tests use). On macOS run `pnpm install` (to link `ts-fsrs`) then
+  `pnpm --filter @dsa/backend test`. `ts-fsrs` was vendored into the sandbox's
+  pnpm store for the typecheck/compile only; `package.json` + `pnpm-lock.yaml`
+  carry the real entry for the macOS install.
+
+### Validation boxes flipped to `[x]` this run (21 → 35 / 103)
+- §1 — no live LLM on the hot path; hot-path latency near-zero (no synchronous
+  LLM chain in `WarmupService`); the old live behaviour is gone.
+- §7 — per-card FSRS implemented (stability/difficulty/due/last_review/reps/
+  lapses/state); `ts-fsrs` is the engine.
+- §11 — exactly 3 cards / self-graded / instant local reveal; drawn from the due
+  queue biased to the topic; fallback order; preview never written back; never
+  reviews not-due cards / never empty; skippable, zero stats, never blocks; no
+  double-counting (graded card leaves the day's queue).
+- §13 — SR engine = `ts-fsrs` (local, MIT).
+- §15.3 — Stage-3 artifact (CardRepository + CardService + warm-up local
+  fallback, no live LLM) exists.
+
+Deliberately left `[ ]`: §7 "no SM-2 remains *anywhere*" (Session._applyRecallQuality_
+still schedules topic SM-2 for *session* logging — out of scope for the card
+hot path; retire in a later cleanup); §7 leech *handling* and mastery generation
+(Stage 8 — the flag+event groundwork is in but reformulation/prereq-resurfacing
+is not); §9 full event-type coverage (only `CardReviewed`/`LeechDetected` are
+emitted; the rest arrive with generation §5 and triage §7); §11 "review =
+interleaved" (the separate review tab is Stage 7).
+
+### Design vs. existing code — conflicts & resolutions
+- **Warm-up grade was topic-level SM-2; now per-card FSRS.** The frontend still
+  posts one averaged self-grade per topic. Rather than rewrite the warm-up queue
+  UX this slice, `buildWarmup` records the served *counting* card ids in
+  `SyncMetaRepository` (keyed by topic+day, mirroring the existing `warmupSrs`
+  pattern), and `warmupGrade` applies that grade as a per-card FSRS review to
+  each. Result: zero frontend grade-flow change, but scheduling is genuinely
+  per-card. Noted as a reasonable single-user simplification (per design §11,
+  warm-up is priming, not a precise study session).
+- **Warm-up no longer marks topic-level SRS applied.** Decoupling warm-up from
+  `SessionService.applyRecallQuality` means it no longer bumps the topic SM-2
+  schedule / `wasWarmupSrsAppliedToday`. That is intended: per design the
+  flashcard SR (per-card FSRS) and the legacy topic schedule (still used by
+  *session* logging) are now independent systems. Session logging is untouched.
+- **`node-cron` weekly digest + SM-2 remain** for non-flashcard features; only
+  the warm-up path moved to FSRS. The broad "no SM-2 anywhere" box stays `[ ]`.
+
+### Next
+- **Stage 4:** local embedding + semantic dedup utility (transformers.js
+  `Xenova/all-MiniLM-L6-v2` or Ollama `nomic-embed-text`), vectors as SQLite
+  blobs, configurable threshold (~0.85) + a labelled golden set. Needs an
+  `embedding` blob column migration (deferred from Stage 1).
+- Then **Stage 5** batch generation (dirty-flag → coverage-gap → existing-tags-only
+  generation → Stage A + Stage B dedup → store with provenance), which unlocks
+  the remaining §2/§4/§5 boxes and the closed-vocabulary *generation* check.
 
 ---
 
