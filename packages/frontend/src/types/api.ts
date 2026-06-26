@@ -151,6 +151,42 @@ export interface RecallGradeResult {
   intervalDays: number;
 }
 
+/** One card in the flashcard-review queue (§11). */
+export interface ReviewCard {
+  id: string;
+  topicId: string | null;
+  type: string;
+  front: string;
+  back: string;
+  lapses: number;
+  /** Flagged a leech (§7) — surfaced so it isn't drilled silently forever. */
+  leech: boolean;
+  due: number | null;
+}
+
+export interface LeechAdvisory {
+  cardId: string;
+  front: string;
+  prerequisiteConcepts: string[];
+  noteExcerpt?: string;
+}
+
+export interface ReviewQueue {
+  cards: ReviewCard[];
+  cap: number;
+  hasMore: boolean;
+  leechAdvisories: LeechAdvisory[];
+}
+
+export interface ReviewGradeResult {
+  cardId: string;
+  due: number;
+  intervalDays: number;
+  state: number;
+  lapses: number;
+  leech: boolean;
+}
+
 export interface ScoreExplanation {
   topicId: string;
   topicName: string;

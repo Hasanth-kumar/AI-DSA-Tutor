@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { NotionSyncTarget, NOTION_RATE_LIMIT, type NotionClientLike } from "./NotionSyncTarget.js";
+import {
+  NotionSyncTarget,
+  NOTION_RATE_LIMIT,
+  assertSchemaTypes,
+  type NotionClientLike,
+} from "./NotionSyncTarget.js";
 import type { CardSyncRecord } from "./SyncTarget.js";
 
 function card(id: string, over: Partial<CardSyncRecord> = {}): CardSyncRecord {
@@ -35,12 +40,20 @@ interface Calls {
   schemaProps: string[];
 }
 
-function stubClient(opts: { failId?: string; existingProps?: string[] } = {}): {
+function stubClient(opts: {
+  failId?: string;
+  existingProps?: Array<string | [string, string]>;
+} = {}): {
   client: NotionClientLike;
   calls: Calls;
 } {
   const calls: Calls = { created: [], updated: [], schemaProps: [] };
-  const existing = Object.fromEntries((opts.existingProps ?? []).map((n) => [n, { type: "x" }]));
+  const existing = Object.fromEntries(
+    (opts.existingProps ?? []).map((entry) => {
+      const [name, type] = Array.isArray(entry) ? entry : [entry, "rich_text"];
+      return [name, { type }];
+    }),
+  );
   const client: NotionClientLike = {
     pages: {
       create: async ({ properties }) => {
@@ -123,5 +136,15 @@ describe("NotionSyncTarget (§8, §10, §13)", () => {
       failed: 0,
       pageIds: {},
     });
+  });
+
+  it("rejects CSV-imported text columns where select/multi_select are required", () => {
+    expect(() =>
+      assertSchemaTypes({
+        Front: { type: "title" },
+        Type: { type: "rich_text" },
+        "Concept Tags": { type: "rich_text" },
+      }),
+    ).toThrow(/schema mismatch.*Type.*Concept Tags/s);
   });
 });

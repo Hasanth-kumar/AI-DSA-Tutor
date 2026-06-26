@@ -342,11 +342,21 @@ function fallbackChatReply(): string {
 }
 
 function fallbackDebrief(ctx: DebriefContext): string {
-  const focus = ctx.isWeakArea
-    ? `Weak area detected — schedule extra ${ctx.topicName} practice.`
-    : `Solid session on ${ctx.topicName}.`;
+  const rating = ctx.productivityScore >= 80 ? 3 : ctx.productivityScore >= 50 ? 2 : 1;
+  const resolveWindow =
+    rating === 3 ? "spaced review in ~2–3 weeks" : rating === 2 ? "cold re-solve in ~5–7 days" : "cold re-solve in ~2 days";
+  const nextAction = ctx.isWeakArea
+    ? `Drill one foundational ${ctx.topicName} sub-skill before the next full problem.`
+    : `Pick the next problem from the engine recommendation: ${ctx.recommendation}`;
 
-  return `📝 Session Debrief\n\n${focus}\nProductivity: ${ctx.productivityScore}/100. ${ctx.recommendation}`;
+  return `📝 Session Debrief
+
+**${ctx.topicName} debrief**
+- **Calibration (1–3):** ${rating} — derived from productivity ${ctx.productivityScore}/100; adjust if it doesn't match how it felt.
+- **Re-solve:** ${resolveWindow}
+- **Signal → pattern → gotcha:** _____ → ${ctx.topicName} → _____
+- **Mistake tag:** _____
+- **Next action:** ${nextAction}`;
 }
 
 export function createLLMService(config: LLMServiceConfig): LLMService {

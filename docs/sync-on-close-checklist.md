@@ -2,7 +2,7 @@
 
 **Goal:** Keep Notion as the source of truth, keep SQLite as a fast local mirror, and guarantee that local mutations are flushed back to Notion when a study session ends and when the app/localhost is closed.
 
-**Verdict:** Yes — this works *without* destroying the existing structure. The architecture was already built for exactly this model (Notion canonical, SQLite mirror, dirty-queue + replay). The model you describe is ~80% already implemented. The remaining work is purely **additive**: a guaranteed flush on shutdown and a hardening pass. No schema migration, no change to how Notion or SQLite store data.
+**Verdict:** Yes — this works *without* destroying the existing structure. The architecture was already built for exactly this model (Notion canonical, SQLite mirror, dirty-queue + replay). Topic/problem sync-on-close is implemented; card-bank sync flushes on shutdown via the same graceful-shutdown path.
 
 ---
 
@@ -16,28 +16,34 @@
 | Dirty-queue for local edits (`markTopicDirty` / `markProblemDirty`) | `SyncMetaRepository` | ✅ |
 | Replay pending local mutations → Notion on next sync | `NotionSyncService.pullFromNotion()` (replay loop) | ✅ |
 | Conflict detection + resolution | `ConflictRepository`, `NotionSyncService.detectConflicts/resolveConflict` | ✅ |
-| **Push after each session** (best-effort, queued on failure) | `SessionService.completeSession()` lines ~172–228 | ✅ |
+| **Push after each session** (best-effort, queued on failure) | `SessionService.completeSession()` | ✅ |
 | Sync on startup (`pnpm study`) | `infrastructure/scripts/study.sh` (`POST /api/sync`) | ✅ |
 | Manual sync endpoints | `POST /api/sync`, `/api/sync/pull`, `GET /api/sync/status` | ✅ |
+| Push-only flush on shutdown (topics/problems) | `server.ts` → `flushPendingToNotion()` | ✅ |
+| `POST /api/sync/flush` + frontend beacon | `sync.routes.ts`, `flushOnClose.ts` | ✅ |
+| **Card bank** delta sync + batched flush | `CardBankSyncService`, `CardSyncService` | ✅ |
+| Card flush on shutdown | `server.ts` + `context.close()` → `cardBankSync.flush()` | ✅ |
+| Card sync routes | `POST /api/sync/cards/flush`, `GET /api/sync/cards/status` | ✅ |
+| Periodic card flush | `CARDS_SYNC_FLUSH_INTERVAL_MS` (default 5 min) | ✅ |
 | SQLite backup on stop | `infrastructure/scripts/study-stop.sh` → `POST /api/backup` | ✅ |
 
-**Implication:** "after a user session" is *already* satisfied — `completeSession()` marks records dirty and pushes immediately; if the push fails it stays queued and replays next sync. You do not need to touch the session path except to confirm it.
+**Implication:** "after a user session" is *already* satisfied for topics/problems — `completeSession()` marks records dirty and pushes immediately; if the push fails it stays queued and replays next sync. Card reviews write to SQLite instantly and flush via the periodic timer or shutdown handler.
 
 ---
 
-## The actual gap
+## The actual gap (remaining)
 
-The "on app close / on localhost close" guarantee is missing:
+Most sync-on-close work is done. What remains is **manual verification**, not code:
 
-1. `packages/backend/src/server.ts` — the `SIGINT`/`SIGTERM` `shutdown()` handler closes schedulers, context (stops backup + closes SQLite), and the HTTP server. **It does not flush the pending Notion queue first.**
-2. `infrastructure/scripts/study-stop.sh` — backs up SQLite but **does not trigger a final Notion sync** before killing the dev servers.
-3. There is no **push-only / flush** endpoint. The only writeback path is `POST /api/sync`, which also *pulls* (acceptable, but a last-second pull on shutdown is undesirable — see guardrails).
+1. Manual e2e: complete a session offline, restore network, run `pnpm study:stop`, confirm Notion updated.
+2. Manual e2e: review cards offline, stop study mode, confirm card bank flushed to Notion (or JSON export).
+3. Confirm `GET /api/sync/status` reports zero pending after a clean close.
 
-Net effect today: if a session's best-effort push failed (offline, schema drift) and the user closes the app, those dirty rows sit in the queue until the *next* startup. That is safe (no data loss — SQLite persists the queue), but it is not a guaranteed "sync on close."
+The stop script calls `POST /api/sync/flush` (topics/problems only). Card bank flush relies on the backend `SIGTERM`/`SIGINT` handler (`cardBankSync.flush()` in `server.ts`) and `context.close()` — both fire when the stop script kills the backend process.
 
 ---
 
-## Phase 1 — Add a flush (push-only) path
+## Phase 1 — Add a flush (push-only) path *(complete)*
 
 - [x] Add `flushPendingToNotion()` to `NotionSyncService`. It should drain the pending queue **without pulling**: iterate `syncMeta.getPendingTopics()` / `getPendingProblems()`, call `pushTopicToNotion` / `pushProblemToNotion`, and `clearTopic` / `clearProblem` on success. Reuse the existing replay loop logic — factor the loop out of `pullFromNotion()` so both share one implementation. → shared `replayPending()` now backs both pull-replay and flush.
 - [x] Return a small result `{ pushedTopics, pushedProblems, failed }` so callers/scripts can log it.
@@ -85,12 +91,13 @@ Net effect today: if a session's best-effort push failed (offline, schema drift)
 
 ## Touch list (files changed)
 
-- `packages/backend/src/services/NotionSyncService.ts` — add `flushPendingToNotion()`, factor out replay loop.
-- `packages/backend/src/routes/sync.routes.ts` — add `POST /api/sync/flush`.
-- `packages/backend/src/server.ts` — flush in `shutdown()` + hard deadline + re-entrancy guard.
+- `packages/backend/src/services/NotionSyncService.ts` — `flushPendingToNotion()`, shared replay loop.
+- `packages/backend/src/services/CardBankSyncService.ts` — card bank periodic + shutdown flush.
+- `packages/backend/src/routes/sync.routes.ts` — `POST /api/sync/flush`, card sync routes.
+- `packages/backend/src/server.ts` — topic/problem + card flush in `shutdown()`.
+- `packages/backend/src/context.ts` — card flush in `close()`.
 - `infrastructure/scripts/study-stop.sh` — flush before killing servers.
-- `packages/frontend/...` — `beforeunload` beacon (optional, Phase 4).
-- `packages/backend/src/...test.ts` — new tests.
-- Optional: a short ADR in `docs/adr/` recording "flush is push-only on shutdown."
+- `packages/frontend/src/lib/flushOnClose.ts` — `beforeunload` beacon.
+- Test files for flush behavior.
 
-**Not touched:** database schema/migrations, Notion database structure, `SyncMetaRepository` storage format, the merge/conflict engine, `SessionService` (verify only).
+**Not touched:** database schema/migrations, Notion database structure, merge/conflict engine.

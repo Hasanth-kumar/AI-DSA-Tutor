@@ -1,9 +1,15 @@
 # ADR 0001 — SRS / scheduling architecture decisions
 
-Status: **Accepted** (2026-06-15)
+Status: **Accepted** (2026-06-15), **amended** (2026-06-26 for flashcard FSRS)
 Scope: Phase 0 of `IMPLEMENTATION_CHECKLIST.md`. These are binding rules for all
 subsequent phases (single SRS path, persisted SM-2 state, safe/merge sync,
 "Again" warm-up behavior). They are cheap to write now and expensive to retrofit.
+
+> **2026-06-26 amendment:** The flashcard rework introduced a **second, independent
+> scheduling model** — per-card FSRS for the warm-up and Review tab (`CardService`,
+> `ts-fsrs`). Decision A below still governs **topic-level** SM-2 for the revision
+> queue and session analytics. The two models do not share state. See
+> `docs/flashcard-system-design.md` §7 and ADR scope note in `CLAUDE.md`.
 
 ---
 

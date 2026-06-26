@@ -17,6 +17,7 @@ import { integrationsRoutes } from "./routes/integrations.routes.js";
 import { syncRoutes } from "./routes/sync.routes.js";
 import { notesRoutes } from "./routes/notes.routes.js";
 import { warmupRoutes } from "./routes/warmup.routes.js";
+import { reviewRoutes } from "./routes/review.routes.js";
 import { exportRoutes } from "./routes/export.routes.js";
 import { eventsRoutes } from "./routes/events.routes.js";
 import {
@@ -95,6 +96,13 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
         answer: "POST /api/warmup/answer",
         grade: "POST /api/warmup/grade",
       },
+      review: {
+        queue: "GET /api/review/queue?cap=<n>",
+        grade: "POST /api/review/grade",
+        suspend: "POST /api/review/:cardId/suspend",
+        edit: "PATCH /api/review/:cardId",
+        delete: "DELETE /api/review/:cardId",
+      },
       attempts: "PATCH /api/attempts/:id/mistake",
       export: "GET /api/export",
       backup: "POST /api/backup",
@@ -108,6 +116,9 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       },
       sync: "POST /api/sync",
       syncFlush: "POST /api/sync/flush",
+      syncCardsFlush: "POST /api/sync/cards/flush",
+      syncCardsStatus: "GET /api/sync/cards/status",
+      syncCardsPull: "POST /api/sync/cards/pull",
       notifications: {
         dailyPlan: "POST /api/notifications/daily-plan",
         revisionCheck: "POST /api/notifications/revision-check",
@@ -137,6 +148,7 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       await syncRoutes(instance, ctx);
       await notesRoutes(instance, ctx);
       await warmupRoutes(instance, ctx);
+      await reviewRoutes(instance, ctx);
       await exportRoutes(instance, ctx);
       await eventsRoutes(instance, ctx);
       await whatsappNotificationRoutes(instance, ctx);

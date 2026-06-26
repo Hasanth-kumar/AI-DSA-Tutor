@@ -1,5 +1,16 @@
 # DSA Mastery OS — Comprehensive Implementation Plan
 
+> **⚠ Historical document (2025).** This plan predates the current codebase. For
+> accurate architecture, commands, and API surface, use:
+> - [README.md](README.md) — what the system does today
+> - [CLAUDE.md](CLAUDE.md) — developer guide
+> - [docs/flashcard-system-design.md](docs/flashcard-system-design.md) — flashcard rework spec
+> - [flashcard-system-validation.md](flashcard-system-validation.md) — implementation checklist
+>
+> Key deltas from this plan: React dashboard shipped (not "future"), WhatsApp not Telegram,
+> OpenRouter not Ollama-primary, in-process cron not n8n-required, per-card FSRS flashcard
+> bank added, Redis never adopted.
+
 > **Executive Summary**  
 > DSA Mastery OS is not a tracker — it is an autonomous learning intelligence layer over your Notion databases, powered by local AI (Ollama), automated via n8n, and delivered through WhatsApp. The system's competitive advantage is its **Intelligence Layer**: five engines that work together to understand your learning state, schedule optimally, and adapt in real-time. This plan is organized into six phases spanning roughly 20–24 weeks of active development. The first four weeks are non-negotiable: they lay the intelligence foundation that everything else depends on. Start there. Ship the rest iteratively.
 

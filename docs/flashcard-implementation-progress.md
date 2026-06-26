@@ -3,7 +3,143 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 81 / 103 boxes passing.**
+**Validation status: 94 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-26 (f) — Build-order Stage 8: leech remediation + mastery trigger + card sync wiring (§4, §7, §8, §9, §15.8)
+
+### What landed
+- **`packages/backend/src/services/leechRemediation.ts`** — `createConceptGraph` reads static
+  `requires` edges from seed vocabulary; used by `CardService.reviewQueue` to skip drilling
+  leech cards and resurface due cards tagged with their prerequisite concepts instead (§4, §7).
+- **`packages/backend/src/services/masteryTrigger.ts`** — `isTopicNearlyMature` (≥80% of active
+  cards with stability ≥21 days, min 3 cards) marks the topic dirty for batch generation (§7).
+- **`packages/backend/src/context.ts`** — wires leech + mastery hooks into `CardService`:
+  `onLeechDetected` → `markTopicDirty` (batch reformulation); `onReviewComplete` → mastery
+  check (once per topic per process); `noteExcerpt` for leech advisory UI.
+- **`CardService.reviewQueue`** — leech due cards excluded from the drill queue; prerequisite
+  cards inserted first; `leechAdvisories` returned with concept ids + note excerpt.
+- **`packages/backend/src/services/CardBankSyncService.ts`** — backend wiring for §8 batched
+  flush: periodic timer (`CARDS_SYNC_FLUSH_INTERVAL_MS`), shutdown flush in `server.ts` and
+  `context.close()`, health reporting. Notion when `NOTION_CARDS_DB_ID` set, else JSON+MD export.
+- **`packages/backend/src/routes/sync.routes.ts`** — `POST /api/sync/cards/flush`,
+  `GET /api/sync/cards/status`, `POST /api/sync/cards/pull`; card health merged into
+  `GET /api/sync/status`.
+- **`packages/frontend/src/pages/ReviewPage.tsx`** — leech advisory banner ("prerequisites
+  surfaced instead"); existing triage + cap + "you're done" flow unchanged.
+
+### Verification
+- `@dsa/backend` CardService tests cover review queue, leech skip, suspend/delete/edit events.
+- `masteryTrigger.test.ts` covers maturity fraction thresholds.
+- Card bank flush runs on graceful shutdown (server.ts) and context close.
+- Health endpoint reports `sync.cards.pendingDirty` and target name.
+
+### Validation boxes flipped to `[x]` this run (88 → 93 / 103)
+- §4 — repeated lapses resurface prerequisites (leech → prerequisite due cards).
+- §7 — leech handling (skip drill, resurface prereqs, mark topic dirty for reformulation).
+- §7 — mastery-triggered generation (`isTopicNearlyMature` → `markTopicDirty`).
+- §7 — single trigger only (no card-generation cron; dirty-flag + mastery only).
+- §15.8 — Stage-8 artifact exists.
+
+Deliberately left `[ ]`: §9 full event-type coverage (`CardMerged` unwired — no merge UI).
+§9 on-demand analytics. §2 strict "notes sole source of truth." §3 mistake-derived /
+confusion-pair cards (helpers exist, not fully wired into generation). §8 live Notion
+round-trip and code-in-page-blocks. §7 "no SM-2 anywhere" (topic SM-2 still powers revision
+queue). §12 daily-loop UX verification (manual). §13 SQLite path in design doc says
+`data/dsa.db` — actual path is `data/sqlite/dsa.db`.
+
+### Next (maintenance / polish)
+1. Wire `extractMistakeSection` into the generation note provider (§3).
+2. Obsidian note-watcher → `markTopicDirty` on real note edits.
+3. Optional: `CardMerged` event if a dedup/merge UI is added.
+4. Manual e2e: live Notion card round-trip, offline session → flush on close.
+
+---
+
+## Run 2026-06-26 (e) — Build-order Stage 7: flashcard review surface + inline triage (§9, §11, §15.7)
+
+### What landed
+- **`packages/backend/src/services/CardService.ts`** — the review surface reuses
+  the **existing** per-card FSRS engine; no new scheduling code:
+  - **`reviewQueue(cap)`** — the real SR queue (§11): due cards across **all**
+    topics in due order (standard SR interleaving — no topic bias, that's the
+    warm-up's job), hard-capped. Fetches `cap + 1` to report `hasMore` without a
+    COUNT, so the UI can say "you're done, the rest can wait" honestly. Reuses
+    `CardStore.dueCards` with no `topicId` — zero new query code.
+  - **`suspend` / `deleteCard` / `editCard`** — one-call inline triage (§11), each
+    appending the matching §9 event (`CardSuspended` / `CardDeleted` / `CardEdited`).
+    `deleteCard` logs **before** removing the row, carrying the content in the
+    payload, so a wrongly-deleted card is recoverable from the append-only log
+    (§9 = the real defense against bad generated cards). `editCard` marks the card
+    `dirty` because content is Notion-authoritative (§8) and must flush up; the
+    `CardEdited` event records before/after. **Grade reuses `review()`** unchanged —
+    the same FSRS path warm-up already drives.
+- **`cardTypes.ts` + `CardRepository.ts`** — three new `CardStore` methods
+  (`suspend`, `deleteCard`, `updateContent`); `deleteCard` clears `card_concepts`
+  first (coverage stays correct, FK-safe under node:sqlite). `card_embeddings`
+  relies on its `ON DELETE CASCADE` (0012); a stale orphan there is harmless.
+- **`packages/backend/src/routes/review.routes.ts`** — `GET /api/review/queue?cap=`,
+  `POST /api/review/grade`, `POST /api/review/:cardId/suspend`,
+  `PATCH /api/review/:cardId`, `DELETE /api/review/:cardId`. Mirrors the
+  `warmup.routes` style (serialize, `events.publish("topic")`, 404-on-not-found).
+  No `context.ts` change — `CardService` was already wired; the routes call it.
+- **`packages/frontend/src/pages/ReviewPage.tsx`** + a **Review tab** in `App.tsx` —
+  one card at a time, reveal → self-grade (Again/Hard/Good/Easy → quality 1/3/4/5),
+  **one-keystroke triage** (`space` reveal, `1–4` grade, `s` suspend, `e` edit,
+  `x` delete). Leech cards show a ⚠ badge with guidance instead of silent
+  re-drilling. Clearing the capped queue shows an explicit **"you're done — go
+  solve"** (and "more are due, but the rest can wait. Don't grind." when capped) —
+  never a backlog guilt-trip. Opt-in = it's a tab you choose to open. API client +
+  types extended; a small CSS block reuses the existing warm-up card styling.
+
+### Verification (observed, not eyeballed — run on macOS, native node_modules)
+- **`pnpm --filter @dsa/backend exec vitest run src/services/CardService.test.ts`
+  → 10/10 pass** against a **real migrated `node:sqlite`** DB (Node 25): the
+  review queue interleaves both topics by due date and excludes not-due cards,
+  caps and reports `hasMore`; suspend drops the card from the queue and logs
+  `CardSuspended`; delete removes the row and logs `CardDeleted` with the content
+  preserved in the payload; edit updates content, marks the row `dirty`, and logs
+  `CardEdited` with before/after. (The 6 prior warm-up/FSRS assertions still pass.)
+- `@dsa/backend` and `@dsa/frontend` **typecheck clean** (`tsc --noEmit`); all
+  new/edited files **lint clean** (`eslint`, exit 0).
+- **`pnpm --filter @dsa/frontend build` succeeds** — `ReviewPage` is its own
+  lazy 5.6 kB chunk; CSS compiles.
+
+### Validation boxes flipped to `[x]` this run (81 → 88 / 103)
+- §11 review surface — separate tab; interleaves all topics; opt-in;
+  one-keystroke inline triage (suspend/delete/edit, each event-logged); hard
+  daily cap + explicit "you're done" signal, no guilt-trip.
+- §11 shared — sampling differs by design (warm-up topic-biased priming vs review
+  interleaved retention; same SR data underneath).
+- §15.7 — Stage-7 artifact (review surface + inline triage) exists.
+
+Deliberately left `[ ]`: §9 "logged event types include … `CardMerged` …" — 6 of 7
+types now emit (`CardReviewed`/`CardGenerated`/`CardEdited`/`CardSuspended`/
+`CardDeleted`/`LeechDetected`); only `CardMerged` is unwired because no
+card-merge flow exists in the design's UI (triage is suspend/delete/edit). §9
+on-demand analytics (no query layer yet). All of §7 leech *handling* / mastery
+generation and §4 lapses-resurface-prerequisites stay for Stage 8.
+
+### Design vs. existing code — conflicts & resolutions
+- **No new service class.** The design's "real SR engine" is the same per-card
+  FSRS already in `CardService`; the review surface is sampling + triage on top,
+  so it extends `CardService` rather than adding a parallel engine. Grade routes
+  straight through the existing `review()`.
+- **"Interleaved" = due-order across all topics**, the standard SR mix (Anki-style),
+  not a round-robin scheduler. Warm-up passes a `topicId` to bias; review omits it.
+  ponytail: no bespoke interleaver nobody asked for.
+- **Delete is a hard delete** (+ concept-link cleanup) with the content captured in
+  the `CardDeleted` event first — recoverable from the log without keeping a
+  tombstone row. Suspend remains the soft, reversible path.
+
+### Next run (Stage 8 — final)
+1. ~~**Leech handling** (§7, §4)~~ — done in Run (f).
+2. ~~**Mastery-triggered generation** (§7)~~ — done in Run (f).
+3. ~~Wire `CardSyncService.flush` to session-close / a timer~~ — done via `CardBankSyncService`.
+
+*Stage 8 complete. Remaining open boxes are polish (§3 mistake/confusion cards, §9 analytics,
+§8 live Notion verification, §7 retire topic SM-2).*
 
 ---
 

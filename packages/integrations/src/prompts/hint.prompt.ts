@@ -11,8 +11,8 @@ const DIFFICULTY_GUIDANCE: Record<TopicDifficulty, string> = {
 };
 
 const HINT_LEVEL_GUIDANCE: Record<1 | 2 | 3 | 4, string> = {
-  1: "Level 1 — conceptual nudge: point at the key observation or property. Do NOT name the algorithm/pattern, give steps, or code.",
-  2: "Level 2 — approach: name the pattern/technique to use (e.g. 'sliding window') and why it fits. No pseudocode, no code.",
+  1: "Level 1 — conceptual nudge: state the key observation or property AND why it matters, then give ONE concrete next step to try. Do NOT name the algorithm/pattern or give the full steps/code. Never a bare cryptic nudge — instead of 'think about sorting', say e.g. 'the array is sorted, so a single comparison can rule out a whole half of the range; next, decide which half to discard based on how the middle compares to the target'.",
+  2: "Level 2 — approach: name the pattern/technique (e.g. 'sliding window'), explain why it fits THIS problem, and give one concrete next step to set it up. No pseudocode, no code.",
   3: "Level 3 — pseudocode: outline the algorithm step by step in plain pseudocode. No runnable code in any language.",
   4: "Level 4 — full solution: walk through the complete solution with code and complexity analysis.",
 };

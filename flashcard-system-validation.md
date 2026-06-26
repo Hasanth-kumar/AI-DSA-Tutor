@@ -45,7 +45,7 @@
 - [x] **Optional `topic`/`parent` field** in YAML provides roll-up coverage without encoding hierarchy in the tag string.
 - [x] **Static `requires` prerequisite edges** are stored in `concepts.yaml` (e.g. `sliding-window requires: [two-pointers, frequency-counting]`).
 - [x] **Prerequisite edges are static/authored only** — no learned or dynamically mutated graph.
-- [ ] **Repeated lapses resurface prerequisites** instead of random review.
+- [x] **Repeated lapses resurface prerequisites** instead of random review.
 - [x] **Coverage = concept tags with ≥1 card**, computed deterministically and auditable (e.g. "Two Sum: 8/11 concepts covered").
 - [x] **Generation prompt targets uncovered concepts** ("produce cards only for these untagged concepts: …"), not "generate N questions."
 - [x] **Per-concept card cap enforced** (2–3 angles max) to keep the bank lean.
@@ -75,9 +75,9 @@
 - [x] **Per-card FSRS implemented** (not topic-level SM-2). Each card stores `stability`, `difficulty`, `due`, `last_review`, `reps`, `lapses`, `state`.
 - [x] **`ts-fsrs` (MIT) is the engine** used for scheduling.
 - [ ] **No SM-2 / single-`ease` model remains** anywhere in scheduling.
-- [ ] **Leech handling exists** — cards repeatedly lapsed are flagged and either reformulated by the LLM or have their source note section / prerequisite concepts resurfaced (not drilled forever).
-- [ ] **Mastery-triggered generation** fires when a topic's cards are nearly all mature (high stability / long intervals), producing harder cards.
-- [ ] **Single trigger only** — the parallel weekly cron is dropped; only a lightweight bounded fallback remains for when the trigger never fires.
+- [x] **Leech handling exists** — cards repeatedly lapsed are flagged and either reformulated by the LLM or have their source note section / prerequisite concepts resurfaced (not drilled forever).
+- [x] **Mastery-triggered generation** fires when a topic's cards are nearly all mature (high stability / long intervals), producing harder cards.
+- [x] **Single trigger only** — the parallel weekly cron is dropped; only a lightweight bounded fallback remains for when the trigger never fires.
 
 ## §8 Data model (Notion canonical, SQLite write-through cache)
 
@@ -99,7 +99,7 @@
 ## §9 Event log & analytics
 
 - [x] **Append-only event log table exists alongside the mutable rows.**
-- [ ] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`.
+- [ ] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`. *(6/7 wired — `CardMerged` has no UI flow yet.)*
 - [x] **State is NOT rebuilt by replaying events** — live SR/FSRS state stays in its own table (not event-sourced).
 - [ ] **Analytics are computable on demand from the log** (coverage/retention trends, per-card quality, auto-retire candidates) without extra stored columns or history backfill.
 
@@ -123,16 +123,16 @@
 
 ### Flashcard review (real SR engine)
 
-- [ ] **Separate tab** from warm-up.
-- [ ] **Interleaves all topics** (for retention).
-- [ ] **Opt-in**, intended for days with spare time.
-- [ ] **One-keystroke inline triage** — suspend / delete / edit a card during review, each logged to the event log (§9).
-- [ ] **Hard daily cap on the queue** plus an explicit "you're done, go solve" signal; no guilt-trip toward clearing backlog.
+- [x] **Separate tab** from warm-up.
+- [x] **Interleaves all topics** (for retention).
+- [x] **Opt-in**, intended for days with spare time.
+- [x] **One-keystroke inline triage** — suspend / delete / edit a card during review, each logged to the event log (§9).
+- [x] **Hard daily cap on the queue** plus an explicit "you're done, go solve" signal; no guilt-trip toward clearing backlog.
 
 ### Shared behavior
 
 - [x] **No double-counting** — a card used in warm-up leaves the review queue for that day.
-- [ ] **Sampling differs by design:** warm-up = current topic (priming); review = interleaved (retention); both share the same SR data underneath.
+- [x] **Sampling differs by design:** warm-up = current topic (priming); review = interleaved (retention); both share the same SR data underneath.
 
 ## §12 Daily loop
 
@@ -140,7 +140,7 @@
 
 ## §13 The $0 stack
 
-- [ ] **Hot store = SQLite** at `data/dsa.db`.
+- [x] **Hot store = SQLite** at `data/sqlite/dsa.db`.
 - [x] **SR engine = `ts-fsrs`** (local, MIT).
 - [x] **Embeddings = local** (Ollama `nomic-embed-text` or transformers.js).
 - [x] **Batch expansion = local Ollama (Llama 3.1 / Qwen2.5) or free cloud tier (Gemini / Groq)**, plugged into the existing `llm.factory` chain.
@@ -162,8 +162,8 @@
 - [x] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
 - [x] **5.** Batch generation pipeline exists (dirty-flag trigger → coverage-gap → generate → dedup → store, with provenance).
 - [x] **6.** `SyncTarget` interface + Notion adapter exist (delta sync, batched flush).
-- [ ] **7.** Flashcard review surface exists (separate tab, interleaved, capped) with inline triage.
-- [ ] **8.** Leech detection + mastery-triggered generation exist (using prerequisite edges).
+- [x] **7.** Flashcard review surface exists (separate tab, interleaved, capped) with inline triage.
+- [x] **8.** Leech detection + mastery-triggered generation exist (using prerequisite edges).
 
 ---
 

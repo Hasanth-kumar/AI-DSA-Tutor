@@ -39,7 +39,10 @@ export async function syncRoutes(app: FastifyInstance, ctx: AppContext): Promise
   });
 
   app.get("/sync/status", async (_request, reply) => {
-    return reply.send(ctx.notionSync.getSyncHealth());
+    return reply.send({
+      ...ctx.notionSync.getSyncHealth(),
+      cards: ctx.cardBankSync.getHealth(),
+    });
   });
 
   app.get("/sync/conflicts", async (_request, reply) => {
@@ -83,6 +86,38 @@ export async function syncRoutes(app: FastifyInstance, ctx: AppContext): Promise
       request.log.error(err);
       return reply.status(502).send({
         error: err instanceof Error ? err.message : "Pull failed",
+      });
+    }
+  });
+
+  /** Batched card-bank delta flush (§8) — Notion when configured, else local JSON export. */
+  app.post("/sync/cards/flush", async (request, reply) => {
+    try {
+      const result = await ctx.cardBankSync.flush();
+      return reply.send(result);
+    } catch (err) {
+      request.log.error(err);
+      return reply.status(502).send({
+        error: err instanceof Error ? err.message : "Card sync flush failed",
+      });
+    }
+  });
+
+  app.get("/sync/cards/status", async (_request, reply) => {
+    return reply.send(ctx.cardBankSync.getHealth());
+  });
+
+  app.post("/sync/cards/pull", async (request, reply) => {
+    try {
+      const result = await ctx.cardBankSync.pull();
+      if (result == null) {
+        return reply.status(503).send({ error: "Card sync target does not support pull" });
+      }
+      return reply.send(result);
+    } catch (err) {
+      request.log.error(err);
+      return reply.status(502).send({
+        error: err instanceof Error ? err.message : "Card sync pull failed",
       });
     }
   });

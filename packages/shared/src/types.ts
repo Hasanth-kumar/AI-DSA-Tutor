@@ -11,6 +11,12 @@ export interface SyncHealth {
   pendingTopics: number;
   pendingProblems: number;
   unresolvedConflicts: number;
+  cards?: {
+    target: string;
+    configured: boolean;
+    pendingDirty: number;
+    lastFlushAt: string | null;
+  };
 }
 
 export interface HealthResponse {

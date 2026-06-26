@@ -50,6 +50,17 @@ async function main() {
       }
     }
 
+    try {
+      const cardFlush = await ctx.cardBankSync.flush();
+      if (cardFlush.pushed > 0) {
+        app.log.info(
+          `Card bank shutdown flush: pushed ${cardFlush.pushed}, ${cardFlush.failed} still dirty`,
+        );
+      }
+    } catch (err) {
+      app.log.warn({ err }, "Card bank shutdown flush failed — dirty cards replay on next flush");
+    }
+
     await schedulers.close();
     await ctx.close();
     await app.close();

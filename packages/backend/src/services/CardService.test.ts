@@ -7,10 +7,12 @@ import type {
   CardEventInput,
   CardRow,
   CardStore,
+  ConceptDueQuery,
   DueQuery,
   PreviewQuery,
   ReviewPatch,
 } from "./cardTypes.js";
+import type { ConceptGraph } from "./leechRemediation.js";
 
 /**
  * Hot-path acceptance for the warm-up + per-card FSRS engine (design §1, §7,
@@ -90,13 +92,50 @@ class SqliteCardStore implements CardStore {
 
   dueCards(q: DueQuery): CardRow[] {
     const topic = q.topicId ? " AND topic_id = ?" : "";
+    const leech = q.excludeLeech ? " AND leech=0" : "";
     const exclude =
       q.excludeIds && q.excludeIds.length
         ? ` AND id NOT IN (${q.excludeIds.map(() => "?").join(",")})`
         : "";
-    const sql = `SELECT * FROM cards WHERE suspended=0 AND due<=?${topic}${exclude} ORDER BY due ASC LIMIT ?`;
+    const sql = `SELECT * FROM cards WHERE suspended=0 AND due<=?${topic}${leech}${exclude} ORDER BY due ASC LIMIT ?`;
     const params = [q.now, ...(q.topicId ? [q.topicId] : []), ...(q.excludeIds ?? []), q.limit];
     return this.db.prepare(sql).all(...params).map(mapRow);
+  }
+
+  dueCardsByConcepts(q: ConceptDueQuery): CardRow[] {
+    if (q.conceptIds.length === 0) return [];
+    const topic = q.topicId ? " AND c.topic_id = ?" : "";
+    const exclude =
+      q.excludeIds && q.excludeIds.length
+        ? ` AND c.id NOT IN (${q.excludeIds.map(() => "?").join(",")})`
+        : "";
+    const placeholders = q.conceptIds.map(() => "?").join(",");
+    const sql = `SELECT DISTINCT c.* FROM cards c
+      JOIN card_concepts cc ON cc.card_id = c.id
+      WHERE c.suspended=0 AND c.due<=? AND cc.concept_id IN (${placeholders})${topic}${exclude}
+      ORDER BY c.due ASC LIMIT ?`;
+    const params = [
+      q.now,
+      ...q.conceptIds,
+      ...(q.topicId ? [q.topicId] : []),
+      ...(q.excludeIds ?? []),
+      q.limit,
+    ];
+    return this.db.prepare(sql).all(...params).map(mapRow);
+  }
+
+  conceptsFor(cardId: string): string[] {
+    return this.db
+      .prepare("SELECT concept_id FROM card_concepts WHERE card_id = ?")
+      .all(cardId)
+      .map((r) => String(r.concept_id));
+  }
+
+  findByTopic(topicId: string): CardRow[] {
+    return this.db
+      .prepare("SELECT * FROM cards WHERE topic_id = ?")
+      .all(topicId)
+      .map(mapRow);
   }
 
   previewCards(q: PreviewQuery): CardRow[] {
@@ -149,6 +188,19 @@ class SqliteCardStore implements CardStore {
       );
   }
 
+  suspend(id: string, now: number): void {
+    this.db.prepare("UPDATE cards SET suspended=1, dirty=1, updated_at=? WHERE id=?").run(now, id);
+  }
+
+  deleteCard(id: string): void {
+    this.db.prepare("DELETE FROM card_concepts WHERE card_id=?").run(id);
+    this.db.prepare("DELETE FROM cards WHERE id=?").run(id);
+  }
+
+  updateContent(id: string, front: string, back: string, now: number): void {
+    this.db.prepare("UPDATE cards SET front=?, back=?, dirty=1, updated_at=? WHERE id=?").run(front, back, now, id);
+  }
+
   logEvent(e: CardEventInput): void {
     this.db
       .prepare("INSERT INTO card_events (id, card_id, type, payload, created_at) VALUES (?,?,?,?,?)")
@@ -174,12 +226,20 @@ function freshDb(): SqliteLike {
 
 function insertCard(
   db: SqliteLike,
-  over: { id: string; topicId: string; front?: string; back?: string; due: number; suspended?: number },
+  over: {
+    id: string;
+    topicId: string;
+    front?: string;
+    back?: string;
+    due: number;
+    suspended?: number;
+    leech?: number;
+  },
 ): void {
   db.prepare(
     `INSERT INTO cards (id, topic_id, type, front, back, suspended, leech, reps, lapses, state,
        elapsed_days, scheduled_days, learning_steps, origin, dirty, created_at, updated_at, due)
-     VALUES (?,?,?,?,?,?,0,0,0,0,0,0,0,'seed',1,?,?,?)`,
+     VALUES (?,?,?,?,?,?,?,0,0,0,0,0,0,'seed',1,?,?,?)`,
   ).run(
     over.id,
     over.topicId,
@@ -187,6 +247,7 @@ function insertCard(
     over.front ?? `Q-${over.id}`,
     over.back ?? `A-${over.id}`,
     over.suspended ?? 0,
+    over.leech ?? 0,
     NOW,
     NOW,
     over.due,
@@ -209,7 +270,7 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
     insertCard(db, { id: "tp1", topicId: "two-pointers", due: NOW - DAY });
     insertCard(db, { id: "tp2", topicId: "two-pointers", due: NOW - DAY });
     insertCard(db, { id: "sw1", topicId: "sliding-window", due: NOW - DAY });
-    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), () => NOW);
+    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), {}, () => NOW);
 
     const sel = svc.buildWarmup("two-pointers", 3);
     expect(sel.source).toBe("due");
@@ -224,7 +285,7 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
     // Nothing due for the requested topic; one due elsewhere; one not-yet-due.
     insertCard(db, { id: "swDue", topicId: "sliding-window", due: NOW - DAY });
     insertCard(db, { id: "tpFuture", topicId: "two-pointers", due: NOW + 5 * DAY });
-    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), () => NOW);
+    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), {}, () => NOW);
 
     const sel = svc.buildWarmup("two-pointers", 3);
     expect(sel.cards.length).toBe(2);
@@ -239,7 +300,7 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
     const db = freshDb();
     insertCard(db, { id: "future1", topicId: "two-pointers", due: NOW + 3 * DAY });
     const store = new SqliteCardStore(db);
-    const svc = new CardService(store, inMemoryMeta(), () => NOW);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
 
     const sel = svc.buildWarmup("two-pointers", 3);
     expect(sel.source).toBe("preview");
@@ -254,7 +315,7 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
     const db = freshDb();
     insertCard(db, { id: "tp1", topicId: "two-pointers", due: NOW - DAY });
     const store = new SqliteCardStore(db);
-    const svc = new CardService(store, inMemoryMeta(), () => NOW);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
 
     const before = store.findById("tp1")!;
     expect(before.reps).toBe(0);
@@ -279,7 +340,7 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
     insertCard(db, { id: "tp2", topicId: "two-pointers", due: NOW - DAY });
     const store = new SqliteCardStore(db);
     const meta = inMemoryMeta();
-    const svc = new CardService(store, meta, () => NOW);
+    const svc = new CardService(store, meta, {}, () => NOW);
 
     svc.buildWarmup("two-pointers", 3); // records served counting ids
     const grade = svc.warmupGrade("two-pointers", 4);
@@ -297,8 +358,99 @@ describe.skipIf(!DatabaseSync)("CardService warm-up + FSRS (§1, §7, §11)", ()
   it("show-answer reads the back locally with no generation", () => {
     const db = freshDb();
     insertCard(db, { id: "tp1", topicId: "two-pointers", front: "Two pointers when?", back: "Sorted array / pair-sum", due: NOW });
-    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), () => NOW);
+    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), {}, () => NOW);
     expect(svc.findAnswer("two-pointers", "Two pointers when?")).toBe("Sorted array / pair-sum");
     expect(svc.findAnswer("two-pointers", "nonexistent")).toBeNull();
+  });
+});
+
+describe.skipIf(!DatabaseSync)("CardService review queue + triage (§9, §11)", () => {
+  it("review queue interleaves all topics by due date, capped, reporting hasMore", () => {
+    const db = freshDb();
+    insertCard(db, { id: "a", topicId: "two-pointers", due: NOW - 3 * DAY });
+    insertCard(db, { id: "b", topicId: "sliding-window", due: NOW - 2 * DAY });
+    insertCard(db, { id: "c", topicId: "two-pointers", due: NOW - DAY });
+    insertCard(db, { id: "future", topicId: "sliding-window", due: NOW + DAY });
+    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), {}, () => NOW);
+
+    const q = svc.reviewQueue(2);
+    expect(q.cap).toBe(2);
+    // Due-order across BOTH topics (no topic bias — that's the warm-up's job).
+    expect(q.cards.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(q.hasMore).toBe(true); // 3 due > cap 2; the not-due card is excluded.
+  });
+
+  it("suspend drops a card from the queue and logs CardSuspended", () => {
+    const db = freshDb();
+    insertCard(db, { id: "a", topicId: "two-pointers", due: NOW - DAY });
+    const store = new SqliteCardStore(db);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
+
+    svc.suspend("a");
+    expect(store.findById("a")!.suspended).toBe(1);
+    expect(svc.reviewQueue(20).cards).toHaveLength(0);
+    const ev = db.prepare("SELECT type FROM card_events WHERE card_id='a'").all();
+    expect(ev.map((e) => e.type)).toContain("CardSuspended");
+  });
+
+  it("delete removes the row and logs CardDeleted with the content preserved", () => {
+    const db = freshDb();
+    insertCard(db, { id: "a", topicId: "two-pointers", front: "F", back: "B", due: NOW - DAY });
+    const store = new SqliteCardStore(db);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
+
+    svc.deleteCard("a");
+    expect(store.findById("a")).toBeNull();
+    const ev = db
+      .prepare("SELECT type, payload FROM card_events WHERE card_id='a'")
+      .get() as { type: string; payload: string };
+    expect(ev.type).toBe("CardDeleted");
+    expect(JSON.parse(ev.payload).front).toBe("F"); // recoverable from the log (§9).
+  });
+
+  it("edit updates content, marks dirty for sync, and logs CardEdited before/after", () => {
+    const db = freshDb();
+    insertCard(db, { id: "a", topicId: "two-pointers", front: "old", back: "oldA", due: NOW - DAY });
+    const store = new SqliteCardStore(db);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
+
+    const updated = svc.editCard("a", "new front", "new back");
+    expect(updated.front).toBe("new front");
+    const row = store.findById("a")!;
+    expect(row.front).toBe("new front");
+    expect(row.dirty).toBe(1); // content is Notion-authoritative → flushes up (§8).
+    const ev = db
+      .prepare("SELECT payload FROM card_events WHERE type='CardEdited' AND card_id='a'")
+      .get() as { payload: string };
+    expect(JSON.parse(ev.payload).before.front).toBe("old");
+  });
+
+  it("skips leech cards and resurfaces prerequisite due cards (§7, §4)", () => {
+    const db = freshDb();
+    insertCard(db, { id: "leech", topicId: "sliding-window", due: NOW - DAY, leech: 1 });
+    insertCard(db, { id: "prereq", topicId: "sliding-window", due: NOW - 2 * DAY });
+    insertCard(db, { id: "normal", topicId: "two-pointers", due: NOW - 3 * DAY });
+    db.prepare("INSERT INTO card_concepts (card_id, concept_id) VALUES (?,?)").run(
+      "leech",
+      "shrink-while-invalid",
+    );
+    db.prepare("INSERT INTO card_concepts (card_id, concept_id) VALUES (?,?)").run(
+      "prereq",
+      "variable-window",
+    );
+
+    const conceptGraph: ConceptGraph = {
+      prerequisitesFor(_topicId, conceptIds) {
+        if (conceptIds.includes("shrink-while-invalid")) return ["variable-window"];
+        return [];
+      },
+    };
+    const svc = new CardService(new SqliteCardStore(db), inMemoryMeta(), { conceptGraph }, () => NOW);
+
+    const q = svc.reviewQueue(10);
+    expect(q.cards.map((c) => c.id)).toContain("prereq");
+    expect(q.cards.map((c) => c.id)).not.toContain("leech");
+    expect(q.leechAdvisories).toHaveLength(1);
+    expect(q.leechAdvisories[0]?.prerequisiteConcepts).toContain("variable-window");
   });
 });

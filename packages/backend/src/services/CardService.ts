@@ -10,6 +10,7 @@
  */
 import type { CardRow, CardStore } from "./cardTypes.js";
 import { LEECH_LAPSE_THRESHOLD, reviewRow } from "./fsrs.js";
+import type { ConceptGraph } from "./leechRemediation.js";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -47,6 +48,47 @@ export interface CardReviewResult {
   leech: boolean;
 }
 
+/** One card in the flashcard-review queue (§11) — the real interleaved SR surface. */
+export interface ReviewCardView {
+  id: string;
+  topicId: string | null;
+  type: string;
+  front: string;
+  back: string;
+  lapses: number;
+  /** Flagged a leech (§7) — UI surfaces this instead of drilling it silently. */
+  leech: boolean;
+  due: number | null;
+}
+
+export interface LeechAdvisory {
+  cardId: string;
+  front: string;
+  prerequisiteConcepts: string[];
+  noteExcerpt?: string;
+}
+
+export interface ReviewQueue {
+  cards: ReviewCardView[];
+  /** The hard daily cap actually applied (§11). */
+  cap: number;
+  /** True when more cards are due than the cap served — the rest can wait (§11). */
+  hasMore: boolean;
+  /** Due leech cards skipped from the queue — prerequisites surfaced instead (§7, §4). */
+  leechAdvisories: LeechAdvisory[];
+}
+
+/** Optional intelligence hooks — vocabulary graph, generation dirty-flag, note excerpts. */
+export interface CardServiceDeps {
+  conceptGraph?: ConceptGraph;
+  /** Called when a card first crosses the leech threshold — marks topic dirty for batch reformulation (§7). */
+  onLeechDetected?: (topicId: string | null, cardId: string) => void;
+  /** Called after a successful review — checks mastery trigger (§7). */
+  onReviewComplete?: (topicId: string | null) => void;
+  /** Short note excerpt for leech remediation UI (§7). */
+  noteExcerpt?: (topicId: string | null) => string | null;
+}
+
 export interface WarmupGradeResult {
   topicId: string;
   quality: number;
@@ -60,6 +102,7 @@ export class CardService {
   constructor(
     private readonly store: CardStore,
     private readonly meta: MetaStore,
+    private readonly deps: CardServiceDeps = {},
     private readonly now: () => number = () => Date.now(),
   ) {}
 
@@ -125,6 +168,143 @@ export class CardService {
     return { cards: picked, source, countingIds };
   }
 
+  private toReviewView(r: CardRow): ReviewCardView {
+    return {
+      id: r.id,
+      topicId: r.topicId,
+      type: r.type,
+      front: r.front,
+      back: r.back,
+      lapses: r.lapses,
+      leech: r.leech === 1,
+      due: r.due,
+    };
+  }
+
+  /**
+   * The real SR review surface (§11): due cards across **all** topics (no topic
+   * bias — that's the warm-up's job), in due order, capped. Leech-flagged cards
+   * are **not** drilled (§7) — their prerequisite concepts are resurfaced via
+   * due cards tagged with those concepts instead (§4). Interleaving is the
+   * standard SR due-order mix; the cap protects problem-solving time and powers
+   * the explicit "you're done" signal.
+   */
+  reviewQueue(cap = 20): ReviewQueue {
+    const now = this.now();
+    const limit = Math.max(1, Math.min(100, Math.floor(cap)));
+
+    const leechDue = this.store.dueCards({ now, limit: limit + 20 }).filter((r) => r.leech === 1);
+    const leechIds = leechDue.map((r) => r.id);
+
+    const seen = new Set<string>();
+    const queue: ReviewCardView[] = [];
+
+    // §7/§4: resurface prerequisite cards for due leeches instead of drilling them.
+    if (this.deps.conceptGraph && leechDue.length > 0) {
+      const prereqConcepts = new Set<string>();
+      for (const leech of leechDue) {
+        const tags = this.store.conceptsFor(leech.id);
+        for (const p of this.deps.conceptGraph.prerequisitesFor(leech.topicId, tags)) {
+          prereqConcepts.add(p);
+        }
+      }
+      if (prereqConcepts.size > 0) {
+        for (const r of this.store.dueCardsByConcepts({
+          conceptIds: [...prereqConcepts],
+          now,
+          limit,
+          excludeIds: leechIds,
+        })) {
+          if (seen.has(r.id) || queue.length >= limit) break;
+          seen.add(r.id);
+          queue.push(this.toReviewView(r));
+        }
+      }
+    }
+
+    const room = limit - queue.length;
+    const normalDue =
+      room > 0
+        ? this.store.dueCards({
+            now,
+            limit: room + 1,
+            excludeLeech: true,
+            excludeIds: [...seen, ...leechIds],
+          })
+        : [];
+
+    for (const r of normalDue) {
+      if (seen.has(r.id) || queue.length >= limit) continue;
+      seen.add(r.id);
+      queue.push(this.toReviewView(r));
+      if (queue.length >= limit) break;
+    }
+
+    const leechAdvisories: LeechAdvisory[] = leechDue.map((leech) => ({
+      cardId: leech.id,
+      front: leech.front,
+      prerequisiteConcepts:
+        this.deps.conceptGraph?.prerequisitesFor(
+          leech.topicId,
+          this.store.conceptsFor(leech.id),
+        ) ?? [],
+      noteExcerpt: this.deps.noteExcerpt?.(leech.topicId) ?? undefined,
+    }));
+
+    const hasMore = normalDue.length > room || leechDue.length > 0;
+
+    return { cards: queue, cap: limit, hasMore, leechAdvisories };
+  }
+
+  /** Triage: suspend a card and log `CardSuspended` (§9, §11). */
+  suspend(cardId: string): void {
+    const now = this.now();
+    const row = this.store.findById(cardId);
+    if (!row) throw new Error(`Card not found: ${cardId}`);
+    this.store.suspend(cardId, now);
+    this.store.logEvent({ cardId, type: "CardSuspended", payload: { front: row.front }, createdAt: now });
+  }
+
+  /**
+   * Triage: delete a card and log `CardDeleted` (§9, §11). The event is written
+   * *before* the row is removed and carries the content, so a wrongly-deleted
+   * card is still recoverable from the append-only log (§9 = the real defense
+   * against bad generated cards).
+   */
+  deleteCard(cardId: string): void {
+    const now = this.now();
+    const row = this.store.findById(cardId);
+    if (!row) throw new Error(`Card not found: ${cardId}`);
+    this.store.logEvent({
+      cardId,
+      type: "CardDeleted",
+      payload: { type: row.type, front: row.front, back: row.back },
+      createdAt: now,
+    });
+    this.store.deleteCard(cardId);
+  }
+
+  /**
+   * Triage: edit a card's content and log `CardEdited` (§9, §11). Content is
+   * Notion-authoritative (§8), so a local edit marks the card dirty to flush up.
+   * Empty fields fall back to the existing value.
+   */
+  editCard(cardId: string, front: string, back: string): ReviewCardView {
+    const now = this.now();
+    const row = this.store.findById(cardId);
+    if (!row) throw new Error(`Card not found: ${cardId}`);
+    const nextFront = front.trim() || row.front;
+    const nextBack = back.trim() || row.back;
+    this.store.updateContent(cardId, nextFront, nextBack, now);
+    this.store.logEvent({
+      cardId,
+      type: "CardEdited",
+      payload: { before: { front: row.front, back: row.back }, after: { front: nextFront, back: nextBack } },
+      createdAt: now,
+    });
+    return this.toReviewView({ ...row, front: nextFront, back: nextBack });
+  }
+
   /** Local answer lookup for "show answer" — no LLM (§1). */
   findAnswer(topicId: string, question: string): string | null {
     const row =
@@ -166,6 +346,11 @@ export class CardService {
         payload: { lapses: patch.lapses, threshold: LEECH_LAPSE_THRESHOLD },
         createdAt: nowMs,
       });
+      this.deps.onLeechDetected?.(row.topicId, cardId);
+    }
+
+    if (row.topicId) {
+      this.deps.onReviewComplete?.(row.topicId);
     }
 
     return {

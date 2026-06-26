@@ -89,6 +89,7 @@ export class NotionSyncTarget implements SyncTarget {
       this.client.databases.retrieve({ database_id: dbId }),
     );
     const existing = current?.properties ?? {};
+    assertSchemaTypes(existing);
     const toAdd: Record<string, unknown> = {};
     for (const [name, type] of Object.entries(NOTION_CARD_SCHEMA) as [
       NotionCardPropertyName,
@@ -117,12 +118,13 @@ export class NotionSyncTarget implements SyncTarget {
     if (records.length === 0 || !this.isConfigured()) {
       return { pushed: 0, failed: 0, pageIds: {} };
     }
-    await this.ensureSchema().catch(() => undefined);
+    await this.ensureSchema();
 
     const dbId = this.config.cardsDbId!;
     const pageIds: Record<string, string> = {};
     const failedIds: string[] = [];
     let pushed = 0;
+    let lastError: string | undefined;
 
     await Promise.all(
       records.map((record) =>
@@ -142,12 +144,21 @@ export class NotionSyncTarget implements SyncTarget {
               if (created?.id) pageIds[record.id] = created.id;
             }
             pushed += 1;
-          } catch {
+          } catch (err) {
+            const message = formatNotionError(err);
+            lastError = message;
+            console.error(`Notion card sync failed for ${record.id}: ${message}`);
             failedIds.push(record.id);
           }
         }),
       ),
     );
+
+    if (failedIds.length > 0 && lastError) {
+      console.error(
+        `Notion card sync: ${failedIds.length} failed, ${pushed} pushed. Last error: ${lastError}`,
+      );
+    }
 
     return { pushed, failed: failedIds.length, failedIds, pageIds };
   }
@@ -235,4 +246,33 @@ function wrapRealClient(token: string): NotionClientLike {
 
 export function createNotionSyncTarget(config: NotionSyncConfig): NotionSyncTarget {
   return new NotionSyncTarget(config);
+}
+
+/** CSV import often creates text columns where we need select/multi_select. */
+export function assertSchemaTypes(
+  existing: Record<string, { type?: string }>,
+): void {
+  const mismatches: string[] = [];
+  for (const [name, expectedType] of Object.entries(NOTION_CARD_SCHEMA) as [
+    NotionCardPropertyName,
+    string,
+  ][]) {
+    const actualType = existing[name]?.type;
+    if (actualType && actualType !== expectedType) {
+      mismatches.push(`"${name}" is ${actualType}, expected ${expectedType}`);
+    }
+  }
+  if (mismatches.length === 0) return;
+  throw new Error(
+    `Notion card database schema mismatch: ${mismatches.join("; ")}. ` +
+      "Delete the mismatched columns in Notion (CSV import often creates them as text), " +
+      "then run flush again — the app will recreate them with the correct types.",
+  );
+}
+
+function formatNotionError(err: unknown): string {
+  const body = (err as { body?: { message?: string } })?.body;
+  if (body?.message) return body.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
 }

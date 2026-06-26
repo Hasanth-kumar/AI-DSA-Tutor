@@ -2,9 +2,8 @@ import {
   createIntelligenceOrchestrator,
   type IntelligenceOrchestrator,
 } from "@dsa/intelligence";
-import { createSqliteDb, runMigrations } from "@dsa/integrations";
+import { createSqliteDb, runMigrations, createSeedVocabularyResolver, markTopicDirty } from "@dsa/integrations";
 import type { LLMService } from "@dsa/integrations";
-import type { AppConfig } from "@dsa/shared";
 import { createAppLLMService, createCoachLLMService } from "./llm.factory.js";
 import { TopicRepository } from "./repositories/TopicRepository.js";
 import { AttemptRepository } from "./repositories/AttemptRepository.js";
@@ -30,8 +29,14 @@ import { ObsidianNoteService } from "./services/ObsidianNoteService.js";
 import { CurriculumService } from "./services/CurriculumService.js";
 import { PlanService } from "./services/PlanService.js";
 import { SessionService } from "./services/SessionService.js";
-import { CardService } from "./services/CardService.js";
+import type { CardSyncDb } from "@dsa/integrations";
+import { findRepoRoot, type AppConfig } from "@dsa/shared";
+import { CardBankSyncService } from "./services/CardBankSyncService.js";
+import { CardService, type CardServiceDeps } from "./services/CardService.js";
+import { createConceptGraph } from "./services/leechRemediation.js";
+import { isTopicNearlyMature } from "./services/masteryTrigger.js";
 import { WarmupService } from "./services/WarmupService.js";
+import { resolve } from "node:path";
 
 export interface AppContext {
   config: AppConfig;
@@ -52,6 +57,7 @@ export interface AppContext {
   planService: PlanService;
   sessionService: SessionService;
   cardService: CardService;
+  cardBankSync: CardBankSyncService;
   analyticsService: AnalyticsService;
   debriefService: DebriefService;
   hintService: HintService;
@@ -150,7 +156,9 @@ export function createAppContext(
     attemptRepo,
     noteRepo,
   );
-  const cardService = new CardService(cardRepo, syncMetaRepo);
+  const cardService = new CardService(cardRepo, syncMetaRepo, buildCardServiceDeps(sqlite, noteRepo, cardRepo));
+  const cardBankSync = new CardBankSyncService(sqlite, config, syncMetaRepo);
+  cardBankSync.startPeriodicFlush(config.cards.flushIntervalMs);
   const warmupService = new WarmupService(topicRepo, cardService);
   const leetcodeService = new LeetCodeService(config, syncMetaRepo);
   const githubSync = new GitHubSyncService(config, problemRepo, mirrorCache);
@@ -175,6 +183,7 @@ export function createAppContext(
     planService,
     sessionService,
     cardService,
+    cardBankSync,
     analyticsService,
     debriefService,
     hintService,
@@ -186,10 +195,53 @@ export function createAppContext(
     obsidianNotes,
     backupService,
     async close() {
+      cardBankSync.stopPeriodicFlush();
+      try {
+        await cardBankSync.flush();
+      } catch {
+        // Best-effort — dirty cards replay on next flush.
+      }
       backupService.stop();
       await obsidianNotes.stopWatching();
       sqlite.close();
       await cache.disconnect();
+    },
+  };
+}
+
+function buildCardServiceDeps(
+  sqlite: CardSyncDb,
+  noteRepo: NoteRepository,
+  cardRepo: CardRepository,
+): CardServiceDeps {
+  const seedsRoot = resolve(findRepoRoot(), "database/seeds");
+  const vocab = createSeedVocabularyResolver(seedsRoot);
+  const conceptGraph = createConceptGraph((topicId) => vocab(topicId));
+
+  const masteryMarked = new Set<string>();
+
+  return {
+    conceptGraph,
+    onLeechDetected(topicId) {
+      if (topicId) markTopicDirty(sqlite, topicId);
+    },
+    onReviewComplete(topicId) {
+      if (!topicId || masteryMarked.has(topicId)) return;
+      const cards = cardRepo.findByTopic(topicId);
+      if (isTopicNearlyMature(cards)) {
+        markTopicDirty(sqlite, topicId);
+        masteryMarked.add(topicId);
+      }
+    },
+    noteExcerpt(topicId) {
+      if (!topicId) return null;
+      const notes = noteRepo.findByTopicId(topicId);
+      const text = notes
+        .map((n) => n.content?.trim())
+        .filter(Boolean)
+        .join("\n\n");
+      if (!text) return null;
+      return text.length <= 400 ? text : `${text.slice(0, 400)}…`;
     },
   };
 }

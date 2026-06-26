@@ -77,7 +77,10 @@ async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
 
   let sync: HealthResponse["sync"];
   try {
-    sync = ctx.notionSync.getSyncHealth();
+    sync = {
+      ...ctx.notionSync.getSyncHealth(),
+      cards: ctx.cardBankSync.getHealth(),
+    };
   } catch {
     sync = undefined;
   }

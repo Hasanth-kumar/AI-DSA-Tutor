@@ -18,6 +18,17 @@ export interface DueQuery {
   now: number;
   limit: number;
   excludeIds?: readonly string[];
+  /** When true, leech-flagged cards are omitted (§7 — don't drill forever). */
+  excludeLeech?: boolean;
+}
+
+/** Due cards tagged with any of the given concept ids (§4 leech remediation). */
+export interface ConceptDueQuery {
+  topicId?: string | null;
+  conceptIds: readonly string[];
+  now: number;
+  limit: number;
+  excludeIds?: readonly string[];
 }
 
 /** Preview query: not-yet-due cards used only as non-counting warm-up filler. */
@@ -65,6 +76,12 @@ export interface CardEventInput {
 export interface CardStore {
   /** Due cards (`due <= now`, not suspended), soonest-due first. */
   dueCards(query: DueQuery): CardRow[];
+  /** Due cards tagged with any of the given concepts (§4 leech remediation). */
+  dueCardsByConcepts(query: ConceptDueQuery): CardRow[];
+  /** Concept ids attached to a card (§4). */
+  conceptsFor(cardId: string): string[];
+  /** All non-suspended cards for a topic — mastery trigger reads stability (§7). */
+  findByTopic(topicId: string): CardRow[];
   /** Not-yet-due cards for non-counting preview filler, soonest-due first. */
   previewCards(query: PreviewQuery): CardRow[];
   findById(id: string): CardRow | null;
@@ -72,6 +89,12 @@ export interface CardStore {
   findByFront(topicId: string | null, front: string): CardRow | null;
   /** Write back FSRS state for one card and mark it dirty for sync (§8). */
   applyReview(id: string, patch: ReviewPatch, now: number): void;
+  /** Triage (§11): suspend a card (drops it from every queue), dirty for sync. */
+  suspend(id: string, now: number): void;
+  /** Triage (§11): hard-delete a card and its concept links. */
+  deleteCard(id: string): void;
+  /** Triage (§11): edit content (Notion-authoritative §8) → mark dirty for sync. */
+  updateContent(id: string, front: string, back: string, now: number): void;
   /** Append one event to the log (§9). */
   logEvent(event: CardEventInput): void;
 }

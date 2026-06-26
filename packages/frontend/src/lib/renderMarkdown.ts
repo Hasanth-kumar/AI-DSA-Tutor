@@ -77,3 +77,23 @@ export function renderMarkdownToHtml(markdown: string): string {
   const html = marked.parse(text, { async: false }) as string;
   return restoreMathTokens(html, math);
 }
+
+const LABELED_LINE = /^\*\*[^*]+\*\*\s*[—–-]/;
+
+/**
+ * Flashcard backs often use repeated "**Label** — detail" lines. Turn those
+ * into a bullet list so review answers read cleanly instead of one flat blob.
+ */
+export function normalizeCardAnswerMarkdown(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return trimmed;
+
+  const lines = trimmed.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const labeled = lines.filter((line) => LABELED_LINE.test(line));
+
+  if (labeled.length >= 2 && labeled.length === lines.length) {
+    return lines.map((line) => `- ${line}`).join("\n");
+  }
+
+  return trimmed;
+}

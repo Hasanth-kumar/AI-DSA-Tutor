@@ -2,6 +2,11 @@
 
 > Summary of design decisions worth implementing. Source of truth for the
 > spaced-repetition flashcard rework. Date: 2026-06-25 (Rev 2).
+>
+> **Implementation status:** see `flashcard-system-validation.md` (94/103 boxes)
+> and `docs/flashcard-implementation-progress.md` for the build log. Stages 1–8
+> of §15 are complete; remaining gaps are polish (analytics, mistake-derived cards,
+> live Notion e2e, retiring topic SM-2).
 
 > **Rev 2 changes:** adopted FSRS over SM-2 (§7); enforced a fixed concept
 > vocabulary the LLM may not extend (§4); added provenance fields and an
@@ -230,7 +235,7 @@ Warm-up (3 cards, ~2–3 min)
 
 ## 13. The $0 stack
 
-- **Hot store:** SQLite (`data/dsa.db`).
+- **Hot store:** SQLite (`data/sqlite/dsa.db`).
 - **SR engine:** `ts-fsrs` (local, MIT — no infra).
 - **Embeddings:** local (Ollama `nomic-embed-text` or transformers.js).
 - **Batch question expansion:** local Ollama (Llama 3.1 / Qwen2.5) **or** free

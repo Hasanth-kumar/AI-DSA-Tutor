@@ -29,6 +29,12 @@ const envSchema = z.object({
   NOTION_TOPICS_DB_ID: z.string().optional(),
   NOTION_PROBLEMS_DB_ID: z.string().optional(),
   NOTION_SESSIONS_DB_ID: z.string().optional(),
+  /** Optional Notion card bank database (one row per card — §8). Falls back to local JSON export. */
+  NOTION_CARDS_DB_ID: z.string().optional(),
+  /** Directory for the canonical local card export when Notion cards DB is unset (§10). */
+  CARDS_EXPORT_DIR: z.string().default("./data/cards-export"),
+  /** Batched card-sync flush interval in ms (§8). 0 disables the timer. */
+  CARDS_SYNC_FLUSH_INTERVAL_MS: z.coerce.number().default(300_000),
   /** Model override for the coach (defaults to OPENROUTER_MODEL). */
   COACH_LLM_MODEL: z.string().optional(),
   /** Model for warm-up quizzes (defaults to OPENROUTER_MODEL). */
@@ -101,6 +107,11 @@ export type AppConfig = {
     topicsDbId?: string;
     problemsDbId?: string;
     sessionsDbId?: string;
+    cardsDbId?: string;
+  };
+  cards: {
+    exportDir: string;
+    flushIntervalMs: number;
   };
   llm: {
     model: string;
@@ -195,6 +206,13 @@ export function loadConfig(envPath?: string): AppConfig {
       topicsDbId: env.NOTION_TOPICS_DB_ID,
       problemsDbId: env.NOTION_PROBLEMS_DB_ID,
       sessionsDbId: env.NOTION_SESSIONS_DB_ID,
+      cardsDbId: env.NOTION_CARDS_DB_ID,
+    },
+    cards: {
+      exportDir: isAbsolute(env.CARDS_EXPORT_DIR)
+        ? env.CARDS_EXPORT_DIR
+        : resolve(repoRoot, env.CARDS_EXPORT_DIR),
+      flushIntervalMs: env.CARDS_SYNC_FLUSH_INTERVAL_MS,
     },
     llm: {
       model: env.OPENROUTER_MODEL,

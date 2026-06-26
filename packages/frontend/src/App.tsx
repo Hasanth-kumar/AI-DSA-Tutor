@@ -30,8 +30,11 @@ const ActivityPage = lazy(() =>
 const SessionPage = lazy(() =>
   import("./pages/SessionPage.js").then((m) => ({ default: m.SessionPage })),
 );
+const ReviewPage = lazy(() =>
+  import("./pages/ReviewPage.js").then((m) => ({ default: m.ReviewPage })),
+);
 
-type Tab = "today" | "overview" | "graph" | "activity" | "session" | "coach";
+type Tab = "today" | "overview" | "review" | "graph" | "activity" | "session" | "coach";
 type Theme = "dark" | "light";
 
 const THEME_STORAGE_KEY = "dsa-theme";
@@ -61,6 +64,18 @@ const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
     icon: (
       <svg viewBox="0 0 16 16" fill="currentColor">
         <path d="M14 2H2a1 1 0 00-1 1v8a1 1 0 001 1h2v2.5l3-2.5h7a1 1 0 001-1V3a1 1 0 00-1-1zM5 7a1 1 0 110-2 1 1 0 010 2zm3 0a1 1 0 110-2 1 1 0 010 2zm3 0a1 1 0 110-2 1 1 0 010 2z" />
+      </svg>
+    ),
+  },
+  {
+    id: "review",
+    label: "Review",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="currentColor">
+        <rect x="2" y="3" width="9" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M5 1.5h9a1 1 0 011 1v10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <line x1="4.5" y1="6.5" x2="8.5" y2="6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <line x1="4.5" y1="9" x2="8.5" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -331,6 +346,7 @@ export function App() {
             <div key={tab} className="page-transition">
               {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
               {tab === "overview" && <OverviewPage />}
+              {tab === "review" && <ReviewPage />}
               {tab === "graph" && <GraphPage />}
               {tab === "activity" && <ActivityPage />}
               {tab === "session" && <SessionPage />}

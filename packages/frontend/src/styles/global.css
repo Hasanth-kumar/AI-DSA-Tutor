@@ -3467,6 +3467,175 @@ button:focus-visible,
   justify-content: center;
 }
 
+/* ─── Flashcard review (§11) — centered study card, warm-up visual language ─── */
+.main .page-transition:has(.review-page) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-page {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4);
+  box-sizing: border-box;
+}
+
+.review-page > .card {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.review-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 14rem;
+  padding: var(--space-5) 0 var(--space-3);
+  text-align: center;
+}
+
+.review-body .warmup-question {
+  max-width: 34rem;
+  margin-bottom: var(--space-4);
+}
+
+.review-body .warmup-show-answer-btn {
+  margin-bottom: 0;
+}
+
+.review-answer {
+  width: 100%;
+  max-width: 34rem;
+  text-align: left;
+}
+
+.review-card .warmup-title {
+  font-size: 1.35rem;
+}
+
+.review-card .warmup-answer-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.warmup-answer-markdown {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+  line-height: 1.62;
+  letter-spacing: -0.012em;
+}
+
+.warmup-answer-markdown p {
+  margin: 0 0 0.55em;
+}
+
+.warmup-answer-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.warmup-answer-markdown ul,
+.warmup-answer-markdown ol {
+  margin: 0;
+  padding-left: 1.15em;
+  list-style-position: outside;
+}
+
+.warmup-answer-markdown li {
+  margin: 0.4em 0;
+  padding-left: 0.15em;
+}
+
+.warmup-answer-markdown li::marker {
+  color: var(--accent);
+}
+
+.warmup-answer-markdown strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.review-card .warmup-answer-markdown {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.review-grades {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.review-grades .warmup-grade-btn {
+  min-width: 0;
+  width: 100%;
+}
+
+.review-triage {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.review-triage .btn-ghost {
+  font-size: 0.78rem;
+  color: var(--text-subtle);
+}
+
+.review-edit-field {
+  width: 100%;
+  resize: vertical;
+  padding: 0.6rem 0.7rem;
+  margin-top: 0.35rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: inherit;
+}
+
+.review-edit-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+@media (max-width: 960px) {
+  .review-grades {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Grade button tints (subtle border + text, not loud fills) */
+.grade-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.grade-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+.grade-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.grade-accent { color: var(--accent); border-color: var(--accent-ring); }
+.grade-danger:hover, .grade-warning:hover, .grade-success:hover, .grade-accent:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+
+/* Keyboard hint on grade buttons */
+.grade-key { margin-left: 0.35rem; padding: 0 0.3rem; font-size: 0.68rem; font-family: var(--font-mono, monospace); border: 1px solid var(--border-soft); border-radius: 3px; opacity: 0.7; }
+
+/* Gentle answer reveal */
+.review-answer { animation: reviewReveal 150ms ease-out; }
+@keyframes reviewReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
 /* ─── Priority score bar (3.2) ───────────── */
 .score-bar {
   display: flex;

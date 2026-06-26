@@ -13,6 +13,9 @@ import type {
   Problem,
   ProblemNote,
   RecallGradeResult,
+  ReviewCard,
+  ReviewGradeResult,
+  ReviewQueue,
   ScoreExplanation,
   SendChatResult,
   Session,
@@ -64,7 +67,9 @@ function resolveApiBase(): string {
     return rewriteLocalhostForLan(configured || DEFAULT_API_ORIGIN, pageHost);
   }
 
-  return configured;
+  // Production: same-origin when the API serves the built SPA (pnpm start /
+  // study:prod). Set VITE_API_BASE_URL when the UI is hosted separately.
+  return configured || window.location.origin;
 }
 
 const BASE = resolveApiBase();
@@ -268,6 +273,32 @@ export const api = {
       invalidateCache("plan");
       invalidateCache("dashboard");
       return result;
+    }),
+
+  getReviewQueue: (cap = 20) =>
+    request<ReviewQueue>(`/api/review/queue?cap=${cap}`),
+
+  gradeReviewCard: (cardId: string, quality: number) =>
+    request<ReviewGradeResult>("/api/review/grade", {
+      method: "POST",
+      body: JSON.stringify({ cardId, quality }),
+    }).then((result) => {
+      invalidateCache("topics");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      return result;
+    }),
+
+  suspendReviewCard: (cardId: string) =>
+    request<{ suspended: boolean }>(`/api/review/${cardId}/suspend`, { method: "POST" }),
+
+  deleteReviewCard: (cardId: string) =>
+    request<{ deleted: boolean }>(`/api/review/${cardId}`, { method: "DELETE" }),
+
+  editReviewCard: (cardId: string, front: string, back: string) =>
+    request<ReviewCard>(`/api/review/${cardId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ front, back }),
     }),
 
   getScoreExplanation: (topicId: string) =>

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # "Press play" — production mode. One Node process serves the API *and* the
 # built frontend on :3000 (no Vite/tsx dev servers), so it's much lighter on
-# memory. Builds first if needed, syncs Notion, opens the app.
+# memory. Always rebuilds, syncs Notion, opens the app.
 #   Stop with: pnpm study:stop   (same as dev mode)
 set -uo pipefail
 
@@ -19,26 +19,37 @@ port_open() {
 
 echo "▶ DSA Mastery OS — study mode (production)"
 
-if port_open 3000; then
-  echo "  ✓ Server already running on :3000"
-else
-  # Build if the compiled server or the frontend bundle is missing.
-  if [ ! -f "$REPO_ROOT/packages/backend/dist/server.js" ] \
-     || [ ! -f "$REPO_ROOT/packages/frontend/dist/index.html" ]; then
-    echo "  • Building (first run / after changes)…"
-    if ! pnpm build >"$RUN_DIR/build.log" 2>&1; then
-      echo "  ✗ Build failed — see $RUN_DIR/build.log"
-      exit 1
-    fi
-    echo "  ✓ Build done"
-  fi
-
-  echo "  • Starting server…"
-  (cd "$REPO_ROOT" \
-     && NODE_ENV=production SERVE_FRONTEND=true \
-        node packages/backend/dist/server.js >"$RUN_DIR/backend.log" 2>&1 &
-   echo $! >"$RUN_DIR/backend.pid")
+# Always rebuild so dist matches the working tree (source edits don't hot-reload
+# in production mode the way tsx/vite dev servers do).
+echo "  • Building…"
+if ! pnpm build >"$RUN_DIR/build.log" 2>&1; then
+  echo "  ✗ Build failed — see $RUN_DIR/build.log"
+  exit 1
 fi
+echo "  ✓ Build done"
+
+if port_open 3000; then
+  echo "  • Restarting server on :3000 (picking up new build)…"
+  pidfile="$RUN_DIR/backend.pid"
+  if [ -f "$pidfile" ]; then
+    pid=$(cat "$pidfile")
+    pkill -TERM -P "$pid" >/dev/null 2>&1 || true
+    kill "$pid" >/dev/null 2>&1 || true
+    rm -f "$pidfile"
+  fi
+  pids=$(lsof -ti tcp:3000 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    echo "$pids" | xargs kill >/dev/null 2>&1 || true
+  fi
+  sleep 1
+else
+  echo "  • Starting server…"
+fi
+
+(cd "$REPO_ROOT" \
+   && NODE_ENV=production SERVE_FRONTEND=true \
+      node packages/backend/dist/server.js >"$RUN_DIR/backend.log" 2>&1 &
+ echo $! >"$RUN_DIR/backend.pid")
 
 # Wait for the API, then trigger a Notion sync.
 echo -n "  • Waiting for API"
