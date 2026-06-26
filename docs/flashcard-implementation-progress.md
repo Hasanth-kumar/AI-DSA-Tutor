@@ -3,7 +3,143 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 45 / 103 boxes passing.**
+**Validation status: 61 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-26 (c) — Build-order Stage 5: batch generation pipeline (§2, §4, §5, §8, §9, §13, §14, §15.5)
+
+### What landed
+- **`database/migrations/0013_generation_queue.sql`** + `topic_generation`
+  Drizzle table — the **dirty-flag trigger** (§5). A note change marks its topic
+  dirty here; generation never runs inline on the edit. Coarse per-topic queue,
+  deliberately separate from the per-card `cards.dirty` Notion-sync delta flag so
+  "needs regeneration" and "needs sync" never conflate. Repeated marks collapse
+  into one pending unit (`dirty_since` preserved via `COALESCE`) so the batch job
+  merges several edits into a single run. Registered in `sqlite/migrations.ts`.
+- **`packages/integrations/src/generation/`** — the pipeline, same binding-free
+  structure as seeds/embeddings (pure core + a tiny DB interface satisfied by
+  better-sqlite3 *and* node:sqlite + injected LLM/embedder):
+  - **`generation.prompt.ts`** — `buildGenerationPrompt` (closed-vocab, targets
+    the **uncovered** concepts only, carries the Stage-A "do not repeat these
+    existing fronts" instruction, notes framed as SOURCE OF TRUTH, **no fixed
+    "generate N" target** — coverage-driven §2/§4/§5); `GENERATION_PROMPT_VERSION`
+    for provenance; `extractMistakeSection` (pulls a note's `## Mistakes` body for
+    future mistake-derived cards §3).
+  - **`generation.ts`** — pure core: `parseGeneratedCards` (tolerant of
+    fences/chatter, total — never throws), `sanitizeGeneratedCards` (the §4
+    enforcement point — **strips invented tags** via `filterToVocabulary`, drops
+    cards with no legal tag, drops off-target/covered concepts, rejects unknown
+    types + empty content, in-batch exact-dup guard, per-concept cap),
+    `buildGeneratedCardRows` (provenance rows: `origin='generated'`, `source_hash`,
+    `model_version`, `prompt_version`, `note_version` §8).
+  - **`GenerationStore.ts`** — binding-free DB: `computeCoverage` (deterministic
+    coverage gap from `card_concepts` vs the closed vocabulary, suspended cards
+    don't count), `existingFronts` (Stage-A context), `storeGeneratedCards`
+    (insert card + concept links + a **`CardGenerated` event** §9, one txn,
+    idempotent), and the dirty queue ops `markTopicDirty`/`clearTopicDirty`/
+    `listDirtyTopics`/`getTopicGeneration`.
+  - **`GenerationProvider.ts`** — the `GenerationClient` contract (the
+    `generate(prompt)` subset of `LLMClient`), a local **Ollama** `/api/generate`
+    adapter (zero deps, HTTP), and `createGenerationClient` — the §14 chain:
+    **local-first, free-cloud fallback** (rolls over on unconfigured / throw /
+    empty).
+  - **`CardGenerationService.ts`** — the orchestrator implementing the §5 order
+    **exactly**: coverage gap → build closed-vocab targeted prompt → LLM (off the
+    hot path) → parse → Stage-A app-side sanitize → **Stage-B `dedupeBatch`**
+    (always runs — vs the bank *and* in-batch) → store unique + provenance +
+    `CardGenerated` event → embed locally → clear dirty. `generateForDirtyTopics`
+    drains the queue (the batch job body).
+  - **`resolvers.ts`** — default `createSeedVocabularyResolver` (closed vocab from
+    `concepts.yaml`) + `createDbNoteProvider` (note excerpts + a deterministic
+    `note_version` hash from the `notes` table).
+- **`packages/backend/src/llm.factory.ts`** — `createGenerationLLMClient`: the
+  generation LLM plugged into the existing factory chain (§13) — local Ollama
+  default + free OpenRouter cloud fallback.
+- **`scripts/generate-cards.ts`** + `db:generate-cards` (root + integrations):
+  `--mark <topic>` to dirty a topic, default drains the dirty queue, `--topic`
+  generates one now.
+- **Tests:** `generation/{generation,generation.prompt,GenerationProvider}.test.ts`
+  (pure / mocked-fetch) and `sqlite/generation-pipeline.test.ts` (node:sqlite —
+  full pipeline with a mock LLM + deterministic fake embedder).
+
+### Verification (observed, not eyeballed)
+- `@dsa/database` builds; `@dsa/integrations` and `@dsa/backend` **typecheck
+  clean** (`tsc --noEmit`, incl. the new tests); all new files **lint clean**.
+- Compiled the package and ran the **real** compiled modules against a migrated
+  `node:sqlite` DB (Node 22.22, `--experimental-sqlite`): **18/18** pipeline
+  assertions pass — coverage gap detected from the closed vocabulary; the
+  invented tag (`totally-made-up`) is stripped and **never** reaches
+  `card_concepts`; the marked near-duplicate collides with the existing
+  hashmap-lookup card (shared concept + cosine 1) and is dropped by **Stage B**;
+  exactly the 2 clean cards store with full provenance (`origin=generated`,
+  `model_version`, `prompt_version=gen-v1`, `note_version`, 64-char `source_hash`);
+  one **`CardGenerated`** event per stored card; vectors stored locally only;
+  coverage is driven to full; the dirty flag is cleared; `markTopicDirty` does
+  **not** generate inline, and `generateForDirtyTopics` drains the queue once.
+- **23/23** pure assertions pass (parse tolerance, closed-vocab strip-vs-drop,
+  off-target/unknown-type/empty/in-batch-dup/over-cap drops, provenance rows,
+  `## Mistakes` extraction, prompt targets uncovered + closed-vocab + Stage-A +
+  coverage-driven, the local-first→cloud fallback chain, Ollama non-streaming).
+- **Test-runner caveat (unchanged):** the mounted `node_modules` is a macOS
+  install, so vitest's rollup binary / `better-sqlite3` can't load in the Linux
+  sandbox — `vitest` was not run here. Logic verified by `tsc` + executing the
+  compiled modules against `node:sqlite` (the same path the committed tests use).
+  On macOS run `pnpm --filter @dsa/integrations test` and `pnpm db:generate-cards`.
+
+### Validation boxes flipped to `[x]` this run (45 → 61 / 103)
+- §2 — LLM runs in batch offline from the hot path; bank size coverage-driven
+  (no fixed N); LLM tops up beyond the seed baseline.
+- §4 — closed vocabulary enforced **on generation** (unknown tags stripped/
+  dropped, never persisted); generation prompt targets uncovered concepts.
+- §5 — all six: dirty-flag trigger (not the edit); debounced batch job merges
+  edits into one run; pipeline order matches design; Stage A (prompt) + Stage B
+  (always-on semantic check); only-unique-with-provenance stored.
+- §8 — provenance stored per generated card.
+- §13 — batch expansion = local Ollama / free cloud tier, in the `llm.factory`
+  chain.
+- §14 — LLM+embedding runtime configurable; default local Ollama with cloud
+  fallback in the chain.
+- §15.5 — Stage-5 artifact exists.
+
+Deliberately left `[ ]`: §2 "notes are the *sole* source of truth" — notes are
+fed as SOURCE OF TRUTH and the system tops up from them, but the pipeline still
+permits note-less generation (falls back to standard DSA knowledge), so the
+strict "no content without a note source" box stays unchecked. §3 mistake-derived
+/ confusion-pair — `extractMistakeSection` is built + tested but not yet wired
+into the note provider, and confusion-pairs need the embedding store to surface
+close cross-topic pairs (a Stage-7/8-adjacent refinement); neither has an
+*observed* generated card yet. §9 full event-type coverage — `CardGenerated` now
+joins `CardReviewed`/`LeechDetected`, but `CardEdited`/`Suspended`/`Deleted`/
+`Merged` arrive with review-tab triage (Stage 7). §9 on-demand analytics — not
+built. The §8 sync/field-ownership boxes belong to Stage 6.
+
+### Design vs. existing code — conflicts & resolutions
+- **No design conflicts.** The Stage 1–4 schema/repo/embedding conventions fit
+  the pipeline unchanged; `filterToVocabulary`/`assertClosedVocabulary` (Stage 2)
+  and `dedupeBatch`/`loadDedupCandidates` (Stage 4) were built for exactly this
+  consumer and slotted in directly.
+- **Dirty granularity = per-topic, not per-card.** The design says "marks affected
+  cards/concepts dirty"; coverage is computed per topic, so a per-topic dirty row
+  is the natural, lean unit for a single user. Noted as a reasonable
+  simplification; finer granularity is a non-breaking add later.
+- **`note_version` = a content hash, not a git ref.** Notes aren't git-backed yet
+  (design §8 "if notes ever go git-backed"), so `note_version` is a sha256 over
+  the topic's note `content_hash`es — same provenance value, no new dependency.
+- **Generation `model_version` provenance.** The fallback chain picks local-vs-
+  cloud at call time, so the runner stamps the *configured default* generation
+  model id; the exact runtime pick can be recovered from the `CardGenerated`
+  event later if needed.
+
+### Next
+- **Stage 6:** `SyncTarget` interface + Notion adapter (delta sync via `cards.
+  dirty` + `updated_at`, batched flush respecting ~3 req/s, field ownership —
+  content Notion-authoritative, SR state local-authoritative write-only mirror,
+  UUID PK as a Notion property). This is where the §8/§10 boxes become verifiable.
+- Quick wins available alongside: wire `extractMistakeSection` into the note
+  provider so a dedicated Mistakes excerpt drives mistake-derived cards (§3), and
+  hook `markTopicDirty` into the existing Obsidian note-watcher so the trigger
+  fires on real edits.
 
 ---
 

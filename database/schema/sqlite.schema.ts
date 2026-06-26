@@ -200,6 +200,24 @@ export const cardEmbeddings = sqliteTable("card_embeddings", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+/**
+ * Batch-generation dirty queue (§5). A note change marks its topic dirty here;
+ * a debounced batch job drains the dirty set and runs the generation pipeline
+ * once. This is the trigger — generation never runs inline on the edit. Coarse
+ * per-topic granularity (single user); distinct from the per-card `cards.dirty`
+ * Notion-sync delta flag.
+ */
+export const topicGeneration = sqliteTable("topic_generation", {
+  topicId: text("topic_id")
+    .primaryKey()
+    .references(() => topics.id),
+  dirty: integer("dirty").notNull().default(0),
+  dirtySince: integer("dirty_since"),
+  noteHash: text("note_hash"),
+  lastGeneratedAt: integer("last_generated_at"),
+  lastGeneratedHash: text("last_generated_hash"),
+});
+
 /** Closed card-type vocabulary (§3). Generation may use these types only. */
 export const CARD_TYPES = [
   "plain-recall",
