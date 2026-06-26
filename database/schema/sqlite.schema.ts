@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, blob } from "drizzle-orm/sqlite-core";
 
 export const topics = sqliteTable("topics", {
   id: text("id").primaryKey(),
@@ -176,6 +176,28 @@ export const cardEvents = sqliteTable("card_events", {
   /** JSON payload: rating, response_ms, prev/next FSRS state, etc. */
   payload: text("payload"),
   createdAt: integer("created_at").notNull(),
+});
+
+/**
+ * Local embedding store for semantic dedup (§6). Vectors live as a raw
+ * little-endian Float32 BLOB — no separate vector DB. This is a SEPARATE table
+ * from `cards` so the §8 Notion sync layer (which reads `cards` only) can never
+ * sync vectors: embeddings are strictly local (§6).
+ */
+export const cardEmbeddings = sqliteTable("card_embeddings", {
+  cardId: text("card_id")
+    .primaryKey()
+    .references(() => cards.id),
+  /** Embedding model id (e.g. 'nomic-embed-text', 'Xenova/all-MiniLM-L6-v2'). */
+  model: text("model").notNull(),
+  /** Vector dimension (nomic-embed-text=768, all-MiniLM-L6-v2=384). */
+  dim: integer("dim").notNull(),
+  /** Raw little-endian Float32 vector (dim * 4 bytes). */
+  vector: blob("vector").notNull(),
+  /** cards.source_hash at embed time — detects stale vectors after an edit. */
+  sourceHash: text("source_hash").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
 });
 
 /** Closed card-type vocabulary (§3). Generation may use these types only. */

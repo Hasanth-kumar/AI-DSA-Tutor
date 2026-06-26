@@ -61,14 +61,14 @@
 
 ## §6 Duplicate detection (embeddings, no vector DB)
 
-- [ ] **Local embeddings only** — `nomic-embed-text` via Ollama, or `Xenova/all-MiniLM-L6-v2` via transformers.js in the Node backend. No hosted embedding API.
-- [ ] **Vectors stored as a blob in SQLite** (no separate vector DB).
-- [ ] **Brute-force cosine similarity** over the card set is the matching method.
-- [ ] **Dedup keys on concept/answer, not just question text** — same answer + different wording is caught.
-- [ ] **Duplicate rule = concept-tag match + high cosine.**
-- [ ] **Threshold is configurable**, default ~0.85, not hard-coded in-line.
-- [ ] **Labelled golden set** of known duplicate / non-duplicate pairs exists for objective re-tuning when models change.
-- [ ] **Embeddings never sync to Notion** — local only.
+- [x] **Local embeddings only** — `nomic-embed-text` via Ollama, or `Xenova/all-MiniLM-L6-v2` via transformers.js in the Node backend. No hosted embedding API.
+- [x] **Vectors stored as a blob in SQLite** (no separate vector DB).
+- [x] **Brute-force cosine similarity** over the card set is the matching method.
+- [x] **Dedup keys on concept/answer, not just question text** — same answer + different wording is caught.
+- [x] **Duplicate rule = concept-tag match + high cosine.**
+- [x] **Threshold is configurable**, default ~0.85, not hard-coded in-line.
+- [x] **Labelled golden set** of known duplicate / non-duplicate pairs exists for objective re-tuning when models change.
+- [x] **Embeddings never sync to Notion** — local only.
 
 ## §7 Spaced repetition
 
@@ -142,7 +142,7 @@
 
 - [ ] **Hot store = SQLite** at `data/dsa.db`.
 - [x] **SR engine = `ts-fsrs`** (local, MIT).
-- [ ] **Embeddings = local** (Ollama `nomic-embed-text` or transformers.js).
+- [x] **Embeddings = local** (Ollama `nomic-embed-text` or transformers.js).
 - [ ] **Batch expansion = local Ollama (Llama 3.1 / Qwen2.5) or free cloud tier (Gemini / Groq)**, plugged into the existing `llm.factory` chain.
 - [ ] **Sync/backup = Notion free tier.**
 - [ ] **No paid component anywhere** in the stack.
@@ -159,7 +159,7 @@
 - [x] **1.** Card + concept-tag + per-card FSRS schema, provenance fields, and append-only event-log table exist as a migration in `database/migrations`.
 - [x] **2.** `concepts.yaml` per topic (closed vocabulary + prerequisite edges) and seed cards for the first few topics exist in `database/seeds`.
 - [x] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
-- [ ] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
+- [x] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
 - [ ] **5.** Batch generation pipeline exists (dirty-flag trigger → coverage-gap → generate → dedup → store, with provenance).
 - [ ] **6.** `SyncTarget` interface + Notion adapter exist (delta sync, batched flush).
 - [ ] **7.** Flashcard review surface exists (separate tab, interleaved, capped) with inline triage.

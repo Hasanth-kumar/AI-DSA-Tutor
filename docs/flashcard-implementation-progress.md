@@ -3,7 +3,122 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 35 / 103 boxes passing.**
+**Validation status: 45 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-26 (b) — Build-order Stage 4: local embedding + semantic dedup utility (§6, §13, §15.4)
+
+### What landed
+- **`database/migrations/0012_card_embeddings.sql`** — the embedding store
+  deferred from Stage 1. A **separate** `card_embeddings` table (not a column on
+  `cards`) keyed by `card_id` (FK → `cards`, `ON DELETE CASCADE`), holding the
+  `model`, `dim`, a raw little-endian Float32 **`vector` BLOB**, and the
+  `source_hash` the vector was computed from (so an edited card's vector is
+  detectably stale). Separate-table-by-design is what makes embeddings provably
+  **local-only**: the §8 Notion sync layer reads `cards` only and never this
+  table. Registered in `sqlite/migrations.ts`; mirrored as a Drizzle
+  `cardEmbeddings` table in `database/schema/sqlite.schema.ts`.
+- **`packages/integrations/src/embeddings/`** — the dedup utility, structured
+  like the repo's other binding-free stacks (pure core + isolated adapters):
+  - **`vector.ts`** — pure, zero-dep: `serializeVector`/`deserializeVector`
+    (lossless Float32 ↔ blob, accepts Buffer *or* Uint8Array so better-sqlite3
+    and node:sqlite both round-trip), `cosineSimilarity` (0 not NaN on a zero
+    vector), `dotProduct`, `magnitude`, `normalizeVector`.
+  - **`dedup.ts`** — pure: `DEFAULT_DEDUP_THRESHOLD = 0.85` (one config point,
+    never inlined), the rule **`isDuplicatePair` = shared concept tag AND cosine
+    ≥ threshold**, `findDuplicates` (brute-force cosine over the set, skips self,
+    sorted closest-first), `dedupeBatch` (Stage-B filter against the bank *and*
+    within the batch — for §5), and `cardEmbeddingText` which embeds
+    **concept + answer + question** so "same answer, different wording" is caught
+    (§6, not just question text).
+  - **`golden-set.ts`** — a labelled `GOLDEN_PAIRS` set (DSA dup/non-dup pairs
+    incl. the two-pointers vs sliding-window confusion case) + pure metric math
+    (`evaluateScoredPairs` → P/R/F1/accuracy, `sweepThreshold` → best F1) +
+    `scoreGoldenPairs(embedder)` to re-tune objectively when a model changes.
+  - **`Embedder.ts`** — the tiny provider-agnostic `Embedder` interface + model
+    registry; **`OllamaEmbedder.ts`** (default, zero npm dep — HTTP to
+    `localhost:11434`, `nomic-embed-text`/768d) and **`TransformersEmbedder.ts`**
+    (in-process `Xenova/all-MiniLM-L6-v2`/384d, **lazy** dynamic import so the
+    large dep is only needed if that provider is picked); **`embedder-factory.ts`**
+    selects via `EMBEDDING_PROVIDER` env, default local Ollama (§14 lean).
+  - **`EmbeddingStore.ts`** — `upsertEmbedding`/`getEmbedding`,
+    `cardsNeedingEmbedding` (missing | model-mismatch | stale-hash work list,
+    excludes suspended), `loadDedupCandidates` (joins cards+concepts+vectors,
+    topic-scopable) — the existing bank the §5 pipeline will dedupe against.
+- **`scripts/embed-cards.ts`** + `db:embed-cards` (root + integrations): embeds
+  every card missing/stale a vector and stores the blob; `--golden` runs the
+  golden-set evaluation + threshold sweep. Vectors local, never synced.
+- **Tests:** `embeddings/{vector,dedup,golden-set,OllamaEmbedder}.test.ts` (pure
+  / mocked-fetch) and `sqlite/card-embeddings.migration.test.ts`
+  (`node:sqlite`-gated — migration shape, blob round-trip through SQLite, work
+  list, candidate join, cascade delete).
+
+### Verification (observed, not eyeballed)
+- `@dsa/database` and `@dsa/integrations` **typecheck clean** (`tsc --noEmit`,
+  incl. the new tests); all new files **lint clean** (`eslint`, exit 0).
+- Compiled the package with `tsc` and ran the **real** compiled modules against
+  a migrated `node:sqlite` DB via a harness mirroring the committed tests:
+  **43/43** assertions pass — blob round-trip is lossless through SQLite;
+  cosine 1/−1/0/zero-safe; the dedup rule fires only on concept-match + high
+  cosine and respects a custom threshold; `findDuplicates` is brute-force and
+  skips self; `dedupeBatch` drops within-batch + vs-bank dupes; the golden-set
+  metrics + threshold sweep are correct; the Ollama adapter posts only to
+  `localhost` (mock fetch), one request per text, preserving order, and throws
+  on non-OK; `cardsNeedingEmbedding` correctly flags missing/stale/other-model
+  and excludes suspended; `loadDedupCandidates` joins concepts + vector and
+  scopes by topic; deleting a card cascades its embedding.
+- **§6 local-only proven structurally:** `card_embeddings` is a separate table
+  and a grep confirms the sync/Notion layer (`sqlite/sync.ts`, `notion/*`,
+  `NotionSyncService.ts`) references no embedding column or table at all.
+- **Test-runner caveat (unchanged):** the mounted `node_modules` is a macOS
+  install, so vitest's rollup binary (`@rollup/rollup-linux-arm64-gnu`) can't
+  load in the Linux sandbox — `vitest` was not run here. Logic was verified by
+  `tsc` + executing the compiled modules against `node:sqlite` (the same path
+  the committed tests use). On macOS run `pnpm --filter @dsa/integrations test`.
+
+### Validation boxes flipped to `[x]` this run (35 → 45 / 103)
+- §6 — all eight: local embeddings only (Ollama nomic / transformers MiniLM, no
+  hosted API); vectors as a SQLite blob (no vector DB); brute-force cosine;
+  dedup keys on concept/answer not just question; rule = concept-tag + high
+  cosine; configurable threshold default ~0.85; labelled golden set; embeddings
+  never sync to Notion.
+- §13 — embeddings = local.
+- §15.4 — Stage-4 artifact (embedding + semantic dedup utility, configurable
+  threshold + golden set) exists.
+
+Deliberately left `[ ]`: §14 (LLM+embedding runtime configurable between local
+Ollama and **free cloud tier**; default-local-Ollama + cloud fallback in the
+`llm.factory` chain). The *embedding* runtime is now configurable (Ollama vs
+transformers via the factory, default local), but §14 is framed around the
+**LLM** runtime + the cloud fallback chain, which is wired in Stage 5 — marked
+only what is observed. The §5 generation boxes that *consume* this utility
+(Stage A/B dedup in the pipeline, closed-vocab generation, provenance on
+generated cards) also remain for Stage 5.
+
+### Design vs. existing code — conflicts & resolutions
+- **No conflicts.** The schema/migration/repo conventions from Stages 1–3 fit
+  the embedding store unchanged.
+- **Provider default = Ollama, transformers.js lazy-optional.** The design lists
+  both local providers; §14 recommends starting local-Ollama. The Ollama adapter
+  needs **zero** npm deps (HTTP only), so it is the default and the transformers
+  adapter loads `@xenova/transformers` via a guarded dynamic import (with a local
+  ambient type) — the package compiles and runs without that large dep installed,
+  matching how `js-yaml`/`ts-fsrs` were handled. Install it with
+  `pnpm --filter @dsa/integrations add @xenova/transformers` to use that path.
+- **Embedding column deferred from Stage 1 → its own migration `0012`.** Kept as
+  a separate table (not a `cards` column) specifically to guarantee §6's
+  local-only / never-sync property structurally rather than by sync-layer
+  discipline.
+
+### Next
+- **Stage 5:** batch generation pipeline — dirty-flag trigger → coverage-gap
+  (uncovered concept tags from `concepts.yaml`) → generate existing-tags-only
+  (closed-vocab enforced via `assertClosedVocabulary`) → Stage A (LLM told not to
+  repeat) → **Stage B (`dedupeBatch` from this stage)** → store unique cards with
+  provenance + emit `CardGenerated` events. Wire the embedder into the generation
+  service and embed new cards on store. This unlocks the remaining §2/§4/§5 boxes
+  and the §14 LLM-runtime boxes (via the `llm.factory` cloud fallback).
 
 ---
 

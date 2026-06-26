@@ -15,4 +15,5 @@ export const MIGRATIONS = [
   "0009_sm2_state.sql",
   "0010_drop_mistake_note.sql",
   "0011_flashcards.sql",
+  "0012_card_embeddings.sql",
 ] as const;
