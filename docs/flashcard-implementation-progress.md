@@ -3,7 +3,120 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 61 / 103 boxes passing.**
+**Validation status: 81 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-26 (d) — Build-order Stage 6: `SyncTarget` interface + Notion adapter (§8, §10, §13, §15.6)
+
+### What landed
+- **`packages/integrations/src/sync/`** — the whole §10 longevity/cost hedge,
+  built in the repo's binding-free style (pure core + a tiny DB interface
+  satisfied by better-sqlite3 *and* node:sqlite; no native-driver import). The
+  app speaks only the abstraction — it never imports `@notionhq/client` directly:
+  - **`SyncTarget.ts`** — the `SyncTarget` interface + `CardSyncRecord` /
+    `SyncPushResult`. Field ownership (§8) is encoded in the record shape:
+    content (`type/front/back/conceptTags`) is Notion-authoritative; SR runtime
+    state is a local-authoritative write-only mirror. **`CardSyncRecord` carries
+    no vector** — embeddings physically cannot reach a sync target (§6).
+  - **`card-properties.ts`** — pure card⇄Notion-property mapper. `NOTION_CARD_SCHEMA`
+    is the one-DB/one-row-per-card shape (§8); `cardToNotionProperties` puts the
+    app **UUID up as a property** (never keys on `page_id`), content + the SR
+    write-only mirror + provenance + an `Updated At` conflict key;
+    `notionPageToContent` reads **content only** on a pull (SR never round-trips
+    back in).
+  - **`CardSyncStore.ts`** — `dirtyCardDeltas` (delta push payload: only
+    `dirty=1` cards + their concept tags), `markCardsSynced` (clears `dirty`,
+    stamps `synced_at`, records the one-way `notion_page_id` mapping, **guarded on
+    `updated_at`** so a review landing mid-flush stays dirty → last field-owner
+    write wins, §8), and `applyPulledContent` (new-device/data-loss rebuild where
+    Notion leads — rewrites content, **leaves local SR state untouched**).
+  - **`JsonFileSyncTarget.ts`** — fully-local adapter writing canonical
+    `cards.json` + portable `cards.md` (§10 canonical export / portability hedge;
+    $0, offline). Delta-merges idempotently; never writes a vector.
+  - **`NotionSyncTarget.ts`** — the **only** module allowed to touch
+    `@notionhq/client` (official client, free tier — not an MCP, §10/§13).
+    Throttled to Notion's ~3 req/s via `PQueue({intervalCap:3, interval:1000})`
+    (§8); pushes deltas (create when unmapped, capturing the page id back; update
+    otherwise); one failed card → `failedIds`, never aborts the batch;
+    `ensureSchema` adds only missing columns.
+  - **`CardSyncService.ts`** — orchestrator: `flush` = batched, delta-only push →
+    clear exactly the confirmed cards; `firstUpload` = one-time full batch;
+    `pull` = Notion-leads rebuild. Target-agnostic (Notion when configured, JSON
+    file otherwise) — swapping Notion out is a one-line config change.
+- **Exports** wired through `sync/index.ts` and the package `index.ts`.
+
+### Verification (observed, not eyeballed)
+- `@dsa/integrations` **typechecks clean** (`tsc --noEmit`) and the new module +
+  test **lint clean**.
+- **26/26** new assertions pass under vitest (5 files): pure mapper (UUID-as-
+  property, content up, SR mirror, no vector/embedding key, content-only pull),
+  `JsonFileSyncTarget` (canonical JSON+MD, idempotent delta-merge, round-trip, no
+  vector), `NotionSyncTarget` against an injected client stub (create-vs-update by
+  page-id mapping, `failedIds` keeps a bad card dirty, ensures only missing
+  columns, **rate-limit config = 3/1000** — the ~1s per-push test timing confirms
+  the throttle actually fires), the §10 import-guard (only `NotionSyncTarget`
+  imports the client), and a **node:sqlite end-to-end**: dirty-delta flush clears
+  `dirty` + stamps `synced_at`, a clean bank is a no-op, the embedding stays
+  strictly local, the `updated_at` guard keeps a re-reviewed card dirty, and a
+  pull rewrites content while **SR state (stability/due) is untouched**.
+- `$0` confirmed by inspecting every workspace `package.json`: **no paid/hosted
+  vendor dependency** (no vector DB, no paid LLM tier, no paid sync).
+
+### Validation boxes flipped to `[x]` this run (20 → 81/103)
+- §1 — zero paid infra; survives Notion pricing change (JSON fallback adapter);
+  single-user assumption holds.
+- §8 — SQLite write-through; direction-of-truth by moment; content field-ownership;
+  SR local-authoritative write-only mirror; UUID primary key as a Notion property;
+  dirty-delta-only push; ~3 req/s respected; batched SR flush; conflict policy
+  (last field-owner write wins, keyed on `updated_at`, no CRDT); one-DB/one-row
+  Notion shape.
+- §10 — `SyncTarget` exists (app/card-layer never imports the client directly);
+  Notion is one swappable adapter; canonical local export exists; official
+  `@notionhq/client` (free, not MCP).
+- §13 — sync/backup = Notion free tier; no paid component anywhere.
+- §15.6 — `SyncTarget` interface + Notion adapter (delta sync, batched flush).
+
+Deliberately left `[ ]`: §8 "Notion durable source of record / cross-device"
+(needs a live Notion round-trip not run here) and §8 "code-heavy content in page
+blocks" (front/back map to `rich_text` properties, not page blocks — a later
+refinement). §9 event-type coverage stays open: the sync layer doesn't log
+review/triage events; that lands with Stage 7.
+
+### Design vs. existing code — conflicts & resolutions
+- **Legacy topic/problem Notion sync still imports `@notionhq/client` directly.**
+  `NotionClient.ts` + `NotionSyncService` (topics/problems, pre-dating this rework)
+  remain. The design's §10 "no direct client import" is honored for the **card
+  bank**: the new card-sync seam routes entirely through `SyncTarget`, and the
+  import-guard test proves only `NotionSyncTarget` touches the client. The legacy
+  topic/problem path is a separate concern and is left untouched this run.
+- **Topic modeled as a `rich_text` id, not a Notion `relation`.** The §8 "notes
+  are pages linked by relation" detail is simplified to a topic-id property for
+  now; the card-row shape + properties match the design. Revisit if/when the
+  notes DB is wired as Notion pages.
+- **Backend wiring (route + shutdown/interval trigger) not added this run.** The
+  batched `flush` mechanism is implemented and tested; hooking it to app-close /
+  a timer mirrors the existing `NotionSyncService.flushPendingToNotion` pattern
+  and is a thin follow-up best done alongside the Stage 7 review surface.
+
+### Test-runner note (environment only)
+- `vitest` needs platform-native `rollup`/`esbuild` binaries; the committed
+  `node_modules` carries the macOS builds, so the Linux CI sandbox needed the
+  `linux-arm64` binaries dropped in to run vitest. Unrelated: 4 pre-existing
+  `sqlite/sync.merge.test.ts` cases fail here on `better-sqlite3`'s macOS
+  `.node` ("invalid ELF header") — a native-binary/platform mismatch, **not** a
+  regression (those files are untouched; the binary is dated well before this
+  run). All flashcard logic is tested via the binding-free `node:sqlite` path
+  precisely to avoid this.
+
+### Next run (Stage 7)
+1. **Flashcard review surface** — separate tab, interleaves all topics, opt-in,
+   hard daily cap + an explicit "you're done, go solve" signal.
+2. **One-keystroke inline triage** (suspend / delete / edit) writing
+   `CardSuspended` / `CardDeleted` / `CardEdited` events (§9) — starts ticking the
+   §9 event-type-coverage and §11 review boxes.
+3. Wire `CardSyncService.flush` to session-close / a periodic timer in the
+   backend (the §8 "batched, never per card" trigger) and expose a sync route.
 
 ---
 

@@ -12,9 +12,9 @@
 - [x] **No live LLM on the hot path.** Warm-up, show-answer, and review complete with zero LLM/network calls. Verify by disabling network and confirming all three flows still work.
 - [x] **Hot-path latency is near-zero.** Show-answer and warm-up card load read only from local store; no synchronous LLM chain invocation remains in `WarmupService`.
 - [x] **The old live behavior is gone.** Confirm `WarmupService` no longer calls the LLM chain for question generation *or* answer reveal.
-- [ ] **Zero paid infrastructure.** No hosted vector DB, no paid LLM tier, no paid sync. Inspect dependencies/config and confirm every component is free-tier or local.
-- [ ] **Survives Notion pricing change.** App degrades gracefully (or swaps adapter) if Notion becomes paid — see §10.
-- [ ] **Single-user assumption holds.** No multi-user/auth complexity added that contradicts the single-user scope.
+- [x] **Zero paid infrastructure.** No hosted vector DB, no paid LLM tier, no paid sync. Inspect dependencies/config and confirm every component is free-tier or local.
+- [x] **Survives Notion pricing change.** App degrades gracefully (or swaps adapter) if Notion becomes paid — see §10.
+- [x] **Single-user assumption holds.** No multi-user/auth complexity added that contradicts the single-user scope.
 
 ## §2 Core architecture
 
@@ -82,19 +82,19 @@
 ## §8 Data model (Notion canonical, SQLite write-through cache)
 
 - [ ] **Notion is durable source of record** + cross-device sync + backup.
-- [ ] **SQLite is write-through, not a passive mirror** — reviews write to SQLite first (instant), then flush to Notion in the background.
-- [ ] **Direction of truth by moment is honored:** day-to-day SQLite leads / Notion follows; on new device or data loss, Notion leads and rebuilds SQLite.
-- [ ] **Field ownership enforced — content fields (front, back, concept tags) are Notion-authoritative.**
-- [ ] **SR runtime state (stability, difficulty, due, reps, lapses, last_review) is local-authoritative**, pushed to Notion as a write-only mirror.
+- [x] **SQLite is write-through, not a passive mirror** — reviews write to SQLite first (instant), then flush to Notion in the background.
+- [x] **Direction of truth by moment is honored:** day-to-day SQLite leads / Notion follows; on new device or data loss, Notion leads and rebuilds SQLite.
+- [x] **Field ownership enforced — content fields (front, back, concept tags) are Notion-authoritative.**
+- [x] **SR runtime state (stability, difficulty, due, reps, lapses, last_review) is local-authoritative**, pushed to Notion as a write-only mirror.
 - [x] **Provenance stored per generated card:** `source_hash` + `model_version` + `prompt_version` (and `note_version` if notes go git-backed).
 - [x] **`generation_confidence` and `quality_score` are NOT stored** — deferred, derivable from the event log later.
 - [ ] **Code-heavy content lives in the card body / page blocks**, not Notion property fields (avoids length/formatting limits) — or such cards are kept local-authoritative.
-- [ ] **Primary key is an app-generated UUID**, stored as a Notion property — the app never keys on Notion's internal `page_id`.
-- [ ] **Sync pushes only dirty deltas** (tracked via `updated_at` + dirty flag); first upload may be a one-time batch.
-- [ ] **Notion ~3 req/s rate limit respected** by the sync layer.
-- [ ] **SR flush is batched** (session-close or every few minutes), never per card.
-- [ ] **Conflict policy = last field-owner write wins, keyed on `updated_at`.** No CRDT / multi-paragraph merge logic present.
-- [ ] **Notion shape = one database, one row per card** with the specified properties (stability, difficulty, due, reps, lapses, last_review, front, back, concept-tags, source-hash, model-version, prompt-version, uuid); notes are pages linked by relation.
+- [x] **Primary key is an app-generated UUID**, stored as a Notion property — the app never keys on Notion's internal `page_id`.
+- [x] **Sync pushes only dirty deltas** (tracked via `updated_at` + dirty flag); first upload may be a one-time batch.
+- [x] **Notion ~3 req/s rate limit respected** by the sync layer.
+- [x] **SR flush is batched** (session-close or every few minutes), never per card.
+- [x] **Conflict policy = last field-owner write wins, keyed on `updated_at`.** No CRDT / multi-paragraph merge logic present.
+- [x] **Notion shape = one database, one row per card** with the specified properties (stability, difficulty, due, reps, lapses, last_review, front, back, concept-tags, source-hash, model-version, prompt-version, uuid); notes are pages linked by relation.
 
 ## §9 Event log & analytics
 
@@ -105,10 +105,10 @@
 
 ## §10 Cost / longevity hedge
 
-- [ ] **`SyncTarget` interface exists** and the app never imports the Notion client directly.
-- [ ] **Notion is one swappable adapter** behind that interface (alternatives: Git+Markdown, Google Sheet, SQLite-in-Dropbox) — swapping requires changing only the adapter.
-- [ ] **Canonical local export (Markdown/JSON) exists** so the bank is portable.
-- [ ] **Running app uses the official `@notionhq/client` (free), not an MCP.**
+- [x] **`SyncTarget` interface exists** and the app never imports the Notion client directly.
+- [x] **Notion is one swappable adapter** behind that interface (alternatives: Git+Markdown, Google Sheet, SQLite-in-Dropbox) — swapping requires changing only the adapter.
+- [x] **Canonical local export (Markdown/JSON) exists** so the bank is portable.
+- [x] **Running app uses the official `@notionhq/client` (free), not an MCP.**
 
 ## §11 Two UI surfaces (kept separate)
 
@@ -144,8 +144,8 @@
 - [x] **SR engine = `ts-fsrs`** (local, MIT).
 - [x] **Embeddings = local** (Ollama `nomic-embed-text` or transformers.js).
 - [x] **Batch expansion = local Ollama (Llama 3.1 / Qwen2.5) or free cloud tier (Gemini / Groq)**, plugged into the existing `llm.factory` chain.
-- [ ] **Sync/backup = Notion free tier.**
-- [ ] **No paid component anywhere** in the stack.
+- [x] **Sync/backup = Notion free tier.**
+- [x] **No paid component anywhere** in the stack.
 
 ## §14 Open decision (runtime choice)
 
@@ -161,7 +161,7 @@
 - [x] **3.** Card repository + `CardService` exist; `WarmupService` reads due cards locally with the fallback order and no live LLM on the hot path.
 - [x] **4.** Local embedding + semantic dedup utility exists (configurable threshold + golden set).
 - [x] **5.** Batch generation pipeline exists (dirty-flag trigger → coverage-gap → generate → dedup → store, with provenance).
-- [ ] **6.** `SyncTarget` interface + Notion adapter exist (delta sync, batched flush).
+- [x] **6.** `SyncTarget` interface + Notion adapter exist (delta sync, batched flush).
 - [ ] **7.** Flashcard review surface exists (separate tab, interleaved, capped) with inline triage.
 - [ ] **8.** Leech detection + mastery-triggered generation exist (using prerequisite edges).
 

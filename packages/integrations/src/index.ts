@@ -34,6 +34,36 @@ export type {
   TopicNotionUpdate,
 } from "./notion/NotionWriter.js";
 export { syncNotionToSqlite, getMirrorCounts, type SyncResult } from "./sqlite/sync.js";
+export {
+  CardSyncService,
+  JsonFileSyncTarget,
+  createJsonFileSyncTarget,
+  NotionSyncTarget,
+  createNotionSyncTarget,
+  NOTION_RATE_LIMIT,
+  NOTION_CARD_SCHEMA,
+  NOTION_CONTENT_PROPERTIES,
+  cardToNotionProperties,
+  notionPageToContent,
+  dirtyCardDeltas,
+  allCardRecords,
+  countDirtyCards,
+  markCardsSynced,
+  applyPulledContent,
+  newSyncId,
+  type SyncTarget,
+  type CardSyncRecord,
+  type SyncPushResult,
+  type CardSyncReport,
+  type SyncDb as CardSyncDb,
+  type SyncStatement as CardSyncStatement,
+  type PullApplyResult,
+  type PulledCardContent,
+  type NotionCardPropertyName,
+  type JsonFileSyncConfig,
+  type NotionSyncConfig,
+  type NotionClientLike,
+} from "./sync/index.js";
 export { createSqliteDb, runMigrations } from "./sqlite/client.js";
 export type { SqliteDb } from "./sqlite/client.js";
 export {
