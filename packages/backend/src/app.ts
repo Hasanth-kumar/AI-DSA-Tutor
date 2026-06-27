@@ -76,6 +76,7 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
         weaknessTrend: "GET /api/analytics/weakness-trend?weeks=8",
         difficulty: "GET /api/analytics/difficulty",
         dashboard: "GET /api/analytics/dashboard?weeks=8",
+        cards: "GET /api/analytics/cards?weeks=8",
       },
       explainScore: "GET /api/topics/:id/score/explain",
       weaknessEvidence: "GET /api/topics/:id/weakness",

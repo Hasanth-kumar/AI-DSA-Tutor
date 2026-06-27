@@ -1,9 +1,13 @@
 import {
+  computeCardAnalytics,
   createAnalyticsEngine,
   type AnalyticsEngine,
   type AnalyticsProblemInput,
   type AnalyticsSessionInput,
   type AnalyticsTopicInput,
+  type CardAnalyticsOptions,
+  type CardAnalyticsReport,
+  type CardEventRecord,
   type DifficultyAnalysis,
   type IntelligenceOrchestrator,
   type MasteryVelocityPoint,
@@ -60,6 +64,15 @@ interface MirrorInputs {
   topicStates: TopicState[];
 }
 
+/**
+ * Read side of the append-only card event log (§9). Kept as a tiny interface so
+ * AnalyticsService never depends on the Drizzle CardRepository concretely and
+ * stays unit-testable with a stub.
+ */
+export interface CardEventSource {
+  listEvents(sinceMs?: number): CardEventRecord[];
+}
+
 export class AnalyticsService {
   private readonly engine: AnalyticsEngine;
   private dashboardCache: {
@@ -74,8 +87,21 @@ export class AnalyticsService {
     private readonly sessionRepo: SessionRepository,
     private readonly problemRepo: ProblemRepository,
     engine?: AnalyticsEngine,
+    private readonly cardEvents?: CardEventSource,
   ) {
     this.engine = engine ?? createAnalyticsEngine();
+  }
+
+  /**
+   * On-demand flashcard analytics computed purely from the append-only event
+   * log (§9): coverage/retention trends, per-card quality, auto-retire
+   * candidates. No extra stored columns, no history backfill — a fresh read of
+   * the log reproduces every number. Degrades to an empty-but-valid report when
+   * no event source is wired.
+   */
+  getCardAnalytics(options: CardAnalyticsOptions = {}): CardAnalyticsReport {
+    const events = this.cardEvents?.listEvents() ?? [];
+    return computeCardAnalytics(events, options);
   }
 
   getStreak(now = new Date()): StreakInfo {

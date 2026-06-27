@@ -3,7 +3,104 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 95 / 103 boxes passing.**
+**Validation status: 96 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-27 (b) — on-demand card analytics over the event log (§9)
+
+### Context found at start
+- Repo at `dd47747` (95/103). Stages 1–8 of §15 complete; the last run's
+  recommended next step was the §9 on-demand analytics module — a **pure**
+  function over the append-only `card_events` log, the one remaining gap that is
+  fully verifiable in the Linux sandbox (no `better-sqlite3` needed).
+- Orphan probe files (`_probe_wt`, `_r2`, `_tmp_8_*`) still present and still
+  un-unlinkable in this sandbox; left untracked, kept out of the commit.
+
+### What landed this run
+1. **Pure analytics engine** — `packages/intelligence/src/card-analytics/`
+   (`types.ts` + `cardAnalytics.ts`), I/O-free, no `@dsa/database` dep:
+   - `computeRetentionTrend` — trailing weekly buckets of recalls vs lapses
+     (rating ≥ 2 = recall, rating 1 = lapse), matching `velocity.ts` week bounds.
+   - `computeCoverageTrend` — weekly bank growth (CardGenerated − CardDeleted),
+     cumulative live cards seeded from pre-window history, and cumulative distinct
+     concept tags from `CardGenerated` payloads (§4 coverage).
+   - `computeCardQuality` — per-card fold: reviews/recalls/lapses, retention,
+     avgRating, edits, suspended/deleted/leech, lastReviewedAt, and a composite
+     `qualityScore` (0–1) — **derived on demand, never stored** (§8 defers
+     `quality_score`). Worst-first sort.
+   - `findRetireCandidates` — never-improving leeches + low-retention duds, with
+     **configurable** thresholds (`retireMinReviews`/`retireMaxRetention`/
+     `retireLeechRetention`); skips suspended/deleted cards.
+   - `computeCardAnalytics` — the full report (summary + both trends + per-card
+     quality + retire candidates). Live FSRS state is **not** rebuilt from events
+     (not event sourcing, §9) — events are only summarized.
+   - Exported from `@dsa/intelligence` index.
+2. **Backend wiring (on demand, off the hot path):**
+   - `CardRepository.listEvents(sinceMs?)` — reads `card_events` oldest-first and
+     parses payload JSON into the pure-engine `CardEventRecord` shape (tolerant
+     parse → malformed row degrades to `null`). Explicitly opt-in analytics, not
+     a warm-up/review read.
+   - `AnalyticsService.getCardAnalytics()` + a tiny `CardEventSource` seam so the
+     service never depends on the Drizzle repo concretely; wired `cardRepo` in
+     `context.ts`.
+   - `GET /api/analytics/cards?weeks=8` route + app.ts route index entry.
+
+### Verification (Linux sandbox)
+- **`@dsa/intelligence` full suite: 85/85** (`corepack pnpm`), incl. **12 new**
+  `cardAnalytics.test.ts` cases (retention buckets, coverage cumulative + concept
+  dedup, per-card fold, leech flag, worst-first sort, retire thresholds
+  configurable, empty-log validity).
+- **`@dsa/backend` typecheck clean** (`tsc --noEmit`, exit 0) after building
+  `@dsa/database` + `@dsa/intelligence`.
+- **Lint clean** — `@dsa/intelligence` and `@dsa/backend` (`eslint src`).
+- **End-to-end §9 behavioral check, NO network:** a `node:sqlite` harness builds
+  the real `card_events` table (migration 0011 DDL), inserts events via the exact
+  app INSERT, reads them back the way `CardRepository.listEvents` does, and runs
+  `computeCardAnalytics` from the built dist — all 10 assertions pass (2 cards
+  tracked, 7 reviews, 1 leech, 4 weekly buckets, cumulative cards/concepts, the
+  failing leech auto-retired while the healthy card is not). This is why the box
+  is flipped on *observed* behavior, not source-reading.
+  - Could NOT run the Drizzle/`better-sqlite3` suites here (module unresolved in
+    the Linux sandbox — macOS native binding); the `node:sqlite` harness exercises
+    the same data path and is the faithful in-sandbox substitute.
+
+### Validation boxes flipped this run (95 → 96 / 103)
+- §9 — **Analytics computable on demand from the log** (coverage/retention
+  trends, per-card quality, auto-retire candidates), no extra stored columns.
+
+### Design vs. existing code — conflicts & resolutions
+- **No conflict.** §8 explicitly defers `generation_confidence`/`quality_score`
+  to "derive on demand from the event log (§9)" — this run builds exactly that
+  derivation, so `qualityScore` is computed live and stored nowhere, honoring the
+  design rather than adding a column.
+- Kept the engine in `@dsa/intelligence` (pure, I/O-free) with its own
+  `CardEventRecord`/`CardEventKind` types rather than importing `@dsa/database`,
+  preserving the package's zero-I/O contract; the backend maps DB rows → that
+  shape in `CardRepository.listEvents`.
+
+### Still `[ ]` (and why)
+- §2 notes-sole-source (generation has an intentional "no notes → standard DSA
+  knowledge" fallback). §3 confusion-pair (needs embedding-store wiring). §7
+  "no SM-2 anywhere" — topic SM-2 still powers the legacy revision queue per
+  `CLAUDE.md`'s intentional dual-scheduling. §8 live Notion round-trip +
+  code-in-page-blocks (needs live Notion). §9 `CardMerged` logging (no merge UI).
+  §12 daily-loop UX (manual).
+
+### Next
+1. §3 confusion-pair cards via the embedding store (semantically-close concepts
+   from `card_embeddings`) — the next pure-ish slice with sandbox-testable logic.
+2. **Housekeeping on a macOS run — the sandbox cannot `unlink`/`rename`, only
+   create/overwrite, so this commit was made via plumbing (`commit-tree` + an
+   in-place overwrite of `.git/refs/heads/main`) rather than `git commit`.** On
+   macOS, before any normal git use, delete these STALE LOCK FILES (they will
+   otherwise block git with "Another git process seems to be running"):
+   `.git/index.lock`, `.git/HEAD.lock`, `.git/refs/heads/main.lock`,
+   `.git/refs/heads/main.lock.stale-*`, `.git/objects/maintenance.lock`. Then
+   also remove the sandbox scratch leftovers `.git/_writetest`, `.git/_ovtest`,
+   the orphan `.git/objects/*/tmp_obj_*`, and the `_probe_wt`/`_r2`/`_tmp_8_*`
+   files in the repo root, run `git gc`, then `git push` (remote configured, not
+   pushed from-sandbox per convention). Verify with `git fsck` + `git status`.
 
 ---
 

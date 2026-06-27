@@ -101,7 +101,7 @@
 - [x] **Append-only event log table exists alongside the mutable rows.**
 - [ ] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`. *(6/7 wired — `CardMerged` has no UI flow yet.)*
 - [x] **State is NOT rebuilt by replaying events** — live SR/FSRS state stays in its own table (not event-sourced).
-- [ ] **Analytics are computable on demand from the log** (coverage/retention trends, per-card quality, auto-retire candidates) without extra stored columns or history backfill.
+- [x] **Analytics are computable on demand from the log** (coverage/retention trends, per-card quality, auto-retire candidates) without extra stored columns or history backfill. *(Pure `computeCardAnalytics` over `card_events` in `@dsa/intelligence`; `AnalyticsService.getCardAnalytics` + `GET /api/analytics/cards` expose it. Verified end-to-end against a real `node:sqlite` `card_events` table with no network — coverage/retention trends, per-card quality, and auto-retire candidates all reproduced from the log alone.)*
 
 ## §10 Cost / longevity hedge
 

@@ -9,9 +9,10 @@
  * the later delta sync to Notion (§8). Cards are not mirrored in MirrorCache
  * (topics/problems/sessions only), so card writes must not invalidate it.
  */
-import { and, asc, eq, gt, inArray, lte, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, notInArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { cardConcepts, cardEvents, cards } from "@dsa/database/schema";
+import type { CardEventRecord } from "@dsa/intelligence";
 import type { SqliteDb } from "@dsa/integrations";
 import type {
   CardEventInput,
@@ -167,6 +168,26 @@ export class CardRepository implements CardStore {
     return this.db.select().from(cards).where(eq(cards.topicId, topicId)).all();
   }
 
+  /**
+   * Read the append-only event log for on-demand analytics (§9). Parses the JSON
+   * payload into the pure-engine {@link CardEventRecord} shape and orders rows
+   * oldest-first so cumulative trends fold correctly. This is opt-in analytics,
+   * NOT a hot-path read — the warm-up/review path never touches it.
+   */
+  listEvents(sinceMs?: number): CardEventRecord[] {
+    const base = this.db.select().from(cardEvents);
+    const rows =
+      sinceMs != null
+        ? base.where(gte(cardEvents.createdAt, sinceMs)).orderBy(asc(cardEvents.createdAt)).all()
+        : base.orderBy(asc(cardEvents.createdAt)).all();
+    return rows.map((r) => ({
+      cardId: r.cardId,
+      type: r.type,
+      createdAt: r.createdAt,
+      payload: parsePayload(r.payload),
+    }));
+  }
+
   /** Concept ids attached to a card (§4) — used by dedup/coverage later. */
   conceptsFor(cardId: string): string[] {
     return this.db
@@ -204,5 +225,15 @@ export class CardRepository implements CardStore {
       .where(and(eq(cards.topicId, topicId), eq(cards.suspended, 0)))
       .get();
     return isNearlyMatureFromCounts(row?.active ?? 0, row?.mature ?? 0);
+  }
+}
+
+/** Tolerant JSON parse for event payloads — a malformed row degrades to null. */
+function parsePayload(raw: string | null): CardEventRecord["payload"] {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CardEventRecord["payload"];
+  } catch {
+    return null;
   }
 }

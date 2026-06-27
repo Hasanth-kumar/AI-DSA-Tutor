@@ -91,3 +91,24 @@ export {
   AnalyticsEngine,
   createAnalyticsEngine,
 } from "./analytics/AnalyticsEngine.js";
+
+export type {
+  CardAnalyticsOptions,
+  CardAnalyticsReport,
+  CardAnalyticsSummary,
+  CardEventKind,
+  CardEventPayload,
+  CardEventRecord,
+  CardQuality,
+  CardQualityFlag,
+  CoverageTrendPoint,
+  RetentionTrendPoint,
+  RetireCandidate,
+} from "./card-analytics/types.js";
+export {
+  computeCardAnalytics,
+  computeCardQuality,
+  computeCoverageTrend,
+  computeRetentionTrend,
+  findRetireCandidates,
+} from "./card-analytics/cardAnalytics.js";

@@ -130,6 +130,8 @@ export function createAppContext(
     topicRepo,
     sessionRepo,
     problemRepo,
+    undefined,
+    cardRepo, // on-demand card analytics over the append-only event log (§9)
   );
   events.subscribe((event) => {
     if (

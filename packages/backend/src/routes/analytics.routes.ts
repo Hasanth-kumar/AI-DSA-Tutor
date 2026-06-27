@@ -56,4 +56,15 @@ export async function analyticsRoutes(
       return reply.send(serializeForJson({ ...dashboard, plan }));
     },
   );
+
+  // On-demand flashcard analytics over the append-only event log (§9):
+  // coverage/retention trends, per-card quality, and auto-retire candidates.
+  app.get<{ Querystring: { weeks?: string } }>(
+    "/analytics/cards",
+    async (request, reply) => {
+      const weeks = parseWeeks(request.query.weeks);
+      const report = ctx.analyticsService.getCardAnalytics({ weeks });
+      return reply.send(serializeForJson(report));
+    },
+  );
 }
