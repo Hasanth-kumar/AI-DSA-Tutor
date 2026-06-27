@@ -6,7 +6,11 @@ import {
   type RawGeneratedCard,
   type SanitizeOptions,
 } from "./generation.js";
-import { extractMistakeSection } from "./generation.prompt.js";
+import {
+  buildGenerationPrompt,
+  extractMistakeSection,
+  type GenerationPromptContext,
+} from "./generation.prompt.js";
 
 /**
  * Stage-5 pure-core acceptance (design §4, §5, §8). The closed-vocabulary
@@ -144,5 +148,49 @@ describe("extractMistakeSection (§3)", () => {
 
   it("returns null when there is no Mistakes section", () => {
     expect(extractMistakeSection("# Topic\n\njust prose")).toBeNull();
+  });
+});
+
+describe("buildGenerationPrompt — mistake-derived block (§3)", () => {
+  const base: GenerationPromptContext = {
+    topicName: "Two Sum",
+    uncovered: [{ id: "complement-trick", description: "x + y = target via lookup" }],
+    noteExcerpts: [{ title: "Two Sum", excerpt: "use a hashmap" }],
+    existingFronts: [],
+    maxPerConcept: 3,
+  };
+
+  it("injects a dedicated mistakes block + a mistake-derived instruction when notes carry one", () => {
+    const prompt = buildGenerationPrompt({
+      ...base,
+      mistakeNotes: [{ title: "Two Sum", mistakes: "- reached for nested loops first" }],
+    });
+    expect(prompt).toContain("OWN past mistakes");
+    expect(prompt).toContain("mistake-derived");
+    expect(prompt).toContain("nested loops first");
+  });
+
+  it("omits the mistakes block entirely when there is no mistake material", () => {
+    expect(buildGenerationPrompt(base)).not.toContain("OWN past mistakes");
+    expect(buildGenerationPrompt({ ...base, mistakeNotes: [] })).not.toContain("OWN past mistakes");
+    expect(
+      buildGenerationPrompt({ ...base, mistakeNotes: [{ title: "x", mistakes: "   " }] }),
+    ).not.toContain("OWN past mistakes");
+  });
+
+  it("surfaces the full Mistakes section even when the note excerpt would truncate it", () => {
+    // A real note where the ## Mistakes section sits past the 1.2k excerpt cap:
+    // the extractor pulls it whole, and it must reach the prompt intact (§3).
+    const note =
+      "# Two Sum\n\n## Approach\n" +
+      "a".repeat(1500) +
+      "\n\n## Mistakes\n- off-by-one on the complement index\n";
+    const section = extractMistakeSection(note);
+    expect(section).toContain("off-by-one on the complement index");
+    const prompt = buildGenerationPrompt({
+      ...base,
+      mistakeNotes: [{ title: "Two Sum", mistakes: section! }],
+    });
+    expect(prompt).toContain("off-by-one on the complement index");
   });
 });

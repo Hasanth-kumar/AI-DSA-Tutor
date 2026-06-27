@@ -3,7 +3,88 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 94 / 103 boxes passing.**
+**Validation status: 95 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-27 (a) — preserve perf/correctness pass + wire mistake-derived cards (§3, §7, §8, §9)
+
+### Context found at start
+- Repo at `aa0e6f4` (94/103), but the working tree held a **large uncommitted
+  pass from a prior crashed run** — never committed, so at risk of loss. Also a
+  stale `refs/heads/main.lock.stale-*`, orphan `_probe_wt`/`_r2`/`_tmp_8_*` probe
+  files, and an untracked `database/migrations/0014_cards_front_index.sql`.
+
+### What landed this run
+1. **Preserved the prior pass → commit `7ec3af1`.** Reviewed the full diff; it is
+   a coherent perf/correctness pass and typechecks + lints + passes all pure
+   tests, so it was committed rather than discarded:
+   - `AnalyticsService`: memoized dashboard + **event-driven invalidation** wired
+     in `context.ts` (session/topic/problem/attempt → `invalidateDashboard()` +
+     `invalidateTodaysPlan()`) (§9).
+   - `health.service` + `health.routes`: split **shallow `/health`** (no probe on
+     hot path, §1) vs **deep `/health/ready`** (Notion/LLM probes preserved).
+   - `CardRepository`: batch `conceptsForMany` + SQL-aggregate
+     `isTopicNearlyMature` kill the review-queue/mastery **N+1** (§7); **dropped
+     the incorrect `MirrorCache.invalidate()` on card writes** — cards aren't
+     mirrored (topics/problems/sessions only), so it was a no-op churn (§8).
+   - `ConflictRepository`/`SyncMetaRepository`: `COUNT(*)` + `json_array_length`
+     fast paths for sync-status (no full payload parse).
+   - `sqlite/client`: **WAL + `busy_timeout`** for write-through concurrency (§8).
+   - `migration 0014`: `idx_cards_front` for warm-up show-answer lookup.
+   - `coaching.routes`: SSE `flush()` + `no-transform` + `setNoDelay` for true
+     token streaming.
+   - frontend live-cache/polling refinements.
+   - `data/cards-export/` added to `.gitignore` (regenerable §10 export, not source).
+
+2. **Wired mistake-derived card generation (§3)** — the `extractMistakeSection`
+   helper existed and was unit-tested but **was never fed into the pipeline**; the
+   note provider only returned generic 1.2k-char excerpts, so a `## Mistakes`
+   section past the cap never reached the model:
+   - `resolvers.ts` `createDbNoteProvider` now runs `extractMistakeSection` over
+     the **full** note body and surfaces `TopicNotes.mistakes`.
+   - `generation.prompt.ts`: new `GenerationPromptContext.mistakeNotes` + a
+     dedicated `mistakeBlock` that hands the model the learner's own mistakes
+     verbatim and explicitly asks for `mistake-derived` cards; injected into
+     `buildGenerationPrompt`.
+   - `CardGenerationService` passes `notes.mistakes` through.
+
+### Verification (this environment = Linux sandbox)
+- **All packages typecheck** (`tsc`) and **lint clean** (`eslint`, 6/6 projects).
+- **Pure test suites pass:** intelligence 73/73, shared 1/1, backend
+  `masteryTrigger` 3/3 (incl. new `isNearlyMatureFromCounts`), integrations
+  `generation` **14/14** (incl. 3 new mistake-block tests: block+instruction+
+  verbatim text present; omitted when absent; full section survives excerpt
+  truncation).
+- **Could NOT run the SQLite-backed suites here:** the repo's native
+  `better_sqlite3.node` (and Vite's `esbuild`) are **macOS binaries**; this run
+  is in a Linux sandbox → "invalid ELF header". The sandbox also **blocks file
+  deletion** in the mount, so a safe binary swap-and-restore was not possible
+  without risking the user's macOS install. Left native modules untouched. Those
+  suites (CardService, SessionService, dashboardState, generation-pipeline,
+  flashcards.migration) were green on macOS in prior runs.
+
+### Validation boxes flipped this run (94 → 95 / 103)
+- §3 — **mistake-derived cards** from the `## Mistakes` section (extraction →
+  dedicated prompt block, observed via pure tests).
+
+### Still `[ ]` (and why)
+- §2 notes-sole-source (generation has a "no notes → standard DSA knowledge"
+  fallback by design). §3 confusion-pair (needs embedding-store wiring). §7
+  "no SM-2 anywhere" — topic SM-2 intentionally still powers the legacy revision
+  queue per `CLAUDE.md` (design/code conflict; following the existing intentional
+  dual-scheduling decision). §8 live Notion round-trip + code-in-page-blocks
+  (needs live Notion). §9 `CardMerged` (no merge UI) + on-demand analytics
+  module. §12 daily-loop UX (manual).
+
+### Next
+1. §9 on-demand analytics module — a **pure** function over the append-only
+   `card_events` rows (coverage/retention trends, per-card quality, auto-retire
+   candidates); fully unit-testable in-sandbox.
+2. §3 confusion-pair cards via the embedding store (semantically-close concepts).
+3. House-keeping: a future run on macOS should `git gc`/clean the orphan
+   `.git/objects/*/tmp_obj_*` and `_probe_wt`/`_r2`/`_tmp_8_*` files this sandbox
+   could not unlink, and `git push` (remote is ahead-only here).
 
 ---
 

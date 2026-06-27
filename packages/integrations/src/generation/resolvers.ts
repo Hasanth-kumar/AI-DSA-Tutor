@@ -9,6 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { loadAllSeeds } from "../seeds/seed-loader.js";
+import { extractMistakeSection } from "./generation.prompt.js";
 import type {
   GenDb,
 } from "./GenerationStore.js";
@@ -65,6 +66,13 @@ export function createDbNoteProvider(db: GenDb): NoteProvider {
       .filter((r) => (r.content ?? "").trim().length > 0)
       .map((r) => ({ title: r.title, excerpt: excerptOf(r.content ?? "") }));
 
+    // Mistake-derived material (§3): pull the `## Mistakes` section from the FULL
+    // note body — before excerpt truncation could drop it — so it always reaches
+    // the prompt's dedicated mistake block.
+    const mistakes = rows
+      .map((r) => ({ title: r.title, mistakes: extractMistakeSection(r.content ?? "") }))
+      .filter((m): m is { title: string; mistakes: string } => m.mistakes !== null);
+
     const hashSource = rows
       .map((r) => r.content_hash ?? createHash("sha256").update(r.content ?? "").digest("hex"))
       .sort()
@@ -72,6 +80,6 @@ export function createDbNoteProvider(db: GenDb): NoteProvider {
     const noteVersion =
       rows.length > 0 ? createHash("sha256").update(hashSource).digest("hex") : null;
 
-    return { excerpts, noteVersion };
+    return { excerpts, mistakes, noteVersion };
   };
 }

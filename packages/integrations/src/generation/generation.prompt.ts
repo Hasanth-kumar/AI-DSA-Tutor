@@ -34,6 +34,14 @@ export interface GenerationPromptContext {
   uncovered: GenerationConcept[];
   /** The user's note material — source of truth for card content (§2). */
   noteExcerpts: { title: string; excerpt: string }[];
+  /**
+   * The `## Mistakes` sections pulled verbatim from the user's notes (§3).
+   * Surfaced as a dedicated, un-truncated block so the model derives
+   * mistake-targeting cards from *the learner's own gaps* rather than hoping the
+   * 1.2k-char excerpt happened to keep the heading. Empty/omitted when no note
+   * has a Mistakes section.
+   */
+  mistakeNotes?: { title: string; mistakes: string }[];
   /** Fronts of cards already in the bank for this topic — Stage-A dedup (§5). */
   existingFronts: string[];
   /** Max cards per concept (2–3 angles) — keeps the bank lean (§4). */
@@ -82,6 +90,25 @@ function noteBlock(ctx: GenerationPromptContext): string {
   );
 }
 
+/**
+ * Dedicated `## Mistakes` block (§3). When the learner's notes carry a Mistakes
+ * section, hand it to the model verbatim and explicitly ask for `mistake-derived`
+ * cards that target those specific errors — the highest personal-value card type.
+ * Returns `""` (no block) when there is no mistake material, so the prompt stays
+ * lean for topics without one.
+ */
+function mistakeBlock(ctx: GenerationPromptContext): string {
+  const notes = (ctx.mistakeNotes ?? []).filter((n) => n.mistakes.trim().length > 0);
+  if (notes.length === 0) return "";
+  return (
+    `\nThe learner's OWN past mistakes on ${ctx.topicName} (from the "## Mistakes" sections of their notes). ` +
+    `For any uncovered concept these touch, prefer a "mistake-derived" card that confronts the specific error ` +
+    `(e.g. "you first reached for nested loops — why doesn't that scale?"):\n` +
+    notes.map((n) => `--- mistakes: ${n.title} ---\n${n.mistakes.trim()}`).join("\n\n") +
+    "\n"
+  );
+}
+
 function existingBlock(ctx: GenerationPromptContext): string {
   if (ctx.existingFronts.length === 0) {
     return "There are no existing cards for this topic yet.";
@@ -106,7 +133,7 @@ export function buildGenerationPrompt(ctx: GenerationPromptContext): string {
   return `You expand a spaced-repetition flashcard bank for a DSA topic: "${ctx.topicName}".
 
 ${noteBlock(ctx)}
-
+${mistakeBlock(ctx)}
 ${existingBlock(ctx)}
 
 Produce flashcards ONLY for these currently-uncovered concepts (do not generate cards for any concept not in this list):

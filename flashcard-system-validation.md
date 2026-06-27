@@ -31,7 +31,7 @@
 - [x] **Pattern-trigger** card type supported (front = problem signal, back = pattern name).
 - [x] **Cloze on canonical code** card type supported (single blanked line).
 - [x] **Predict-the-complexity / predict-the-output** card type supported.
-- [ ] **Mistake-derived** cards generated from the `## Mistakes` section of a note.
+- [x] **Mistake-derived** cards generated from the `## Mistakes` section of a note. *(Note provider extracts the section from full note content before truncation → `TopicNotes.mistakes` → a dedicated prompt block instructing `mistake-derived` cards. Pure prompt-builder tests confirm the block + instruction + verbatim mistake text are present and omitted when absent; live LLM emission deferred to manual e2e.)*
 - [ ] **Confusion-pair** discrimination cards supported, sourced via the embedding store.
 - [x] **Card type is a stored attribute** so generation/sampling/analytics can distinguish them.
 

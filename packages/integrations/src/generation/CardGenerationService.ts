@@ -61,6 +61,12 @@ export interface TopicVocabulary {
 /** Note material for a topic — the source of truth for card content (§2). */
 export interface TopicNotes {
   excerpts: { title: string; excerpt: string }[];
+  /**
+   * The `## Mistakes` sections extracted verbatim from the topic's notes (§3),
+   * fed to the prompt as a dedicated block for mistake-derived cards. Optional
+   * for back-compat; absent/empty when no note has a Mistakes section.
+   */
+  mistakes?: { title: string; mistakes: string }[];
   /** Stable hash of the note content — stored as `note_version` provenance (§8). */
   noteVersion: string | null;
 }
@@ -144,7 +150,9 @@ export class CardGenerationService {
     }
 
     // 2. Build the closed-vocabulary, coverage-targeted prompt (§4/§5).
-    const notes = (this.cfg.loadNotes ?? (() => ({ excerpts: [], noteVersion: null })))(topicId);
+    const notes: TopicNotes = (
+      this.cfg.loadNotes ?? (() => ({ excerpts: [], mistakes: [], noteVersion: null }))
+    )(topicId);
     const uncoveredConcepts: GenerationConcept[] = coverage.uncovered.map((id) => ({
       id,
       description: vocab.concepts.find((c) => c.id === id)?.description,
@@ -153,6 +161,7 @@ export class CardGenerationService {
       topicName: vocab.topicName,
       uncovered: uncoveredConcepts,
       noteExcerpts: notes.excerpts,
+      mistakeNotes: notes.mistakes ?? [],
       existingFronts: existingFronts(this.cfg.db, topicId),
       maxPerConcept: this.maxPerConcept,
     });
