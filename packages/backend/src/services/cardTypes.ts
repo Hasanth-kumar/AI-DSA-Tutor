@@ -20,6 +20,8 @@ export interface DueQuery {
   excludeIds?: readonly string[];
   /** When true, leech-flagged cards are omitted (§7 — don't drill forever). */
   excludeLeech?: boolean;
+  /** When true, only leech-flagged due cards are returned. */
+  leechOnly?: boolean;
 }
 
 /** Due cards tagged with any of the given concept ids (§4 leech remediation). */
@@ -80,8 +82,10 @@ export interface CardStore {
   dueCardsByConcepts(query: ConceptDueQuery): CardRow[];
   /** Concept ids attached to a card (§4). */
   conceptsFor(cardId: string): string[];
-  /** All non-suspended cards for a topic — mastery trigger reads stability (§7). */
-  findByTopic(topicId: string): CardRow[];
+  /** Batch concept lookup for leech remediation (avoids N+1 in review queue). */
+  conceptsForMany(cardIds: readonly string[]): Map<string, string[]>;
+  /** SQL aggregate maturity check — avoids loading all topic cards per review. */
+  isTopicNearlyMature(topicId: string): boolean;
   /** Not-yet-due cards for non-counting preview filler, soonest-due first. */
   previewCards(query: PreviewQuery): CardRow[];
   findById(id: string): CardRow | null;

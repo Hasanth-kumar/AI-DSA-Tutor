@@ -193,8 +193,14 @@ export class CardService {
     const now = this.now();
     const limit = Math.max(1, Math.min(100, Math.floor(cap)));
 
-    const leechDue = this.store.dueCards({ now, limit: limit + 20 }).filter((r) => r.leech === 1);
+    const leechDue = this.store.dueCards({
+      now,
+      limit: limit + 20,
+      leechOnly: true,
+    });
     const leechIds = leechDue.map((r) => r.id);
+    const leechConcepts =
+      leechIds.length > 0 ? this.store.conceptsForMany(leechIds) : new Map<string, string[]>();
 
     const seen = new Set<string>();
     const queue: ReviewCardView[] = [];
@@ -203,7 +209,7 @@ export class CardService {
     if (this.deps.conceptGraph && leechDue.length > 0) {
       const prereqConcepts = new Set<string>();
       for (const leech of leechDue) {
-        const tags = this.store.conceptsFor(leech.id);
+        const tags = leechConcepts.get(leech.id) ?? [];
         for (const p of this.deps.conceptGraph.prerequisitesFor(leech.topicId, tags)) {
           prereqConcepts.add(p);
         }
@@ -246,7 +252,7 @@ export class CardService {
       prerequisiteConcepts:
         this.deps.conceptGraph?.prerequisitesFor(
           leech.topicId,
-          this.store.conceptsFor(leech.id),
+          leechConcepts.get(leech.id) ?? [],
         ) ?? [],
       noteExcerpt: this.deps.noteExcerpt?.(leech.topicId) ?? undefined,
     }));

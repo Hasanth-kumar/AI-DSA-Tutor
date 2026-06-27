@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { usePolling } from "../hooks/usePolling.js";
 import type { SyncConflict } from "../types/api.js";
 
 const CONFLICT_POLL_MS = 60_000;
+const IDLE_CONFLICT_POLL_MS = 3_600_000;
 
 function formatValue(value: Record<string, unknown>): string {
   return Object.entries(value)
@@ -14,11 +15,18 @@ function formatValue(value: Record<string, unknown>): string {
 /** Simple "pick winner" UI for Notion sync conflicts (5.2). */
 export function SyncConflictsPanel() {
   const fetchConflicts = useCallback(() => api.getSyncConflicts(), []);
-  const { data, refresh } = usePolling(fetchConflicts, CONFLICT_POLL_MS, {
+  const [pollMs, setPollMs] = useState(CONFLICT_POLL_MS);
+  const { data, refresh } = usePolling(fetchConflicts, pollMs, {
     initialLoading: false,
   });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!data) return;
+    const count = data.conflicts?.length ?? 0;
+    setPollMs(count > 0 ? CONFLICT_POLL_MS : IDLE_CONFLICT_POLL_MS);
+  }, [data]);
 
   const conflicts: SyncConflict[] = data?.conflicts ?? [];
   if (conflicts.length === 0) return null;

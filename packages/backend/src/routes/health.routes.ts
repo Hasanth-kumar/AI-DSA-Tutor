@@ -17,7 +17,7 @@ export async function healthRoutes(
   });
 
   app.get("/health", async (_request, reply) => {
-    const health = await checkHealthFromContext(ctx, { deep: true });
+    const health = await checkHealthFromContext(ctx, { deep: false });
     return reply.status(200).send(health);
   });
 }

@@ -74,8 +74,8 @@ export class NotionSyncService {
   } {
     return {
       lastSyncAt: this.syncMeta.get(LAST_SYNC_KEY),
-      pendingTopics: this.syncMeta.getPendingTopics().length,
-      pendingProblems: this.syncMeta.getPendingProblems().length,
+      pendingTopics: this.syncMeta.pendingTopicsCount(),
+      pendingProblems: this.syncMeta.pendingProblemsCount(),
       unresolvedConflicts: this.conflictRepo?.unresolvedCount() ?? 0,
     };
   }

@@ -30,7 +30,7 @@ export async function checkHealthFromContext(
   ctx: AppContext,
   options: { deep?: boolean } = {},
 ): Promise<HealthResponse> {
-  const deep = options.deep !== false;
+  const deep = options.deep === true;
   if (deep) {
     const now = Date.now();
     if (cachedDeepHealth && cachedDeepHealth.expiresAt > now) {
@@ -38,7 +38,7 @@ export async function checkHealthFromContext(
     }
   }
 
-  const response = await buildDeepHealth(ctx);
+  const response = deep ? await buildDeepHealth(ctx) : await buildShallowHealth(ctx);
   if (deep) {
     cachedDeepHealth = {
       response,
@@ -46,6 +46,56 @@ export async function checkHealthFromContext(
     };
   }
   return response;
+}
+
+async function buildShallowHealth(ctx: AppContext): Promise<HealthResponse> {
+  const api: ServiceHealth = { status: "ok" };
+  let counts: HealthResponse["counts"];
+
+  let sqlite: ServiceHealth = { status: "down", message: "Not initialized" };
+  try {
+    const mirror = ctx.mirrorCache.getCounts();
+    counts = mirror;
+    sqlite = {
+      status: "ok",
+      message: `${mirror.topics} topics, ${mirror.problems} problems, ${mirror.sessions} sessions`,
+    };
+  } catch (err) {
+    sqlite = {
+      status: "down",
+      message: err instanceof Error ? err.message : "SQLite check failed",
+    };
+  }
+
+  const notion: ServiceHealth = ctx.notionSync.isConfigured()
+    ? { status: "ok", message: "not probed (use /health/ready)" }
+    : { status: "down", message: "Not configured" };
+
+  const llm: ServiceHealth = ctx.config.llm.openrouter.apiKey
+    ? { status: "ok", message: "not probed (use /health/ready)" }
+    : { status: "down", message: "OPENROUTER_API_KEY not set" };
+
+  const services = { api, sqlite, notion, llm };
+  const status = aggregateStatus(Object.values(services));
+
+  let sync: HealthResponse["sync"];
+  try {
+    sync = {
+      ...ctx.notionSync.getSyncHealth(),
+      cards: ctx.cardBankSync.getHealth(),
+    };
+  } catch {
+    sync = undefined;
+  }
+
+  return {
+    status,
+    timestamp: new Date().toISOString(),
+    version: "0.1.0",
+    services,
+    counts,
+    sync,
+  };
 }
 
 async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {

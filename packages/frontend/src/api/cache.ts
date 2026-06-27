@@ -47,3 +47,40 @@ export function invalidateCache(keyPrefix?: string): void {
     if (key.startsWith(keyPrefix)) inflight.delete(key);
   }
 }
+
+/** Invalidate only the fetch keys affected by a backend SSE change event. */
+export function invalidateForDataChange(type: string): void {
+  switch (type) {
+    case "session":
+      invalidateCache("sessions:");
+      invalidateCache("activity:");
+      invalidateCache("dashboard");
+      invalidateCache("plan");
+      break;
+    case "topic":
+      invalidateCache("topics");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      invalidateCache("curriculum");
+      break;
+    case "problem":
+      invalidateCache("problems");
+      invalidateCache("topics");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      break;
+    case "attempt":
+      invalidateCache("topics");
+      invalidateCache("dashboard");
+      invalidateCache("activity:");
+      break;
+    case "sync":
+      invalidateCache("health:");
+      break;
+    case "note":
+      invalidateCache("topics");
+      break;
+    default:
+      invalidateCache();
+  }
+}

@@ -1,4 +1,5 @@
 import katex from "katex";
+import "katex/dist/katex.min.css";
 import { marked, type Tokens } from "marked";
 
 function escapeHtml(value: string): string {
@@ -76,6 +77,75 @@ export function renderMarkdownToHtml(markdown: string): string {
   const { text, math } = renderMathSegments(markdown);
   const html = marked.parse(text, { async: false }) as string;
   return restoreMathTokens(html, math);
+}
+
+export interface StreamingMarkdownView {
+  stableHtml: string;
+  tail: string;
+}
+
+/**
+ * Split streaming markdown into a safe-to-parse prefix and an in-flight tail.
+ * Closed blocks are parsed once and cached; only the tail stays plain text.
+ */
+export function splitStableStreamingMarkdown(text: string): {
+  stable: string;
+  tail: string;
+} {
+  if (!text) return { stable: "", tail: "" };
+
+  const displayMathMarkers = text.match(/\$\$/g)?.length ?? 0;
+  if (displayMathMarkers % 2 === 1) {
+    const openAt = text.lastIndexOf("$$");
+    if (openAt >= 0) {
+      return { stable: text.slice(0, openAt), tail: text.slice(openAt) };
+    }
+  }
+
+  const lines = text.split("\n");
+  let inFence = false;
+  let openFenceLine = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^```/.test(lines[i]!.trimStart())) {
+      if (!inFence) openFenceLine = i;
+      inFence = !inFence;
+    }
+  }
+  if (inFence && openFenceLine >= 0) {
+    return {
+      stable: lines.slice(0, openFenceLine).join("\n"),
+      tail: lines.slice(openFenceLine).join("\n"),
+    };
+  }
+
+  const lastNl = text.lastIndexOf("\n");
+  if (lastNl === -1) return { stable: "", tail: text };
+
+  return {
+    stable: text.slice(0, lastNl),
+    tail: text.slice(lastNl + 1),
+  };
+}
+
+/** Incremental renderer: re-parses only when the stable boundary advances. */
+export function createStreamingMarkdownRenderer() {
+  let cachedStable = "";
+  let cachedStableHtml = "";
+
+  return {
+    render(text: string): StreamingMarkdownView {
+      const { stable, tail } = splitStableStreamingMarkdown(text);
+      if (stable !== cachedStable) {
+        cachedStable = stable;
+        cachedStableHtml = stable ? renderMarkdownToHtml(stable) : "";
+      }
+      return { stableHtml: cachedStableHtml, tail };
+    },
+    reset() {
+      cachedStable = "";
+      cachedStableHtml = "";
+    },
+  };
 }
 
 const LABELED_LINE = /^\*\*[^*]+\*\*\s*[—–-]/;

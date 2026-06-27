@@ -93,11 +93,12 @@ class SqliteCardStore implements CardStore {
   dueCards(q: DueQuery): CardRow[] {
     const topic = q.topicId ? " AND topic_id = ?" : "";
     const leech = q.excludeLeech ? " AND leech=0" : "";
+    const leechOnly = q.leechOnly ? " AND leech=1" : "";
     const exclude =
       q.excludeIds && q.excludeIds.length
         ? ` AND id NOT IN (${q.excludeIds.map(() => "?").join(",")})`
         : "";
-    const sql = `SELECT * FROM cards WHERE suspended=0 AND due<=?${topic}${leech}${exclude} ORDER BY due ASC LIMIT ?`;
+    const sql = `SELECT * FROM cards WHERE suspended=0 AND due<=?${topic}${leech}${leechOnly}${exclude} ORDER BY due ASC LIMIT ?`;
     const params = [q.now, ...(q.topicId ? [q.topicId] : []), ...(q.excludeIds ?? []), q.limit];
     return this.db.prepare(sql).all(...params).map(mapRow);
   }
@@ -129,6 +130,39 @@ class SqliteCardStore implements CardStore {
       .prepare("SELECT concept_id FROM card_concepts WHERE card_id = ?")
       .all(cardId)
       .map((r) => String(r.concept_id));
+  }
+
+  conceptsForMany(cardIds: readonly string[]): Map<string, string[]> {
+    const result = new Map<string, string[]>();
+    if (cardIds.length === 0) return result;
+    for (const id of cardIds) result.set(id, []);
+    const placeholders = cardIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT card_id, concept_id FROM card_concepts WHERE card_id IN (${placeholders})`,
+      )
+      .all(...cardIds);
+    for (const r of rows) {
+      const cardId = String(r.card_id);
+      const list = result.get(cardId) ?? [];
+      list.push(String(r.concept_id));
+      result.set(cardId, list);
+    }
+    return result;
+  }
+
+  isTopicNearlyMature(topicId: string): boolean {
+    const row = this.db
+      .prepare(
+        `SELECT count(*) as active,
+           coalesce(sum(case when stability >= 21 then 1 else 0 end), 0) as mature
+         FROM cards WHERE topic_id = ? AND suspended = 0`,
+      )
+      .get(topicId) as { active: number; mature: number } | undefined;
+    const active = Number(row?.active ?? 0);
+    const mature = Number(row?.mature ?? 0);
+    if (active < 3) return false;
+    return mature / active >= 0.8;
   }
 
   findByTopic(topicId: string): CardRow[] {

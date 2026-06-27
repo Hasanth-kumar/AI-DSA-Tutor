@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTopicNearlyMature, topicMaturityFraction } from "./masteryTrigger.js";
+import { isNearlyMatureFromCounts, isTopicNearlyMature, topicMaturityFraction } from "./masteryTrigger.js";
 import type { CardRow } from "./cardTypes.js";
 
 function card(stability: number, suspended = 0): CardRow {
@@ -20,5 +20,6 @@ describe("masteryTrigger", () => {
 
   it("does not trigger with too few cards", () => {
     expect(isTopicNearlyMature([card(30), card(40)])).toBe(false);
+    expect(isNearlyMatureFromCounts(2, 2)).toBe(false);
   });
 });

@@ -23,6 +23,13 @@ export function topicMaturityFraction(cards: readonly CardRow[]): number {
 
 export function isTopicNearlyMature(cards: readonly CardRow[]): boolean {
   const active = cards.filter((c) => c.suspended === 0);
-  if (active.length < MASTERY_MIN_CARDS) return false;
-  return topicMaturityFraction(cards) >= MASTERY_FRACTION;
+  return isNearlyMatureFromCounts(
+    active.length,
+    active.filter((c) => (c.stability ?? 0) >= MASTERY_STABILITY_DAYS).length,
+  );
+}
+
+export function isNearlyMatureFromCounts(active: number, mature: number): boolean {
+  if (active < MASTERY_MIN_CARDS) return false;
+  return mature / active >= MASTERY_FRACTION;
 }

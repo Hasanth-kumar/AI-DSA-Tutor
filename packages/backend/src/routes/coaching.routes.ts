@@ -13,6 +13,8 @@ function parseHintLevel(raw: string | undefined): 1 | 2 | 3 | 4 | undefined {
 
 function writeSseEvent(reply: { raw: ServerResponse }, event: ChatStreamEvent): void {
   reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+  const flush = (reply.raw as ServerResponse & { flush?: () => void }).flush;
+  flush?.();
 }
 
 async function streamChatEvents(
@@ -21,10 +23,12 @@ async function streamChatEvents(
 ): Promise<void> {
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
+    "Cache-Control": "no-cache, no-transform",
     Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
     "Access-Control-Allow-Origin": "*",
   });
+  reply.raw.socket?.setNoDelay(true);
 
   try {
     for await (const event of generator) {

@@ -1245,13 +1245,12 @@ button:focus-visible,
   width: 100%;
 }
 
-.coach-msg-row--streaming .coach-assistant-text {
-  animation: coach-stream-fade 0.2s ease;
+.coach-streaming-text {
+  word-break: break-word;
 }
 
-@keyframes coach-stream-fade {
-  from { opacity: 0.85; }
-  to { opacity: 1; }
+.coach-streaming-tail {
+  white-space: pre-wrap;
 }
 
 @media (hover: none) {

@@ -15,6 +15,8 @@ export type SqliteDb = BetterSQLite3Database<typeof schema>;
 export function createSqliteDb(sqlitePath: string): { db: SqliteDb; sqlite: Database.Database } {
   mkdirSync(dirname(sqlitePath), { recursive: true });
   const sqlite = new Database(sqlitePath);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("busy_timeout = 5000");
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };
 }

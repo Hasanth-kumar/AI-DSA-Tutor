@@ -230,12 +230,38 @@ export function CoachingPage({ anchorProblemId }: Props) {
     ta.setSelectionRange(ta.value.length, ta.value.length);
   }, [editingId, editDraft]);
 
-  const appendStreamChunk = useCallback((text: string) => {
+  const streamPendingRef = useRef("");
+  const streamRafRef = useRef<number | null>(null);
+
+  const flushPendingStreamChunks = useCallback(() => {
+    if (streamRafRef.current != null) {
+      cancelAnimationFrame(streamRafRef.current);
+      streamRafRef.current = null;
+    }
+    const pending = streamPendingRef.current;
+    if (!pending) return;
+    streamPendingRef.current = "";
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === STREAMING_ID ? { ...m, content: m.content + text } : m,
+        m.id === STREAMING_ID ? { ...m, content: m.content + pending } : m,
       ),
     );
+  }, []);
+
+  const appendStreamChunk = useCallback((text: string) => {
+    streamPendingRef.current += text;
+    if (streamRafRef.current != null) return;
+    streamRafRef.current = requestAnimationFrame(() => {
+      streamRafRef.current = null;
+      const pending = streamPendingRef.current;
+      streamPendingRef.current = "";
+      if (!pending) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === STREAMING_ID ? { ...m, content: m.content + pending } : m,
+        ),
+      );
+    });
   }, []);
 
   const syncThreadAfterAbort = useCallback(async (activeThreadId: string | null) => {
@@ -277,6 +303,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
           body,
           signal: controller.signal,
           onMeta: (tid, userMessage) => {
+            flushPendingStreamChunks();
             activeThreadId = tid;
             setThreadId(tid);
             sessionStorage.setItem(THREAD_STORAGE_KEY, tid);
@@ -299,6 +326,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
           onChunk: appendStreamChunk,
         });
 
+        flushPendingStreamChunks();
         setThreadId(result.threadId);
         sessionStorage.setItem(THREAD_STORAGE_KEY, result.threadId);
         setMessages((prev) => [
@@ -319,11 +347,13 @@ export function CoachingPage({ anchorProblemId }: Props) {
         );
         throw err;
       } finally {
+        flushPendingStreamChunks();
+        streamPendingRef.current = "";
         if (abortRef.current === controller) abortRef.current = null;
         setLoading(false);
       }
     },
-    [appendStreamChunk, syncThreadAfterAbort, threadId],
+    [appendStreamChunk, flushPendingStreamChunks, syncThreadAfterAbort, threadId],
   );
 
   const handleStop = () => {
@@ -805,7 +835,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
                         {isStreaming && !msg.content ? (
                           <CoachGenerating />
                         ) : (
-                          <CoachMarkdown content={msg.content} />
+                          <CoachMarkdown content={msg.content} streaming={isStreaming} />
                         )}
                         {!isStreaming && msg.content && (
                           <CoachMessageActions

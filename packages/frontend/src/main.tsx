@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { registerFlushOnClose } from "./lib/flushOnClose.js";
-import "katex/dist/katex.min.css";
 import "./styles/global.css";
 
 // Best-effort push-only flush to Notion when the tab closes (extra trigger;

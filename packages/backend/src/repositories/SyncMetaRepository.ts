@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { syncMeta } from "@dsa/database/schema";
 import type { SqliteDb } from "@dsa/integrations";
 
@@ -44,6 +44,15 @@ export class SyncMetaRepository {
 
   getPendingProblems(): PendingProblemPush[] {
     return this.readJson(PENDING_PROBLEMS_KEY, []);
+  }
+
+  /** Fast path for health/sync status — avoids parsing pending push payloads. */
+  pendingTopicsCount(): number {
+    return this.jsonArrayLength(PENDING_TOPICS_KEY);
+  }
+
+  pendingProblemsCount(): number {
+    return this.jsonArrayLength(PENDING_PROBLEMS_KEY);
   }
 
   markTopicPending(id: string, fields: PendingTopicFields): void {
@@ -109,5 +118,16 @@ export class SyncMetaRepository {
     } else {
       this.db.insert(syncMeta).values({ key, value: serialized }).run();
     }
+  }
+
+  private jsonArrayLength(key: string): number {
+    const row = this.db
+      .select({
+        len: sql<number>`coalesce(json_array_length(${syncMeta.value}), 0)`,
+      })
+      .from(syncMeta)
+      .where(eq(syncMeta.key, key))
+      .get();
+    return row?.len ?? 0;
   }
 }

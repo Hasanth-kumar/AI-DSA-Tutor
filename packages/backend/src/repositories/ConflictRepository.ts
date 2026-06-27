@@ -1,4 +1,4 @@
-import { desc, eq, isNull } from "drizzle-orm";
+import { count, desc, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { syncConflicts } from "@dsa/database/schema";
 import type { SqliteDb } from "@dsa/integrations";
@@ -70,6 +70,11 @@ export class ConflictRepository {
   }
 
   unresolvedCount(): number {
-    return this.findUnresolved().length;
+    const row = this.db
+      .select({ count: count() })
+      .from(syncConflicts)
+      .where(isNull(syncConflicts.resolvedAt))
+      .get();
+    return row?.count ?? 0;
   }
 }

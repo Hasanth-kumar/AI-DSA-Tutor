@@ -51,6 +51,7 @@ export interface AnalyticsDashboard {
 }
 
 const MS_PER_DAY = 86_400_000;
+const DASHBOARD_CACHE_TTL_MS = 45_000;
 
 interface MirrorInputs {
   sessions: AnalyticsSessionInput[];
@@ -61,6 +62,11 @@ interface MirrorInputs {
 
 export class AnalyticsService {
   private readonly engine: AnalyticsEngine;
+  private dashboardCache: {
+    key: string;
+    expiresAt: number;
+    value: AnalyticsDashboard;
+  } | null = null;
 
   constructor(
     private readonly intelligence: IntelligenceOrchestrator,
@@ -103,27 +109,63 @@ export class AnalyticsService {
   }
 
   getDashboard(weeks = 8, now = new Date()): AnalyticsDashboard {
+    const cacheKey = `dashboard:${weeks}`;
+    if (
+      this.dashboardCache?.key === cacheKey &&
+      this.dashboardCache.expiresAt > Date.now()
+    ) {
+      return this.dashboardCache.value;
+    }
+
+    const value = this.buildDashboard(weeks, now);
+    this.dashboardCache = {
+      key: cacheKey,
+      expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+      value,
+    };
+    return value;
+  }
+
+  invalidateDashboard(): void {
+    this.dashboardCache = null;
+  }
+
+  private buildDashboard(weeks: number, now: Date): AnalyticsDashboard {
     const mirror = this.loadMirror();
     const { sessions, topics, problems } = mirror;
 
+    const weeklyVelocity = this.engine.getMasteryVelocity(sessions, weeks, now);
+    const topicsVelocity = this.engine.getTopicVelocity(sessions, topics, weeks, now);
+    const weaknessTrend = this.engine.getWeaknessTrend(
+      topics,
+      problems,
+      sessions,
+      weeks,
+      now,
+    );
+    const difficulty = this.engine.getDifficultyAnalysis(topics, problems, sessions);
+
     return {
-      summary: this.buildWeeklySummary(mirror, now),
-      velocity: {
-        weekly: this.engine.getMasteryVelocity(sessions, weeks, now),
-        topics: this.engine.getTopicVelocity(sessions, topics, weeks, now),
-      },
-      weaknessTrend: this.engine.getWeaknessTrend(
-        topics,
-        problems,
-        sessions,
-        weeks,
-        now,
-      ),
-      difficulty: this.engine.getDifficultyAnalysis(topics, problems, sessions),
+      summary: this.buildWeeklySummary(mirror, now, {
+        weeklyVelocity,
+        weaknessTrend,
+        difficulty,
+      }),
+      velocity: { weekly: weeklyVelocity, topics: topicsVelocity },
+      weaknessTrend,
+      difficulty,
     };
   }
 
-  private buildWeeklySummary(mirror: MirrorInputs, now: Date): WeeklySummary {
+  private buildWeeklySummary(
+    mirror: MirrorInputs,
+    now: Date,
+    engines?: {
+      weeklyVelocity: MasteryVelocityPoint[];
+      weaknessTrend: WeaknessTrendPoint[];
+      difficulty: DifficultyAnalysis;
+    },
+  ): WeeklySummary {
     const { sessions, topics, problems, topicStates } = mirror;
 
     const weekEnd = new Date(now);
@@ -164,19 +206,15 @@ export class AnalyticsService {
       .map((s) => ({ id: s.topic.id, name: s.topic.name }));
 
     const streak = this.engine.getStreakInfo(sessions, now);
-    const velocity = this.engine.getMasteryVelocity(sessions, 2, now);
-    const weaknessTrend = this.engine.getWeaknessTrend(
-      topics,
-      problems,
-      sessions,
-      2,
-      now,
-    );
-    const difficulty = this.engine.getDifficultyAnalysis(
-      topics,
-      problems,
-      sessions,
-    );
+    const velocity = engines
+      ? engines.weeklyVelocity.slice(-2)
+      : this.engine.getMasteryVelocity(sessions, 2, now);
+    const weaknessTrend = engines
+      ? engines.weaknessTrend.slice(-2)
+      : this.engine.getWeaknessTrend(topics, problems, sessions, 2, now);
+    const difficulty =
+      engines?.difficulty ??
+      this.engine.getDifficultyAnalysis(topics, problems, sessions);
 
     const currentVelocity = velocity[velocity.length - 1];
     const previousVelocity = velocity[velocity.length - 2];

@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef } from "react";
 import { copyToClipboard } from "../lib/copyToClipboard.js";
-import { renderMarkdownToHtml } from "../lib/renderMarkdown.js";
+import {
+  createStreamingMarkdownRenderer,
+  renderMarkdownToHtml,
+} from "../lib/renderMarkdown.js";
 
 interface Props {
   content: string;
   className?: string;
+  /** When true, parse closed blocks incrementally; the active line stays plain. */
+  streaming?: boolean;
 }
 
 const COPIED_LABEL = "Copied!";
@@ -26,9 +31,19 @@ function setCodeCopyState(btn: HTMLButtonElement, copied: boolean) {
 }
 
 /** Renders coach assistant replies with markdown, LaTeX, and copyable code blocks. */
-export function CoachMarkdown({ content, className }: Props) {
+export function CoachMarkdown({ content, className, streaming = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const html = useMemo(() => renderMarkdownToHtml(content), [content]);
+  const streamRendererRef = useRef(createStreamingMarkdownRenderer());
+
+  useEffect(() => {
+    if (!streaming) streamRendererRef.current.reset();
+  }, [streaming]);
+
+  const streamView = streaming ? streamRendererRef.current.render(content) : null;
+  const html = useMemo(
+    () => (streaming ? "" : renderMarkdownToHtml(content)),
+    [content, streaming],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -67,10 +82,25 @@ export function CoachMarkdown({ content, className }: Props) {
     };
   }, [html]);
 
+  const baseClass = className ?? "coach-assistant-text";
+
+  if (streaming) {
+    return (
+      <div ref={containerRef} className={`${baseClass} coach-streaming-text`}>
+        {streamView?.stableHtml ? (
+          <div dangerouslySetInnerHTML={{ __html: streamView.stableHtml }} />
+        ) : null}
+        {streamView?.tail ? (
+          <span className="coach-streaming-tail">{streamView.tail}</span>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
-      className={className ?? "coach-assistant-text"}
+      className={baseClass}
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

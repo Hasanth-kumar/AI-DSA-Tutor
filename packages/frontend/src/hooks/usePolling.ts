@@ -9,11 +9,28 @@ export interface UsePollingOptions {
 function isSameData<T>(prev: T | null, next: T): boolean {
   if (prev === next) return true;
   if (prev == null) return false;
-  try {
-    return JSON.stringify(prev) === JSON.stringify(next);
-  } catch {
-    return false;
+  if (typeof prev !== "object" || typeof next !== "object") return prev === next;
+
+  const prevObj = prev as Record<string, unknown>;
+  const nextObj = next as Record<string, unknown>;
+  const keys = Object.keys(prevObj);
+  if (keys.length !== Object.keys(nextObj).length) return false;
+
+  for (const key of keys) {
+    const pv = prevObj[key];
+    const nv = nextObj[key];
+    if (pv === nv) continue;
+    if (typeof pv === "object" && pv !== null && typeof nv === "object" && nv !== null) {
+      try {
+        if (JSON.stringify(pv) !== JSON.stringify(nv)) return false;
+      } catch {
+        return false;
+      }
+    } else {
+      return false;
+    }
   }
+  return true;
 }
 
 export function usePolling<T>(

@@ -12,3 +12,6 @@ coverage/
 data/backups/*.db
 
 IMPLEMENTATION_CHECKLIST.md
+
+# Generated local card export (regenerable from SQLite via flush; §10 portable export)
+data/cards-export/

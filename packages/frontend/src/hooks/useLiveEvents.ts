@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "../api/client.js";
-import { invalidateCache } from "../api/cache.js";
+import { invalidateForDataChange } from "../api/cache.js";
 
 export const DATA_CHANGED_EVENT = "dsa:data-changed";
 
@@ -23,8 +23,17 @@ export function useLiveEvents(): { connected: boolean } {
       source = new EventSource(`${API_BASE}/api/events`);
 
       source.addEventListener("connected", () => setConnected(true));
-      source.addEventListener("change", () => {
-        invalidateCache();
+      source.addEventListener("change", (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { type?: string };
+          if (payload.type) {
+            invalidateForDataChange(payload.type);
+          } else {
+            invalidateForDataChange("");
+          }
+        } catch {
+          invalidateForDataChange("");
+        }
         window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT));
       });
       source.onerror = () => {

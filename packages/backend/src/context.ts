@@ -34,7 +34,6 @@ import { findRepoRoot, type AppConfig } from "@dsa/shared";
 import { CardBankSyncService } from "./services/CardBankSyncService.js";
 import { CardService, type CardServiceDeps } from "./services/CardService.js";
 import { createConceptGraph } from "./services/leechRemediation.js";
-import { isTopicNearlyMature } from "./services/masteryTrigger.js";
 import { WarmupService } from "./services/WarmupService.js";
 import { resolve } from "node:path";
 
@@ -89,7 +88,7 @@ export function createAppContext(
   const sessionRepo = new SessionRepository(db, mirrorCache);
   const syncMetaRepo = new SyncMetaRepository(db);
   const attemptRepo = new AttemptRepository(db, mirrorCache);
-  const cardRepo = new CardRepository(db, mirrorCache);
+  const cardRepo = new CardRepository(db);
   const noteRepo = new NoteRepository(db, mirrorCache);
   const conflictRepo = new ConflictRepository(db);
   const cache = new CacheService();
@@ -132,6 +131,17 @@ export function createAppContext(
     sessionRepo,
     problemRepo,
   );
+  events.subscribe((event) => {
+    if (
+      event.type === "session" ||
+      event.type === "topic" ||
+      event.type === "problem" ||
+      event.type === "attempt"
+    ) {
+      analyticsService.invalidateDashboard();
+      void planService.invalidateTodaysPlan();
+    }
+  });
   // Coaching paths (debrief/hint/chat) build their own LLM from coachLlm config (3.3).
   const coachLlm = options.coachLlm ?? createCoachLLMService(config);
   const debriefService = new DebriefService(
@@ -227,8 +237,7 @@ function buildCardServiceDeps(
     },
     onReviewComplete(topicId) {
       if (!topicId || masteryMarked.has(topicId)) return;
-      const cards = cardRepo.findByTopic(topicId);
-      if (isTopicNearlyMature(cards)) {
+      if (cardRepo.isTopicNearlyMature(topicId)) {
         markTopicDirty(sqlite, topicId);
         masteryMarked.add(topicId);
       }
