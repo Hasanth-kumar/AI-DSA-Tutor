@@ -19,7 +19,11 @@ import {
   type PullApplyResult,
   type SyncDb,
 } from "./CardSyncStore.js";
-import type { PulledCardContent } from "./card-properties.js";
+import {
+  isCodeHeavy,
+  CODE_IN_BODY_NOTICE,
+  type PulledCardContent,
+} from "./card-properties.js";
 import type { CardSyncRecord, SyncTarget } from "./SyncTarget.js";
 
 export interface CardSyncReport {
@@ -95,5 +99,8 @@ function recordToContent(r: CardSyncRecord): PulledCardContent {
     front: r.front,
     back: r.back,
     conceptTags: r.conceptTags,
+    // Code-heavy cards are local-authoritative (§8): a pulled `back` that is the
+    // page-body pointer (or a cloze/fenced body) must not overwrite local content.
+    codeHeavy: isCodeHeavy(r) || r.back.trim() === CODE_IN_BODY_NOTICE,
   };
 }

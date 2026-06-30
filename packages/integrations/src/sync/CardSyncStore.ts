@@ -171,6 +171,14 @@ UPDATE cards
  WHERE id = ?
 `;
 
+/** Code-heavy cards are local-authoritative (§8): on pull we refresh only the
+ *  one-way page mapping and never overwrite local content from the pointer. */
+const MAP_PAGE_ID = `
+UPDATE cards
+   SET notion_page_id = COALESCE(?, notion_page_id)
+ WHERE id = ?
+`;
+
 const INSERT_PULLED = `
 INSERT INTO cards (
   id, topic_id, type, front, back, note_ref,
@@ -201,6 +209,7 @@ export function applyPulledContent(
   now: number = Date.now(),
 ): PullApplyResult {
   const updateStmt = db.prepare(UPDATE_CONTENT);
+  const mapStmt = db.prepare(MAP_PAGE_ID);
   const insertStmt = db.prepare(INSERT_PULLED);
   const findStmt = db.prepare(`SELECT id FROM cards WHERE id = ?`);
   const delConcepts = db.prepare(`DELETE FROM card_concepts WHERE card_id = ?`);
@@ -217,7 +226,13 @@ export function applyPulledContent(
     for (const c of contents) {
       const exists = findStmt.get(c.id) as { id: string } | undefined;
       if (exists) {
-        updateStmt.run(c.type, c.front, c.back, c.topicId, c.notionPageId, now, c.id);
+        if (c.codeHeavy) {
+          // Local-authoritative (§8): keep local front/back/type/topic, just
+          // (re)bind the page mapping. The pulled `back` is only a pointer.
+          mapStmt.run(c.notionPageId, c.id);
+        } else {
+          updateStmt.run(c.type, c.front, c.back, c.topicId, c.notionPageId, now, c.id);
+        }
         updated += 1;
       } else {
         // Param order matches INSERT_PULLED: id, topic_id, type, front, back,

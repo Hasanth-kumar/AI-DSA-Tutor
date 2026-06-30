@@ -207,6 +207,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
           front: "remote front",
           back: "remote back",
           conceptTags: ["complement-trick"],
+          codeHeavy: false,
         },
         // A brand-new card C arriving from the remote.
         {
@@ -217,6 +218,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
           front: "front-C",
           back: "back-C",
           conceptTags: ["overflow"],
+          codeHeavy: false,
         },
       ],
       7000,
@@ -243,5 +245,67 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     };
     expect(c.id).toBe("C");
     expect(Number(c.dirty)).toBe(0);
+  });
+
+  it("keeps code-heavy cards local-authoritative on pull — pointer never clobbers local content (§8)", async () => {
+    const db = freshDb();
+    db.prepare(`INSERT INTO topics(id,name,updated_at) VALUES(?,?,1)`).run(TOPIC, "Two Pointers");
+    // A local cloze (code) card with real, formatted content + SR state.
+    db.prepare(
+      `INSERT INTO cards(id,topic_id,type,front,back,stability,difficulty,due,last_review,
+         reps,lapses,state,origin,source_hash,dirty,synced_at,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      "Z",
+      TOPIC,
+      "cloze",
+      "Binary search update:\n```py\nmid = (lo + hi) // 2\n```",
+      "```py\nlo = mid + 1\n```",
+      3.3,
+      5,
+      9000,
+      null,
+      4,
+      0,
+      2,
+      "seed",
+      "hash-Z",
+      0,
+      null,
+      1,
+      100,
+    );
+
+    // The remote pull carries only the page-body pointer in `back` and the
+    // code-heavy flag — content is local-authoritative and must be preserved.
+    const res = applyPulledContent(
+      db,
+      [
+        {
+          id: "Z",
+          notionPageId: "page-Z",
+          topicId: TOPIC,
+          type: "cloze",
+          front: "Binary search update:\n```py\nmid = (lo + hi) // 2\n```",
+          back: "⤵ code / long content in page body — card kept local-authoritative (§8)",
+          conceptTags: ["overflow"],
+          codeHeavy: true,
+        },
+      ],
+      8000,
+    );
+    expect(res.updated).toBe(1);
+
+    const z = db.prepare(`SELECT * FROM cards WHERE id='Z'`).get() as Record<string, unknown>;
+    // Local content is intact — the pointer did NOT overwrite the real code body.
+    expect(String(z.back)).toContain("lo = mid + 1");
+    expect(String(z.back)).not.toContain("page body");
+    expect(z.type).toBe("cloze");
+    // SR state untouched (local-authoritative), and the page mapping was bound.
+    expect(z.stability).toBe(3.3);
+    expect(Number(z.due)).toBe(9000);
+    expect(z.notion_page_id).toBe("page-Z");
+    // updated_at was NOT bumped (no content change applied).
+    expect(Number(z.updated_at)).toBe(100);
   });
 });

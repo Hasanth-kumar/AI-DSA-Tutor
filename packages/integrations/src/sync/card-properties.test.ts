@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   cardToNotionProperties,
+  cardToNotionPageBlocks,
   notionPageToContent,
+  isCodeHeavy,
   NOTION_CARD_SCHEMA,
+  NOTION_TEXT_LIMIT,
+  CODE_IN_BODY_NOTICE,
 } from "./card-properties.js";
 import type { CardSyncRecord } from "./SyncTarget.js";
 
@@ -95,6 +99,7 @@ describe("notionPageToContent (§8 — pull reads content only)", () => {
       front: "front text",
       back: "back text",
       conceptTags: ["overflow", "complement-trick"],
+      codeHeavy: false,
     });
     // No SR keys leaked into the pulled content.
     expect(Object.keys(content!)).not.toContain("stability");
@@ -103,5 +108,78 @@ describe("notionPageToContent (§8 — pull reads content only)", () => {
 
   it("skips rows without our UUID (foreign rows in the DB)", () => {
     expect(notionPageToContent({ id: "x", properties: { Front: { title: [] } } })).toBeNull();
+  });
+});
+
+describe("§8 — code-heavy cards keep their body in page blocks, not properties", () => {
+  const clozeCard: CardSyncRecord = {
+    ...card,
+    id: "uuid-cloze",
+    type: "cloze",
+    front: "Binary search update:\n```py\nmid = (lo + hi) // 2\n```",
+    back: "```py\nlo = mid + 1\n```",
+  };
+
+  it("flags cloze / fenced-code / oversized content as code-heavy", () => {
+    expect(isCodeHeavy(clozeCard)).toBe(true);
+    expect(isCodeHeavy({ type: "plain-recall", front: "q", back: "```\ncode\n```" })).toBe(true);
+    expect(
+      isCodeHeavy({ type: "plain-recall", front: "x".repeat(NOTION_TEXT_LIMIT + 1), back: "a" }),
+    ).toBe(true);
+    expect(isCodeHeavy({ type: "pattern-trigger", front: "sorted array", back: "two pointers" })).toBe(
+      false,
+    );
+  });
+
+  it("writes a pointer into the length-limited Back property, not the code", () => {
+    const props = cardToNotionProperties(clozeCard);
+    const back = props.Back as { rich_text: Array<{ text: { content: string } }> };
+    expect(back.rich_text[0].text.content).toBe(CODE_IN_BODY_NOTICE);
+    expect(JSON.stringify(props)).not.toContain("lo = mid + 1");
+  });
+
+  it("emits the full Front+Back as page-body code blocks for code-heavy cards", () => {
+    const blocks = cardToNotionPageBlocks(clozeCard) as Array<{
+      type: string;
+      code?: { rich_text: Array<{ text: { content: string } }> };
+    }>;
+    const codeBlocks = blocks.filter((b) => b.type === "code");
+    expect(codeBlocks.length).toBe(2);
+    const bodyText = codeBlocks.map((b) => b.code!.rich_text.map((r) => r.text.content).join("")).join("\n");
+    expect(bodyText).toContain("mid = (lo + hi) // 2");
+    expect(bodyText).toContain("lo = mid + 1");
+  });
+
+  it("emits no page blocks for ordinary cards (content rides in properties)", () => {
+    expect(cardToNotionPageBlocks(card)).toEqual([]);
+  });
+
+  it("chunks an over-limit Front into ≤2000-char Notion title items (no API rejection)", () => {
+    // The Front title is always emitted as a property; chunking keeps every item
+    // within Notion's 2000-char limit so a long card is never rejected (§8).
+    const longFront: CardSyncRecord = { ...card, id: "uuid-long", front: "z".repeat(4500) };
+    const props = cardToNotionProperties(longFront);
+    const front = props.Front as { title: Array<{ text: { content: string } }> };
+    expect(front.title.length).toBe(3); // 4500 → 2000 + 2000 + 500
+    expect(front.title.every((t) => t.text.content.length <= NOTION_TEXT_LIMIT)).toBe(true);
+    // An over-limit Back is code-heavy by length → it becomes the page-body
+    // pointer rather than an (oversized) property value.
+    const longBack: CardSyncRecord = { ...card, id: "uuid-big", type: "plain-recall", back: "y".repeat(4500) };
+    const bigBack = cardToNotionProperties(longBack).Back as { rich_text: Array<{ text: { content: string } }> };
+    expect(bigBack.rich_text[0].text.content).toBe(CODE_IN_BODY_NOTICE);
+  });
+
+  it("marks a pulled card code-heavy when Back is the page-body pointer", () => {
+    const content = notionPageToContent({
+      id: "page-z",
+      properties: {
+        UUID: { rich_text: [{ plain_text: "uuid-cloze" }] },
+        Front: { title: [{ plain_text: "Binary search update" }] },
+        Back: { rich_text: [{ plain_text: CODE_IN_BODY_NOTICE }] },
+        Type: { select: { name: "cloze" } },
+        "Concept Tags": { multi_select: [] },
+      },
+    });
+    expect(content!.codeHeavy).toBe(true);
   });
 });

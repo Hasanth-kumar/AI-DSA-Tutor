@@ -50,14 +50,84 @@ export const NOTION_CONTENT_PROPERTIES: NotionCardPropertyName[] = [
   "Concept Tags",
 ];
 
+/**
+ * Notion rejects a single rich_text / title text item whose `content` exceeds
+ * 2000 characters. Splitting long values into multiple ≤2000-char items keeps a
+ * push from being rejected on long cards — the property length limit the design
+ * calls out (§8).
+ */
+export const NOTION_TEXT_LIMIT = 2000;
+
+/**
+ * Marker left in the length-limited `Back` *property* of a code-heavy card. The
+ * real, formatted content lives in the page-body blocks instead (§8: "keep code
+ * in the card body, not Notion properties"). The pull side recognizes this
+ * marker and treats the card as local-authoritative so the pointer never
+ * clobbers the local content.
+ */
+export const CODE_IN_BODY_NOTICE =
+  "⤵ code / long content in page body — card kept local-authoritative (§8)";
+
 // --- tiny property-value builders (the @notionhq/client shapes, untyped) ------
 
-function richText(value: string | null): unknown {
+/** Split a value into Notion text items no longer than {@link NOTION_TEXT_LIMIT}.
+ *  Empty / null → `[]` (Notion's "no rich text" shape). */
+function textItems(value: string | null): Array<{ type: "text"; text: { content: string } }> {
   const content = value ?? "";
-  return { rich_text: content ? [{ type: "text", text: { content } }] : [] };
+  if (!content) return [];
+  const items: Array<{ type: "text"; text: { content: string } }> = [];
+  for (let i = 0; i < content.length; i += NOTION_TEXT_LIMIT) {
+    items.push({ type: "text", text: { content: content.slice(i, i + NOTION_TEXT_LIMIT) } });
+  }
+  return items;
+}
+
+function richText(value: string | null): unknown {
+  return { rich_text: textItems(value) };
 }
 function title(value: string): unknown {
-  return { title: value ? [{ type: "text", text: { content: value } }] : [] };
+  return { title: textItems(value) };
+}
+
+/**
+ * Whether a card's content is code-heavy / oversized for Notion's property
+ * fields (§8). True for `cloze` cards (canonical-code blanks), any card whose
+ * front or back carries a fenced code block, or content that would overflow a
+ * single Notion text item. These cards keep their body in page blocks rather
+ * than round-tripping through length/format-limited properties.
+ */
+export function isCodeHeavy(card: Pick<CardSyncRecord, "type" | "front" | "back">): boolean {
+  if (card.type === "cloze") return true;
+  if (card.front.includes("```") || card.back.includes("```")) return true;
+  return card.front.length > NOTION_TEXT_LIMIT || card.back.length > NOTION_TEXT_LIMIT;
+}
+
+/**
+ * Page-body blocks for a code-heavy card (§8): the full, formatted Front + Back
+ * live here as `code` blocks instead of in the length-limited properties.
+ * Returns `[]` for ordinary cards — their content rides in the properties as
+ * before, so {@link NotionSyncTarget} only attaches a body when this is non-empty.
+ */
+export function cardToNotionPageBlocks(card: CardSyncRecord): unknown[] {
+  if (!isCodeHeavy(card)) return [];
+  const label = (text: string) => ({
+    object: "block",
+    type: "paragraph",
+    paragraph: { rich_text: textItems(text) },
+  });
+  const codeBlock = (content: string) => ({
+    object: "block",
+    type: "code",
+    code: { language: "plain text", rich_text: textItems(content) },
+  });
+  const blocks: unknown[] = [];
+  if (card.front) {
+    blocks.push(label("Front"), codeBlock(card.front));
+  }
+  if (card.back) {
+    blocks.push(label("Back"), codeBlock(card.back));
+  }
+  return blocks;
 }
 function number(value: number | null): unknown {
   return { number: value ?? null };
@@ -83,10 +153,14 @@ function checkbox(value: boolean): unknown {
 export function cardToNotionProperties(
   card: CardSyncRecord,
 ): Record<NotionCardPropertyName, unknown> {
+  // Code-heavy cards keep their (long, formatted) answer in the page-body blocks,
+  // not this length/format-limited property (§8). A short pointer goes here; the
+  // pull recognizes it and keeps the card local-authoritative.
+  const back = isCodeHeavy(card) ? CODE_IN_BODY_NOTICE : card.back;
   return {
     Front: title(card.front),
     UUID: richText(card.id),
-    Back: richText(card.back),
+    Back: richText(back),
     Topic: richText(card.topicId),
     Type: select(card.type),
     "Concept Tags": multiSelect(card.conceptTags),
@@ -136,6 +210,13 @@ export interface PulledCardContent {
   front: string;
   back: string;
   conceptTags: string[];
+  /**
+   * True when this card's real content lives in page-body blocks (code-heavy,
+   * §8) and the pulled `back` property is only {@link CODE_IN_BODY_NOTICE}. Such
+   * cards are local-authoritative: the pull must NOT overwrite local content
+   * from the pointer (see `applyPulledContent`).
+   */
+  codeHeavy: boolean;
 }
 
 /**
@@ -150,13 +231,25 @@ export function notionPageToContent(page: NotionPageLike): PulledCardContent | n
   const id = readPlainText(props.UUID).trim();
   if (!id) return null; // a row without our UUID isn't a card we manage
   const topic = readPlainText(props.Topic).trim();
+  const type = readSelect(props.Type);
+  const front = readPlainText(props.Front);
+  const back = readPlainText(props.Back);
+  // A pulled card is code-heavy (local-authoritative, §8) when its Back is the
+  // page-body pointer, when it is a cloze card, or when fenced code survived in a
+  // property — in all cases the property content must not clobber local content.
+  const codeHeavy =
+    back.trim() === CODE_IN_BODY_NOTICE ||
+    type === "cloze" ||
+    front.includes("```") ||
+    back.includes("```");
   return {
     id,
     notionPageId: page.id ?? null,
     topicId: topic ? topic : null,
-    type: readSelect(props.Type),
-    front: readPlainText(props.Front),
-    back: readPlainText(props.Back),
+    type,
+    front,
+    back,
     conceptTags: readMultiSelect(props["Concept Tags"]),
+    codeHeavy,
   };
 }

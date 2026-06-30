@@ -11,6 +11,7 @@ import { Client } from "@notionhq/client";
 import PQueue from "p-queue";
 import {
   cardToNotionProperties,
+  cardToNotionPageBlocks,
   notionPageToContent,
   NOTION_CARD_SCHEMA,
   type NotionCardPropertyName,
@@ -34,6 +35,8 @@ export interface NotionClientLike {
     create(args: {
       parent: { database_id: string };
       properties: Record<string, unknown>;
+      /** Page-body blocks — code-heavy card bodies go here, not properties (§8). */
+      children?: unknown[];
     }): Promise<{ id: string }>;
     update(args: { page_id: string; properties: Record<string, unknown> }): Promise<unknown>;
   };
@@ -137,9 +140,13 @@ export class NotionSyncTarget implements SyncTarget {
                 properties,
               });
             } else {
+              // Attach a page body only for code-heavy cards (§8): their
+              // formatted Front/Back live in blocks, not length-limited props.
+              const children = cardToNotionPageBlocks(record);
               const created = await this.client.pages.create({
                 parent: { database_id: dbId },
                 properties,
+                ...(children.length > 0 ? { children } : {}),
               });
               if (created?.id) pageIds[record.id] = created.id;
             }
