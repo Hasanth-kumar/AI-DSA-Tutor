@@ -136,7 +136,7 @@
 
 ## §12 Daily loop
 
-- [ ] **Daily flow supports the 1-hour budget:** warm-up (3 cards, ~2–3 min) → solve (~45 min) → update note (~5 min) → optional capped review. Nothing in the flow forces extra time.
+- [x] **Daily flow supports the 1-hour budget:** warm-up (3 cards, ~2–3 min) → solve (~45 min) → update note (~5 min) → optional capped review. Nothing in the flow forces extra time. *(The two app-controlled surfaces are the only places the budget could blow, and both are bounded by construction. Observed in `daily-loop.test.ts` (6 tests, real `WarmupService`+`CardService` over a migrated `node:sqlite`, no LLM/network): with a 50-card backlog the warm-up still serves exactly 3 due cards; the optional review is hard-capped (20 of 50) and reports `hasMore=true` — the explicit "you're done, go solve" signal, never a forced backlog clear; an absurd cap clamps to 100 and a zero cap floors at 1; a sparse bank yields a non-empty, ≤3, preview-only warm-up that writes nothing back to SR (0 reps, 0 events); warm-up's 3 graded cards leave the same-day review queue so the two surfaces never double-count; and merely opening the review queue mutates no SR state. Solve/update-note are out-of-app steps the loop never forces.)*
 
 ## §13 The $0 stack
 

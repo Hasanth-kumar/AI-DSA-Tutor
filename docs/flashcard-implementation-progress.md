@@ -3,7 +3,100 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 100 / 103 boxes passing.**
+**Validation status: 101 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-30 (c) — daily-loop budget verified (§12)
+
+### Context found at start
+- Repo at `79e0fef` (100/103). Stages 1–8 of §15 complete; all of §1–§11, §13–§15
+  passing. **3 boxes open:** §7 "no SM-2 / single-ease anywhere in scheduling",
+  §8 "Notion is durable source of record" (live e2e), §12 "daily flow supports the
+  1-hour budget".
+- **Good news on the runner:** unlike the prior runs' notes, **vitest now runs in
+  this Linux sandbox** (Node v22.22, `node:sqlite` present). The `node:sqlite`-backed
+  suites execute and pass here; only the `better-sqlite3`-backed suites (anything
+  building a real `AppContext`) still fail to load (no Linux binding in the mounted
+  macOS `node_modules`) — pre-existing and environmental, not a regression.
+- Picked **§12** as the one remaining box that is concrete, design-faithful, and
+  fully verifiable **offline** (no live Notion, no UI). §7 and §8 are left open for
+  the documented reasons below.
+
+### What landed this run
+- **`packages/backend/src/services/daily-loop.test.ts`** (6 tests) — a §12
+  composition acceptance test that drives the **real** `WarmupService` +
+  `CardService` against a migrated `node:sqlite` (no LLM, no network), asserting
+  the invariants that make the 1-hour budget hold:
+  1. **Warm-up is hard-bounded to 3** even with a 50-card backlog (`QUESTION_COUNT`),
+     all 3 real due cards — the gateway can't balloon.
+  2. **Optional review is hard-capped + signals "done":** 20 of 50 served,
+     `hasMore=true` (the explicit "you're done, go solve" signal — never a forced
+     backlog clear).
+  3. **Cap is clamped:** absurd cap → 100, zero cap → 1; the queue can't explode.
+  4. **Sparse-bank gateway never blocks or adds SR debt:** non-empty, ≤3,
+     preview-only warm-up; grading it reviews 0 cards and writes 0 events (no hidden
+     time debt).
+  5. **No double-counting:** warm-up's 3 graded cards leave the same-day review
+     queue, so the two surfaces don't stack the same work.
+  6. **Review is opt-in:** merely opening the queue mutates no SR state / logs no
+     events.
+
+### Verification
+- `vitest run daily-loop.test.ts CardService.test.ts` → **19/19 pass** in-sandbox.
+- `tsc --noEmit` (backend) clean; `eslint` on the new file clean.
+- Pure `@dsa/intelligence` suite green (**85/85**) — the SM-2 topic engines are
+  unaffected.
+- The 7 failing backend suites in a full run are all `better-sqlite3`/`AppContext`
+  setup failures (`Cannot find module 'better-sqlite3'` in the Linux sandbox),
+  documented above; unrelated to this change.
+
+### Boxes flipped to `[x]` this run (1) → 101/103
+- §12 — daily flow supports the 1-hour budget (observed via `daily-loop.test.ts`).
+
+### The 2 remaining boxes — why they stay `[ ]`
+- **§7 "No SM-2 / single-`ease` model remains anywhere in scheduling."** This is a
+  genuine, documented **design-vs-codebase conflict**, not missing work:
+  - The **flashcard** scheduling path is already 100% FSRS. Verified: `CardService`,
+    `fsrs.ts`, `WarmupService`, `cardTypes.ts`, `leechRemediation.ts` contain **zero**
+    SM-2 / `ease` / `applyRecallQuality` references; warm-up grades via
+    `CardService.warmupGrade` → per-card `ts-fsrs`, and review via `CardService.review`.
+  - SM-2 survives **only** in the separate **topic-level revision** subsystem
+    (`IntelligenceOrchestrator.applyRecallQuality` → `RevisionEngine`,
+    `SessionService.applyRecallQuality`, `topics.sm2_*` columns, topic analytics +
+    Notion topic sync). `CLAUDE.md` documents this as **intentional dual scheduling**:
+    *"The legacy topic-level SM-2 path … still powers the revision queue and session
+    analytics. Warm-up and Review tab scheduling are FSRS-only; do not conflate the
+    two."*
+  - Resolution (following the design *and* respecting `CLAUDE.md`'s override): the
+    design's actual §7 requirement — *cards* are scheduled by FSRS, not topic SM-2 —
+    is met. Ripping out topic-revision SM-2 would contradict `CLAUDE.md` and break
+    `SessionService`/analytics/topic-priority, so it is **not** done autonomously.
+    Under the box's literal "anywhere", SM-2 still exists in topic scheduling, so the
+    box stays `[ ]` honestly. Closing it is a product decision (retire the topic
+    revision queue entirely) that needs a human, not a code gap.
+- **§8 "Notion is durable source of record + cross-device sync + backup."** Every
+  *mechanism* box under §8 (write-through, field ownership, delta sync, rate-limit,
+  batched flush, UUID PK, conflict policy, pull-rebuild direction) is `[x]`. This
+  umbrella box asserts the **real Notion remote** as durable backup + cross-device,
+  which can only be *observed* via a live round-trip against the user's Notion. An
+  autonomous/offline run must not perform that write, so it stays `[ ]` as the one
+  genuine live/manual check. (The portable local JSON/MD export hedge — §10 — is
+  already `[x]`, so the bank is not Notion-locked.)
+
+### Design vs. existing code — conflicts & resolutions
+- **§7 conflict** as detailed above — resolved by following the design's intent
+  (FSRS for cards, verified) while honoring `CLAUDE.md`'s explicit retention of the
+  topic-level SM-2 subsystem; box left honestly open rather than force-flipped.
+- No other conflicts this run; the slice is additive (one new test + doc updates).
+
+### Next
+- The only remaining **code-conformance** item is §7, which is blocked on a product
+  decision (keep intentional dual scheduling per `CLAUDE.md`, or retire the topic
+  revision queue to make SM-2 truly absent). §8 needs a one-time live Notion e2e.
+  **No further autonomous code work is required for the flashcard system** — if a
+  human confirms the §7 dual-scheduling decision and runs the §8 Notion round-trip,
+  the remaining 2 boxes resolve and this scheduled task can be disabled.
 
 ---
 
