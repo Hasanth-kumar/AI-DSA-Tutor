@@ -311,6 +311,31 @@ export class CardService {
     return this.toReviewView({ ...row, front: nextFront, back: nextBack });
   }
 
+  /**
+   * Triage: merge two cards — keep `winnerId`, delete `loserId`, log
+   * `CardMerged` (§9). Useful when the embedding store surfaces a near-duplicate
+   * pair that dedup missed (e.g. added manually before embeddings existed).
+   * The event preserves both cards' content for recovery.
+   */
+  mergeCards(winnerId: string, loserId: string): void {
+    if (winnerId === loserId) throw new Error("Cannot merge a card with itself");
+    const now = this.now();
+    const winner = this.store.findById(winnerId);
+    if (!winner) throw new Error(`Winner card not found: ${winnerId}`);
+    const loser = this.store.findById(loserId);
+    if (!loser) throw new Error(`Loser card not found: ${loserId}`);
+    this.store.logEvent({
+      cardId: winnerId,
+      type: "CardMerged",
+      payload: {
+        kept: { id: winnerId, front: winner.front, back: winner.back },
+        deleted: { id: loserId, front: loser.front, back: loser.back },
+      },
+      createdAt: now,
+    });
+    this.store.deleteCard(loserId);
+  }
+
   /** Local answer lookup for "show answer" — no LLM (§1). */
   findAnswer(topicId: string, question: string): string | null {
     const row =

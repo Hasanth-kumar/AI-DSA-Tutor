@@ -19,9 +19,13 @@
  * feeds mistake-derived cards (§3).
  */
 import { CARD_TYPES } from "@dsa/database/schema";
+import type { ConfusionPair } from "../embeddings/confusion.js";
 
 /** Bumped when the prompt text changes — persisted per card as provenance (§8). */
 export const GENERATION_PROMPT_VERSION = "gen-v1";
+
+// Re-export so callers only need to import from generation.prompt.
+export type { ConfusionPair };
 
 export interface GenerationConcept {
   id: string;
@@ -46,6 +50,14 @@ export interface GenerationPromptContext {
   existingFronts: string[];
   /** Max cards per concept (2–3 angles) — keeps the bank lean (§4). */
   maxPerConcept: number;
+  /**
+   * Semantically close cross-concept card pairs found via the embedding store
+   * (§3 confusion-pair). When non-empty the prompt asks the model to produce
+   * "confusion-pair" discrimination cards for these pairings — "when do you use
+   * A instead of B?" — targeting the concepts the learner actually confuses.
+   * Absent/empty when the embedding store has no vectors yet.
+   */
+  confusionPairs?: ConfusionPair[];
 }
 
 /**
@@ -109,6 +121,34 @@ function mistakeBlock(ctx: GenerationPromptContext): string {
   );
 }
 
+/**
+ * Confusion-pair block (§3). When the embedding store has found semantically
+ * close cross-concept pairs, tell the model about them and ask for
+ * discrimination cards ("confusion-pair" type). Returns "" when there are no
+ * pairs so the prompt stays lean for new topics without embeddings.
+ */
+function confusionBlock(ctx: GenerationPromptContext): string {
+  const pairs = (ctx.confusionPairs ?? []).filter(
+    (p) => p.frontA.trim().length > 0 && p.frontB.trim().length > 0,
+  );
+  if (pairs.length === 0) return "";
+  const lines = pairs
+    .map(
+      (p, i) =>
+        `  ${i + 1}. [${[...p.conceptsA].join(", ")}] "${p.frontA}"` +
+        `\n     vs [${[...p.conceptsB].join(", ")}] "${p.frontB}"`,
+    )
+    .join("\n");
+  return (
+    `\nThe embedding store found these semantically similar cross-concept pairs — ` +
+    `concepts the learner likely confuses. For any uncovered concept that appears in ` +
+    `a pair below, prefer a "confusion-pair" discrimination card that asks ` +
+    `"when / why do you use X instead of Y?":\n` +
+    lines +
+    "\n"
+  );
+}
+
 function existingBlock(ctx: GenerationPromptContext): string {
   if (ctx.existingFronts.length === 0) {
     return "There are no existing cards for this topic yet.";
@@ -134,6 +174,7 @@ export function buildGenerationPrompt(ctx: GenerationPromptContext): string {
 
 ${noteBlock(ctx)}
 ${mistakeBlock(ctx)}
+${confusionBlock(ctx)}
 ${existingBlock(ctx)}
 
 Produce flashcards ONLY for these currently-uncovered concepts (do not generate cards for any concept not in this list):

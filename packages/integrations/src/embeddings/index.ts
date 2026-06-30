@@ -58,3 +58,12 @@ export {
   type StoredEmbedding,
   type CardNeedingEmbedding,
 } from "./EmbeddingStore.js";
+export {
+  detectConfusionPairs,
+  findCrossConceptPairs,
+  DEFAULT_CONFUSION_CONFIG,
+  type ConfusionPairConfig,
+  type ConfusionCandidate,
+  type ConfusionPair,
+  type ConfusionDb,
+} from "./confusion.js";

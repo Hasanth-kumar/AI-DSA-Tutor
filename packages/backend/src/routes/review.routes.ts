@@ -74,4 +74,27 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
       }
     },
   );
+
+  /**
+   * Triage: merge two cards — keep the winner, delete the loser, logs
+   * `CardMerged` (§9). Body: `{ loserId: string }`. The `:cardId` param is the
+   * winner. Useful when dedup surfaces near-duplicates after the fact.
+   */
+  app.post<{ Params: { cardId: string }; Body: { loserId?: string } }>(
+    "/review/:cardId/merge",
+    async (request, reply) => {
+      const { loserId } = request.body ?? {};
+      if (!loserId) {
+        return reply.status(400).send({ error: "loserId is required" });
+      }
+      try {
+        ctx.cardService.mergeCards(request.params.cardId, loserId);
+        ctx.events.publish("topic");
+        return reply.send({ merged: true, kept: request.params.cardId, deleted: loserId });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Merge failed";
+        return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+      }
+    },
+  );
 }

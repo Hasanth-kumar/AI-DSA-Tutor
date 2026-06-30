@@ -32,7 +32,7 @@
 - [x] **Cloze on canonical code** card type supported (single blanked line).
 - [x] **Predict-the-complexity / predict-the-output** card type supported.
 - [x] **Mistake-derived** cards generated from the `## Mistakes` section of a note. *(Note provider extracts the section from full note content before truncation → `TopicNotes.mistakes` → a dedicated prompt block instructing `mistake-derived` cards. Pure prompt-builder tests confirm the block + instruction + verbatim mistake text are present and omitted when absent; live LLM emission deferred to manual e2e.)*
-- [ ] **Confusion-pair** discrimination cards supported, sourced via the embedding store.
+- [x] **Confusion-pair** discrimination cards supported, sourced via the embedding store. *(`detectConfusionPairs` finds cross-concept card pairs with cosine in [0.65, 0.84) (below the 0.85 dedup threshold); `findCrossConceptPairs` queries the `card_embeddings` DB. `buildGenerationPrompt` includes a `confusionBlock` when pairs are present, instructing the LLM to emit `confusion-pair` discrimination cards. 7 unit tests for the pure detection logic + 3 prompt tests all pass (`vitest run`). Pipeline wired in `CardGenerationService.generateForTopic`. Seed cards of type `confusion-pair` were already present.)*
 - [x] **Card type is a stored attribute** so generation/sampling/analytics can distinguish them.
 
 ## §4 Concept inventory (coverage + dedup backbone)
@@ -99,7 +99,7 @@
 ## §9 Event log & analytics
 
 - [x] **Append-only event log table exists alongside the mutable rows.**
-- [ ] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`. *(6/7 wired — `CardMerged` has no UI flow yet.)*
+- [x] **Logged event types include:** `CardReviewed`, `CardGenerated`, `CardEdited`, `CardSuspended`, `CardDeleted`, `CardMerged`, `LeechDetected`. *(`CardService.mergeCards(winnerId, loserId)` writes a `CardMerged` event with both cards' content preserved for recovery, then deletes the loser. `POST /review/:cardId/merge` wires this to the API. 2 tests in `CardService.test.ts` verify: event is logged with full content, winner survives, loser is deleted, error on self-merge or missing cards.)*
 - [x] **State is NOT rebuilt by replaying events** — live SR/FSRS state stays in its own table (not event-sourced).
 - [x] **Analytics are computable on demand from the log** (coverage/retention trends, per-card quality, auto-retire candidates) without extra stored columns or history backfill. *(Pure `computeCardAnalytics` over `card_events` in `@dsa/intelligence`; `AnalyticsService.getCardAnalytics` + `GET /api/analytics/cards` expose it. Verified end-to-end against a real `node:sqlite` `card_events` table with no network — coverage/retention trends, per-card quality, and auto-retire candidates all reproduced from the log alone.)*
 

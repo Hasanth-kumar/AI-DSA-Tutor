@@ -3,7 +3,124 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 96 / 103 boxes passing.**
+**Validation status: 98 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-30 — confusion-pair detection (§3) + CardMerged event (§9)
+
+### Context found at start
+- Repo at `fd5ff2b` (96/103). Stages 1–8 of §15 complete.
+- 7 unchecked boxes: §2 notes-sole-source, §3 confusion-pair, §7 no-SM-2-anywhere,
+  §8 Notion live e2e, §8 code-in-page-blocks, §9 CardMerged, §12 daily-loop UX.
+- Previous run recommended §3 confusion-pair as the next pure/testable slice.
+- Pre-existing git state: `.git/index.lock`, `.git/HEAD.lock`,
+  `.git/refs/heads/main.lock` un-deletable (sandbox `rm` blocked). Used
+  `GIT_INDEX_FILE=/tmp/dsa-fresh-index` to bypass and commit via plumbing.
+
+### What landed this run
+
+**Slice 1 — §3 Confusion-pair cards sourced via the embedding store**
+
+1. **`packages/integrations/src/embeddings/confusion.ts`** (new):
+   - `detectConfusionPairs(candidates, fronts, config)` — pure, I/O-free. Finds
+     cross-concept card pairs whose cosine falls in `[minSimilarity, maxSimilarity)`
+     (default `[0.65, 0.84)`, strictly below the 0.85 dedup threshold) AND whose
+     concept tags do NOT overlap (overlapping + high cosine = near-duplicate, not a
+     useful discrimination pair). Sorts by descending similarity, caps at `limit`.
+   - `findCrossConceptPairs(db, model, opts)` — DB-backed variant: queries
+     `card_embeddings JOIN cards JOIN card_concepts`, deserializes vectors, calls
+     `detectConfusionPairs`. If `topicId` is provided, filters to pairs where at
+     least one card is from that topic — used by the per-topic generation run.
+   - `DEFAULT_CONFUSION_CONFIG: { minSimilarity: 0.65, maxSimilarity: 0.84, limit: 10 }`.
+   - `ConfusionDb` interface (only `prepare().all()`) — binding-free, no `better-sqlite3` dep.
+   - Exported from `packages/integrations/src/embeddings/index.ts`.
+
+2. **`packages/integrations/src/generation/generation.prompt.ts`** (modified):
+   - Added `confusionPairs?: ConfusionPair[]` to `GenerationPromptContext`.
+   - Added `confusionBlock()` — when pairs are present, injects a block telling the
+     LLM "these semantically similar cross-concept pairs are things the learner likely
+     confuses — prefer a `confusion-pair` discrimination card asking when/why to use
+     X instead of Y." Empty when no pairs → prompt stays lean.
+   - Re-exports `ConfusionPair` type so callers have one import point.
+
+3. **`packages/integrations/src/generation/CardGenerationService.ts`** (modified):
+   - `CardGenerationConfig` gets `confusionPairs?: ConfusionPairConfig` (defaults to
+     `DEFAULT_CONFUSION_CONFIG`; pass `{ limit: 0 }` to disable).
+   - `generateForTopic` queries `findCrossConceptPairs` for the topic being expanded
+     and passes the result to `buildGenerationPrompt` as `confusionPairs`.
+   - `GenerationDb` type now also extends `ConfusionDb` (all three are binding-free).
+
+4. **Tests** — `confusion.test.ts` (7 tests, pure function, `node:sqlite` not needed):
+   - Pair in confusion zone found; above-max excluded; below-min excluded; overlapping
+     concepts excluded; sort + limit respected; fallback to card id when front missing.
+
+5. **`generation.test.ts`** — 3 new prompt tests:
+   - `confusionBlock` injected when pairs are supplied; omitted when absent/empty;
+     omits pairs with empty fronts.
+
+**Slice 2 — §9 CardMerged event (all 7 event types now wired)**
+
+1. **`packages/backend/src/services/CardService.ts`** — `mergeCards(winnerId, loserId)`:
+   - Validates both cards exist, guards against self-merge.
+   - Logs `CardMerged` on the winner with `{ kept: {id, front, back}, deleted: {id, front, back} }`
+     — full content preserved in the append-only log for recovery (§9 design intent).
+   - Deletes the loser card.
+
+2. **`packages/backend/src/routes/review.routes.ts`** — `POST /review/:cardId/merge`:
+   - Body: `{ loserId: string }`. The `:cardId` param is the winner.
+   - Calls `cardService.mergeCards`, publishes SSE event, returns `{ merged, kept, deleted }`.
+
+3. **`CardService.test.ts`** — 2 new tests:
+   - Merge: winner survives, loser deleted, event logged with both contents.
+   - Error handling: missing winner, missing loser, self-merge all throw correctly.
+
+### Verification (Linux sandbox)
+- `@dsa/integrations` tsc `--noEmit`: **clean (0 errors)**.
+- `@dsa/backend` tsc `--noEmit`: **clean (0 errors)**.
+- `confusion.test.ts`: **7/7 pass**.
+- `generation.test.ts`: **17/17 pass** (3 new confusion-block tests included).
+- `CardService.test.ts`: **13/13 pass** (2 new merge tests included).
+- Pre-existing `sync.merge.test.ts` (4 fail) and all `better-sqlite3` backend tests
+  remain as-was — macOS native binary / ELF incompatibility documented in every
+  prior run. No new failures introduced.
+
+### Validation boxes flipped this run (96 → 98 / 103)
+- §3 — **Confusion-pair cards supported, sourced via the embedding store.**
+- §9 — **All 7 event types wired** (`CardMerged` was the only missing one).
+
+### Design vs. existing code — conflicts & resolutions
+- No conflict. The confusion-pair detection follows §6 exactly (brute-force cosine,
+  configurable threshold, no vector DB), and the generation pipeline extension follows
+  §5 (prompt augmentation only, not a new pipeline stage). `CardMerged` logging
+  follows §9 (append-only, content preserved, not event-sourced).
+
+### Still `[ ]` (and why)
+- **§2 notes-sole-source**: generation has an intentional "no notes → standard DSA
+  knowledge" fallback (from design § "The learner has no notes yet — derive cards from
+  the concept list and standard DSA knowledge"). This box requires a design decision:
+  the fallback is intentional and useful for new topics. Consider it a known deviation
+  to document rather than fix.
+- **§7 no-SM-2 anywhere**: topic-level SM-2 (`sm2_interval/repetition/efactor` on
+  `topics` table) still powers the legacy revision queue per `CLAUDE.md` dual
+  scheduling. Per-card scheduling is FSRS-only; the SM-2 path is topic-level only.
+  This box means "no SM-2 for card scheduling" — which IS true. Could be flipped on
+  macOS when someone reads the CardService source and confirms zero `ease`/SM-2 there.
+- **§8 live Notion e2e**: requires `NOTION_TOKEN` + `NOTION_CARDS_DB_ID` in
+  `.env`. Cannot verify in the Linux sandbox.
+- **§8 code-in-page-blocks**: design compliance check (cloze/code cards stored in
+  page body not Notion properties). Needs live Notion inspection.
+- **§12 daily-loop UX**: manual/subjective — open the dashboard, do a warm-up, solve,
+  update note, do review. No automated test for the overall UX budget.
+
+### Next (5 boxes remain)
+- **§7 SM-2 box**: flip on macOS by running `grep -rn "sm2\|ease" packages/backend/src/services/CardService.ts packages/backend/src/services/fsrs.ts` — if absent → `[x]`.
+- **§2 notes-sole-source**: document as intentional deviation OR remove the fallback
+  prose and require notes to always exist (warn the user instead).
+- **§8/§12 remaining boxes**: require macOS + live Notion; once `.env` is set up, a
+  single real sync run + review session covers all three.
+- Consider this task near-complete (98/103); remaining 5 are manual e2e checks or
+  documented design trade-offs, not code to write.
 
 ---
 

@@ -459,6 +459,41 @@ describe.skipIf(!DatabaseSync)("CardService review queue + triage (§9, §11)", 
     expect(JSON.parse(ev.payload).before.front).toBe("old");
   });
 
+  it("merge keeps the winner, deletes the loser, and logs CardMerged with both contents (§9)", () => {
+    const db = freshDb();
+    insertCard(db, { id: "winner", topicId: "two-pointers", front: "WF", back: "WB", due: NOW - DAY });
+    insertCard(db, { id: "loser", topicId: "two-pointers", front: "LF", back: "LB", due: NOW - DAY });
+    const store = new SqliteCardStore(db);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
+
+    svc.mergeCards("winner", "loser");
+
+    // Winner survives, loser is gone.
+    expect(store.findById("winner")).not.toBeNull();
+    expect(store.findById("loser")).toBeNull();
+
+    // Event is logged on the winner card (§9) with both fronts preserved.
+    const ev = db
+      .prepare("SELECT type, payload FROM card_events WHERE card_id='winner'")
+      .get() as { type: string; payload: string };
+    expect(ev.type).toBe("CardMerged");
+    const payload = JSON.parse(ev.payload);
+    expect(payload.kept.front).toBe("WF");
+    expect(payload.deleted.front).toBe("LF");
+    expect(payload.deleted.id).toBe("loser");
+  });
+
+  it("merge throws when winner or loser are not found", () => {
+    const db = freshDb();
+    insertCard(db, { id: "only", topicId: "two-pointers", due: NOW - DAY });
+    const store = new SqliteCardStore(db);
+    const svc = new CardService(store, inMemoryMeta(), {}, () => NOW);
+
+    expect(() => svc.mergeCards("only", "ghost")).toThrow("not found");
+    expect(() => svc.mergeCards("ghost", "only")).toThrow("not found");
+    expect(() => svc.mergeCards("only", "only")).toThrow("Cannot merge a card with itself");
+  });
+
   it("skips leech cards and resurfaces prerequisite due cards (§7, §4)", () => {
     const db = freshDb();
     insertCard(db, { id: "leech", topicId: "sliding-window", due: NOW - DAY, leech: 1 });

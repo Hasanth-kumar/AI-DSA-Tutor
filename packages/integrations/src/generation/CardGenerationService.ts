@@ -27,6 +27,12 @@ import {
   type EmbeddingDb,
 } from "../embeddings/index.js";
 import {
+  findCrossConceptPairs,
+  DEFAULT_CONFUSION_CONFIG,
+  type ConfusionPairConfig,
+  type ConfusionDb,
+} from "../embeddings/confusion.js";
+import {
   parseGeneratedCards,
   sanitizeGeneratedCards,
   buildGeneratedCardRows,
@@ -47,8 +53,8 @@ import {
 } from "./GenerationStore.js";
 import type { GenerationClient } from "./GenerationProvider.js";
 
-/** The DB handle must satisfy both the generation and embedding stores. */
-export type GenerationDb = GenDb & EmbeddingDb;
+/** The DB handle must satisfy the generation store, embedding store, and confusion detector. */
+export type GenerationDb = GenDb & EmbeddingDb & ConfusionDb;
 
 /** A topic's closed vocabulary + display name (from concepts.yaml). */
 export interface TopicVocabulary {
@@ -84,6 +90,11 @@ export interface CardGenerationConfig {
   modelVersion: string;
   dedup?: DedupConfig;
   maxPerConcept?: number;
+  /**
+   * Config for confusion-pair detection (§3). Defaults to
+   * {@link DEFAULT_CONFUSION_CONFIG}. Pass `{ limit: 0 }` to disable.
+   */
+  confusionPairs?: ConfusionPairConfig;
 }
 
 export type SkipReason =
@@ -112,10 +123,13 @@ export class CardGenerationService {
   private readonly dedup: DedupConfig;
   private readonly maxPerConcept: number;
 
+  private readonly confusion: ConfusionPairConfig;
+
   constructor(config: CardGenerationConfig) {
     this.cfg = config;
     this.dedup = config.dedup ?? DEFAULT_DEDUP_CONFIG;
     this.maxPerConcept = config.maxPerConcept ?? MAX_CARDS_PER_CONCEPT;
+    this.confusion = config.confusionPairs ?? DEFAULT_CONFUSION_CONFIG;
   }
 
   /** Run the full pipeline for one topic. Returns a report; never throws on a
@@ -157,6 +171,17 @@ export class CardGenerationService {
       id,
       description: vocab.concepts.find((c) => c.id === id)?.description,
     }));
+
+    // 2b. Confusion-pair context from the embedding store (§3). Only available
+    //     once the topic has embeddings; gracefully absent for new topics.
+    const confusionPairs =
+      this.confusion.limit > 0
+        ? findCrossConceptPairs(this.cfg.db, this.cfg.embedder.model, {
+            topicId,
+            config: this.confusion,
+          })
+        : [];
+
     const prompt = buildGenerationPrompt({
       topicName: vocab.topicName,
       uncovered: uncoveredConcepts,
@@ -164,6 +189,7 @@ export class CardGenerationService {
       mistakeNotes: notes.mistakes ?? [],
       existingFronts: existingFronts(this.cfg.db, topicId),
       maxPerConcept: this.maxPerConcept,
+      confusionPairs,
     });
 
     // 3. Generate (off the hot path) and parse tolerantly.

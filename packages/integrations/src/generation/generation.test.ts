@@ -151,6 +151,53 @@ describe("extractMistakeSection (§3)", () => {
   });
 });
 
+describe("buildGenerationPrompt — confusion-pair block (§3)", () => {
+  const base: GenerationPromptContext = {
+    topicName: "Two Sum",
+    uncovered: [{ id: "complement-trick", description: "x + y = target via lookup" }],
+    noteExcerpts: [{ title: "Two Sum", excerpt: "use a hashmap" }],
+    existingFronts: [],
+    maxPerConcept: 3,
+  };
+
+  it("injects a confusion-pair block when pairs are supplied", () => {
+    const prompt = buildGenerationPrompt({
+      ...base,
+      confusionPairs: [
+        {
+          frontA: "When do two-pointers collapse to a single scan?",
+          frontB: "What distinguishes a sliding window from two-pointers?",
+          conceptsA: ["two-pointers"],
+          conceptsB: ["sliding-window"],
+          similarity: 0.72,
+        },
+      ],
+    });
+    expect(prompt).toMatch(/semantically similar cross-concept pairs/i);
+    expect(prompt).toContain("two-pointers");
+    expect(prompt).toContain("sliding-window");
+    expect(prompt).toContain("confusion-pair");
+    expect(prompt).toMatch(/when \/ why do you use X instead of Y/i);
+  });
+
+  it("omits the confusion block when confusionPairs is absent or empty", () => {
+    expect(buildGenerationPrompt(base)).not.toMatch(/semantically similar cross-concept pairs/i);
+    expect(
+      buildGenerationPrompt({ ...base, confusionPairs: [] }),
+    ).not.toMatch(/semantically similar cross-concept pairs/i);
+  });
+
+  it("omits pairs with empty fronts", () => {
+    const prompt = buildGenerationPrompt({
+      ...base,
+      confusionPairs: [
+        { frontA: "  ", frontB: "valid back", conceptsA: ["a"], conceptsB: ["b"], similarity: 0.7 },
+      ],
+    });
+    expect(prompt).not.toMatch(/semantically similar cross-concept pairs/i);
+  });
+});
+
 describe("buildGenerationPrompt — mistake-derived block (§3)", () => {
   const base: GenerationPromptContext = {
     topicName: "Two Sum",

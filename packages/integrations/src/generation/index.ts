@@ -16,6 +16,7 @@ export {
   GENERATION_PROMPT_VERSION,
   type GenerationConcept,
   type GenerationPromptContext,
+  type ConfusionPair,
 } from "./generation.prompt.js";
 export {
   computeCoverage,

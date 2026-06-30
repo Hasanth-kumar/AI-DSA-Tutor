@@ -3,10 +3,10 @@
 > Summary of design decisions worth implementing. Source of truth for the
 > spaced-repetition flashcard rework. Date: 2026-06-25 (Rev 2).
 >
-> **Implementation status:** see `flashcard-system-validation.md` (96/103 boxes)
+> **Implementation status:** see `flashcard-system-validation.md` (98/103 boxes)
 > and `docs/flashcard-implementation-progress.md` for the build log. Stages 1–8
-> of §15 are complete; remaining gaps are polish (confusion-pair cards, live
-> Notion e2e, retiring topic SM-2, notes-sole-source, CardMerged UI flow).
+> of §15 are complete; remaining gaps are polish (live Notion e2e, retiring topic
+> SM-2, notes-sole-source, code-in-page-blocks, daily-loop UX).
 
 > **Rev 2 changes:** adopted FSRS over SM-2 (§7); enforced a fixed concept
 > vocabulary the LLM may not extend (§4); added provenance fields and an
