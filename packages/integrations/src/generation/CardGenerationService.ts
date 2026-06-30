@@ -100,6 +100,7 @@ export interface CardGenerationConfig {
 export type SkipReason =
   | "no-vocabulary"
   | "fully-covered"
+  | "no-notes"
   | "llm-unavailable"
   | "empty-generation"
   | "all-duplicates";
@@ -158,15 +159,32 @@ export class CardGenerationService {
       return { ...base, skipped: "fully-covered" };
     }
 
+    // 2. Load the note material — the SOURCE OF TRUTH for card content (§2).
+    //    Notes are the only material the LLM may derive *new* cards from; the
+    //    curated seed baseline is the sole non-note content, and it is
+    //    human-authored, version-controlled — not invented. A topic can have a
+    //    coverage gap and no notes (e.g. a mastery/leech trigger marked it dirty
+    //    before the learner wrote anything). With no note source there is
+    //    nothing to derive, so skip rather than let the model invent cards from
+    //    "standard DSA knowledge" — that would violate §2 ("notes are the source
+    //    of truth; cards are not invented in a vacuum").
+    const notes: TopicNotes = (
+      this.cfg.loadNotes ?? (() => ({ excerpts: [], mistakes: [], noteVersion: null }))
+    )(topicId);
+    if (notes.excerpts.length === 0) {
+      // Clear the dirty flag (when asked) so the batch queue drains instead of
+      // re-attempting a source-less topic every run; a later note edit (or the
+      // next mastery/leech evaluation) re-marks it dirty when material exists.
+      if (opts.clearDirty) clearTopicDirty(this.cfg.db, topicId);
+      return { ...base, skipped: "no-notes" };
+    }
+
     if (!this.cfg.llm.isConfigured()) {
       // Leave the topic dirty so the next batch run retries.
       return { ...base, skipped: "llm-unavailable" };
     }
 
-    // 2. Build the closed-vocabulary, coverage-targeted prompt (§4/§5).
-    const notes: TopicNotes = (
-      this.cfg.loadNotes ?? (() => ({ excerpts: [], mistakes: [], noteVersion: null }))
-    )(topicId);
+    // 3. Build the closed-vocabulary, coverage-targeted prompt (§4/§5).
     const uncoveredConcepts: GenerationConcept[] = coverage.uncovered.map((id) => ({
       id,
       description: vocab.concepts.find((c) => c.id === id)?.description,

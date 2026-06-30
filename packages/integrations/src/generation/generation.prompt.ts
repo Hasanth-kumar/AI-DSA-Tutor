@@ -93,7 +93,17 @@ export function extractMistakeSection(noteContent: string): string | null {
 
 function noteBlock(ctx: GenerationPromptContext): string {
   if (ctx.noteExcerpts.length === 0) {
-    return `The learner has no notes on ${ctx.topicName} yet — derive cards from the concept list and standard DSA knowledge.`;
+    // Defensive only — the generation service short-circuits with skip reason
+    // "no-notes" before ever building a prompt for a note-less topic (§2: notes
+    // are the source of truth, cards are not invented in a vacuum). If this
+    // branch is somehow reached, do NOT invite the model to draw on outside
+    // "standard DSA knowledge"; restrict it to the authored concept descriptions
+    // already supplied below, which come from the human-curated concepts.yaml.
+    return (
+      `No note material was supplied for ${ctx.topicName}. There is no source ` +
+      `text to derive cards from — rely solely on the concept descriptions listed ` +
+      `below and do not invent content from outside knowledge.`
+    );
   }
   return (
     `The learner's own notes on ${ctx.topicName} (the SOURCE OF TRUTH — derive cards from this material, ` +

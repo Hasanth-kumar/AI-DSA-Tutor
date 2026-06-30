@@ -18,7 +18,7 @@
 
 ## §2 Core architecture
 
-- [ ] **Notes are source of truth for content.** Cards are derived from notes; no card content is invented without a note source.
+- [x] **Notes are source of truth for content.** Cards are derived from notes; no card content is invented without a note source. *(`CardGenerationService.generateForTopic` now short-circuits with skip reason `no-notes` when a topic has a coverage gap but no note excerpts — the LLM and embedder are never called, so no content is invented from "standard DSA knowledge". Seeds remain the only non-note content, and they are human-authored/version-controlled, not invented. The defensive `noteBlock` fallback no longer invites outside knowledge. Observed: `CardGenerationService.test.ts` — no-notes ⇒ `skipped:"no-notes"` with 0 LLM/embed calls; notes-present ⇒ advances past the gate. 3 tests pass under `vitest run` in the Linux sandbox.)*
 - [x] **LLM runs in batch, offline from hot path** — triggered only on note change / mastery triggers, never on review/warm-up.
 - [x] **Local question bank per topic exists** — prebuilt + cached cards persisted locally, accumulating over time.
 - [x] **Bank size is coverage-driven, not a fixed target.** No hard-coded "30–50 cards/topic" (or similar) count anywhere in generation logic.
