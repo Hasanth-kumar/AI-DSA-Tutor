@@ -3,7 +3,126 @@
 Running log for the spaced-repetition flashcard rework. Source of truth:
 `docs/flashcard-system-design.md` (Rev 2) and `flashcard-system-validation.md`.
 
-**Validation status: 98 / 103 boxes passing.**
+**Validation status: 100 / 103 boxes passing.**
+
+---
+
+## Run 2026-06-30 (b) — notes-as-source-of-truth (§2) + code-in-page-blocks (§8)
+
+### Context found at start
+- Repo at `143ca91` (98/103). Stages 1–8 of §15 complete.
+- Pre-existing messy git state from a crashed prior run: `.git/index.lock`,
+  `HEAD.lock`, `refs/heads/main.lock`, `objects/maintenance.lock` present, plus a
+  scrambled index (many files half-staged for deletion while still on disk). The
+  working tree itself already equalled `HEAD`. **This FUSE mount blocks `unlink`
+  but allows `rename`**, which is why prior runs left `*.lock.stale*` debris.
+  Resolved by sweeping every `*.lock` → `*.lock.stale-<ns>` via `mv`, then
+  `git reset HEAD`; confirmed `git diff HEAD` empty and `git fsck` connectivity
+  clean. Every commit this run sweeps locks first; the unlink warnings git prints
+  are cosmetic (it finalizes refs/objects by rename, which works).
+- 5 unchecked boxes at start: §2 notes-sole-source, §7 no-SM-2-anywhere, §8 Notion
+  live e2e, §8 code-in-page-blocks, §12 daily-loop UX. Picked the two that are
+  concrete, design-faithful, and verifiable **offline** (no live Notion / no UI).
+
+### What landed this run
+
+**Slice 1 — §2 notes are the source of truth (commit `ff2989d`)**
+- `CardGenerationService.generateForTopic` now loads notes right after the
+  coverage-gap check and **short-circuits with skip reason `no-notes`** when a
+  topic has uncovered concepts but **no note excerpts**. The LLM and embedder are
+  never invoked, so no card content is invented from "standard DSA knowledge"
+  (the prior fallback) — a direct §2 violation. Seeds remain the only non-note
+  content, and they are human-authored / version-controlled, not invented.
+- `generation.prompt.ts` `noteBlock`: the defensive no-notes branch no longer
+  invites outside knowledge (it restricts to the authored concept descriptions).
+  This branch is now unreachable in the real pipeline (the service gates first).
+- `SkipReason` gains `"no-notes"`. Dirty flag is cleared on this skip (when
+  `clearDirty`) so the batch queue drains instead of re-attempting a source-less
+  topic; a later note edit (or mastery/leech evaluation) re-marks it.
+- New `CardGenerationService.test.ts` (3 tests): no-notes ⇒ `skipped:"no-notes"`
+  with **0 LLM/embed calls**; whitespace-only notes ⇒ same; notes-present ⇒
+  advances past the gate (to `llm-unavailable` in the stubbed-down test).
+
+**Slice 2 — §8 code-heavy bodies in Notion page blocks (commit `1ed4c81`)**
+- `isCodeHeavy(card)` — cloze type, fenced ``` in front/back, or content over the
+  2000-char Notion text-item limit.
+- `cardToNotionPageBlocks(card)` — emits the full Front+Back as Notion `code`
+  blocks in the page **body** for code-heavy cards (`[]` otherwise).
+- `cardToNotionProperties` — for code-heavy cards the length-limited `Back`
+  *property* carries only `CODE_IN_BODY_NOTICE`; all text is chunked into
+  ≤2000-char items so a long card's push is never rejected.
+- `NotionSyncTarget.pushCards` — attaches `children` on create only when blocks
+  exist (the `NotionClientLike.pages.create` type gained optional `children`).
+- Pull side: `PulledCardContent.codeHeavy`; `notionPageToContent` and
+  `CardSyncService.recordToContent` set it (pointer / cloze / fenced detect).
+  `applyPulledContent` keeps code-heavy cards **local-authoritative** — it rebinds
+  only the page mapping and never overwrites local content from the pointer, and
+  does not bump `updated_at`.
+- Tests: `card-properties.test.ts` +6 (isCodeHeavy, pointer-in-Back, page-block
+  emission, chunking, pull-side codeHeavy); `card-sync.test.ts` +1 real
+  node:sqlite case proving a local cloze card's code body + SR state survive a
+  pull whose `back` is the pointer.
+
+### Verification (Linux sandbox; pnpm unavailable, node_modules is a macOS build)
+- `@dsa/integrations` `tsc --noEmit`: **clean** (both slices).
+- `vitest run` (the binding-free suites): **165 passed**. The only failures are
+  the 4 pre-existing `sync.merge.test.ts` cases that construct `better-sqlite3`
+  directly → `invalid ELF header` (macOS native binary under Linux), documented
+  in every prior run and unrelated to these changes. All node:sqlite-backed tests
+  (incl. the new code-heavy pull test) and all pure tests pass.
+- Card path FSRS scheduling re-verified for §7: `fsrs.test.ts` + `CardService.test.ts`
+  = 20/20 (backend, node:sqlite). eslint clean on every edited file.
+
+### Validation boxes flipped this run (98 → 100 / 103)
+- §2 — **Notes are source of truth for content** (no card content invented without
+  a note source; observed 0 LLM/embed calls on the no-notes path).
+- §8 — **Code-heavy content lives in the card body / page blocks** (or kept
+  local-authoritative) — both halves implemented and observed offline.
+
+### Design vs. code — conflicts & resolutions
+- **§2 no-notes fallback.** The generation prompt previously told the model to
+  "derive cards from the concept list and **standard DSA knowledge**" when a topic
+  had no notes — convenient for brand-new topics but a direct contradiction of §2
+  ("notes are the source of truth; cards are not invented in a vacuum"). Resolved
+  **per the design**: gate generation on a note source; topics with no notes get
+  only their seed baseline until the learner writes notes. (Prior runs flagged
+  this as a "known deviation to document" — this run removes the deviation.)
+- **§8 code-in-page-blocks.** The design offers two options; both are now honored
+  — code lives in page **blocks** on push, AND those cards are **local-authoritative**
+  on pull. The data-loss edge (a fresh rebuild reads the pointer, not the blocks)
+  is the documented trade-off of "local-authoritative", mitigated by the canonical
+  JSON export (§10). Block *updates* are intentionally not diffed: content for
+  these cards is local-authoritative, so only SR-state properties round-trip after
+  the one-time create.
+
+### Still `[ ]` (3 — all design-decision or live/manual, not code to write)
+- **§7 "no SM-2 anywhere in scheduling".** Verified the entire **card** scheduling
+  path (CardService, fsrs.ts, WarmupService.grade→warmupGrade, review) is per-card
+  FSRS with **zero** SM-2 (only comments asserting its absence). Notably,
+  `SessionService.applyRecallQuality` (topic SM-2 from the old warm-up) now has
+  **no production caller** — it is orphaned. The SM-2 that genuinely remains is the
+  **topic-level revision queue / session analytics** (`SessionService.completeSession`
+  → `RevisionEngine.updateAfterSession`), which `CLAUDE.md` documents as
+  *intentional dual scheduling* (a different axis: when to revisit a whole topic).
+  The box's literal "anywhere in scheduling" therefore conflicts with the design's
+  own dual-scheduling decision. Left `[ ]` rather than re-scope a checklist
+  criterion; resolving it is a deliberate human call (re-scope to "card scheduling"
+  → pass, or remove the topic revision engine → large, untestable-in-sandbox change
+  that contradicts CLAUDE.md). Did **not** flip it to avoid over-claiming.
+- **§8 "Notion is durable source of record".** Needs a live `NOTION_TOKEN` +
+  `NOTION_CARDS_DB_ID` round-trip; can't be exercised in the sandbox, and writing
+  to the user's real Notion is out of scope for an autonomous run.
+- **§12 daily-loop UX.** Subjective/manual — requires running the dashboard
+  (warm-up → solve → note → optional review) and judging the time budget.
+
+### Next run
+- The remaining 3 are not "code to write": §7 needs a scoping decision, §8-live and
+  §12 need a machine with creds + the UI. Suggest: (a) get a human ruling on §7's
+  scope (recommend re-scoping to *card* scheduling, which passes today), (b) run a
+  single live Notion flush + pull on the real workspace to clear §8-live and verify
+  the page-block round-trip end-to-end, (c) a manual daily-loop pass for §12. If all
+  three are accepted, implementation is effectively complete and this scheduled task
+  can be retired.
 
 ---
 
