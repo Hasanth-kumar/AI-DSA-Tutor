@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "../api/client.js";
 import { CardAnswer } from "../components/CardAnswer.js";
+import { PageHeader } from "../components/PageHeader.js";
 import type { ReviewCard, ReviewQueue } from "../types/api.js";
 
 const GRADES: { key: string; label: string; quality: number; hint: string; tone: string }[] = [
@@ -16,8 +17,13 @@ function formatCardType(type: string): string {
 
 function ReviewShell({ children }: { children: ReactNode }) {
   return (
-    <div className="review-page">
-      <div className="warmup-card card review-card">{children}</div>
+    <div className="page-content page-content--narrow">
+      <PageHeader
+        eyebrow="Flashcards · interleaved"
+        title="Review"
+        align="center"
+      />
+      {children}
     </div>
   );
 }
@@ -209,91 +215,118 @@ export function ReviewPage() {
     current.lapses > 0 ? `${current.lapses} lapse${current.lapses === 1 ? "" : "s"}` : null,
   ].filter(Boolean);
 
+  const progressPct = cards.length > 0 ? ((index + (revealed ? 1 : 0)) / cards.length) * 100 : 0;
+
   return (
     <ReviewShell>
-      <div className="warmup-header">
-        <span className="warmup-title">Review</span>
-        <span className="warmup-progress">
-          {index + 1} / {cards.length}
-          {queue.hasMore ? ` · cap ${queue.cap}` : ""}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1.4rem" }}>
+        <div className="review-progress-bar">
+          <div className="review-progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+          {index + 1} / {cards.length} due
         </span>
       </div>
 
-      {leechAdvisories.length > 0 && (
-        <p className="muted text-xs mt-0 mb-3">
-          Leech cards skipped — prerequisites surfaced instead.
-        </p>
-      )}
-
-      {metaParts.length > 0 && (
-        <p className="muted text-xs mt-0 mb-3" style={{ textTransform: "capitalize" }}>
-          {metaParts.join(" · ")}
-        </p>
-      )}
-
       {editing ? (
-        <div className="review-edit">
-          <label className="card-section-title">Front</label>
-          <textarea
-            className="review-edit-field"
-            rows={3}
-            value={editFront}
-            onChange={(e) => setEditFront(e.target.value)}
-          />
-          <label className="card-section-title mt-3">Back</label>
-          <textarea
-            className="review-edit-field"
-            rows={4}
-            value={editBack}
-            onChange={(e) => setEditBack(e.target.value)}
-          />
-          <div className="warmup-grades mt-3">
-            <button type="button" className="btn" disabled={busy} onClick={() => void saveEdit()}>
-              Save
-            </button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setEditing(false)}>
-              Cancel
-            </button>
+        <div className="review-card-v2">
+          <div className="review-edit">
+            <label className="card-section-title">Front</label>
+            <textarea
+              className="review-edit-field"
+              rows={3}
+              value={editFront}
+              onChange={(e) => setEditFront(e.target.value)}
+            />
+            <label className="card-section-title mt-3">Back</label>
+            <textarea
+              className="review-edit-field"
+              rows={4}
+              value={editBack}
+              onChange={(e) => setEditBack(e.target.value)}
+            />
+            <div className="warmup-grades mt-3">
+              <button type="button" className="btn" disabled={busy} onClick={() => void saveEdit()}>
+                Save
+              </button>
+              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       ) : (
         <>
-          <div className="review-body">
-            <p className="warmup-question">{current.front}</p>
+          <div className="review-card-v2">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.6rem" }}>
+              <span style={{ fontSize: "0.66rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--accent)" }}>
+                {formatCardType(current.type)}
+              </span>
+              <span style={{ fontSize: "0.66rem", fontFamily: "var(--font-mono)", color: "var(--text-subtle)" }}>
+                card {index + 1} of {cards.length}
+              </span>
+            </div>
 
-            {!revealed ? (
-              <button
-                type="button"
-                className="btn btn-ghost warmup-show-answer-btn"
-                disabled={busy}
-                onClick={() => setRevealed(true)}
-              >
-                Show answer
-              </button>
-            ) : (
-              <div className="warmup-answer review-answer">
-                <span className="warmup-answer-label">Answer</span>
-                <CardAnswer content={current.back} className="warmup-answer-text warmup-answer-markdown coach-assistant-text" />
-              </div>
+            {leechAdvisories.length > 0 && (
+              <p className="muted text-xs mt-0 mb-3">
+                Leech cards skipped — prerequisites surfaced instead.
+              </p>
             )}
+
+            {metaParts.length > 0 && (
+              <p className="muted text-xs mt-0 mb-3" style={{ textTransform: "capitalize" }}>
+                {metaParts.join(" · ")}
+              </p>
+            )}
+
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: "1.4rem", minHeight: "200px" }}>
+              <p className="review-question-serif">{current.front}</p>
+
+              {!revealed ? (
+                <button
+                  type="button"
+                  className="btn-ghost-v2"
+                  disabled={busy}
+                  onClick={() => setRevealed(true)}
+                >
+                  Show answer
+                </button>
+              ) : (
+                <div style={{ width: "100%", maxWidth: "34ch", borderTop: "1px solid var(--border-soft)", paddingTop: "1.4rem" }}>
+                  <CardAnswer content={current.back} className="coach-assistant-text" />
+                </div>
+              )}
+            </div>
           </div>
 
           {revealed && (
-            <div className="warmup-grades review-grades">
+            <div className="review-grade-grid">
               {GRADES.map((g) => (
                 <button
                   key={g.label}
                   type="button"
-                  className={`btn warmup-grade-btn grade-${g.tone}`}
+                  className={`review-grade-btn${g.tone === "accent" ? " review-grade-btn--primary" : ""} grade-${g.tone}`}
                   title={g.hint}
                   disabled={busy}
                   onClick={() => void grade(g.quality)}
                 >
-                  {g.label} <kbd className="grade-key">{g.key}</kbd>
+                  <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{g.label}</span>
+                  <span style={{ fontSize: "0.66rem", color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
+                    <kbd className="grade-key">{g.key}</kbd>
+                  </span>
                 </button>
               ))}
             </div>
           )}
+
+          <div className="review-dots" aria-hidden>
+            {cards.map((_, i) => (
+              <span
+                key={i}
+                className={`review-dot${i < index ? " review-dot--done" : ""}${i === index ? " review-dot--current" : ""}`}
+              />
+            ))}
+          </div>
 
           <div className="review-triage">
             <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void suspend()}>

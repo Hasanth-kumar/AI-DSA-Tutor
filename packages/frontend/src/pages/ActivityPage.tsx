@@ -1,9 +1,39 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client.js";
 import { ActivityHeatmap } from "../components/ActivityHeatmap.js";
-import { Skeleton, SkeletonLines } from "../components/Skeleton.js";
-import { mistakeTagLabel } from "../types/api.js";
-import type { DayDetail } from "../types/api.js";
+import { PageHeader } from "../components/PageHeader.js";
+import { Skeleton } from "../components/Skeleton.js";
+import { usePolling } from "../hooks/usePolling.js";
+
+const ACTIVITY_DAYS = 365;
+const SESSION_POLL_MS = 60_000;
+
+function computeStreakFromCounts(counts: Map<string, number>): number {
+  let streak = 0;
+  const cursor = new Date();
+  cursor.setHours(0, 0, 0, 0);
+  const today = cursor.toISOString().slice(0, 10);
+
+  while (true) {
+    const key = cursor.toISOString().slice(0, 10);
+    if ((counts.get(key) ?? 0) > 0) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else if (key === today) {
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+function productivityClass(score: number | null): string {
+  if (score == null) return "";
+  if (score >= 75) return "activity-pct--success";
+  if (score >= 55) return "activity-pct--warning";
+  return "activity-pct--muted";
+}
 
 export function ActivityPage() {
   const [dailyCounts, setDailyCounts] = useState<Map<string, number>>(new Map());
@@ -12,17 +42,28 @@ export function ActivityPage() {
   const [leetcodeUnconfigured, setLeetcodeUnconfigured] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dayDetail, setDayDetail] = useState<DayDetail | null>(null);
-  const [dayLoading, setDayLoading] = useState(false);
 
-  const openDay = useCallback((dateKey: string) => {
-    setDayLoading(true);
-    api
-      .getDayDetail(dateKey)
-      .then(setDayDetail)
-      .catch(() => setDayDetail({ date: dateKey, sessions: [], problems: [] }))
-      .finally(() => setDayLoading(false));
-  }, []);
+  const fetchSessions = useCallback(
+    () => api.getSessions(200).then((r) => r.sessions),
+    [],
+  );
+  const { data: sessions } = usePolling(fetchSessions, SESSION_POLL_MS, {
+    initialLoading: false,
+  });
+
+  const fetchTopics = useCallback(
+    () => api.getTopics().then((r) => r.topics),
+    [],
+  );
+  const { data: topics } = usePolling(fetchTopics, SESSION_POLL_MS, {
+    initialLoading: false,
+  });
+
+  const topicNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of topics ?? []) map.set(t.id, t.name);
+    return map;
+  }, [topics]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,7 +76,7 @@ export function ActivityPage() {
         setLeetcodeUsername(leetcodeActivity.username);
         setLeetcodeUnconfigured(false);
       } else {
-        const activity = await api.getSessionActivity(182);
+        const activity = await api.getSessionActivity(ACTIVITY_DAYS);
         setDailyCounts(new Map(Object.entries(activity.dailyCounts)));
         setSource("sessions");
         setLeetcodeUsername(undefined);
@@ -54,109 +95,90 @@ export function ActivityPage() {
     void load();
   }, [load]);
 
+  const stats = useMemo(() => {
+    const keys = [...dailyCounts.keys()];
+    const activeDays = keys.filter((k) => (dailyCounts.get(k) ?? 0) > 0).length;
+    const streak = computeStreakFromCounts(dailyCounts);
+    const totalSessions = sessions?.length ?? 0;
+    return { activeDays, streak, totalSessions };
+  }, [dailyCounts, sessions]);
+
+  const recentSessions = (sessions ?? []).slice(0, 8);
+
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header-text">
-          <h2>Activity</h2>
-          <p>
-            {source === "leetcode"
-              ? "Daily accepted submissions from your LeetCode profile."
-              : "LeetCode-style heatmap from locally logged sessions."}
-          </p>
-        </div>
-      </header>
+    <div className="page-content">
+      <PageHeader title="Activity" />
+
       {error && <div className="error-banner">{error}</div>}
       {leetcodeUnconfigured && !error && (
         <div className="info-banner">
-          Set <code>LEETCODE_USERNAME</code> in your <code>.env</code> to pull real solve counts from LeetCode.
+          Set <code>LEETCODE_USERNAME</code> in your <code>.env</code> for LeetCode heatmap data.
         </div>
       )}
-      {loading ? (
-        <div className="card" aria-busy="true">
-          <Skeleton variant="title" width={160} />
-          <div style={{ display: "flex", gap: "1.5rem", marginBottom: "1rem" }}>
-            <Skeleton variant="stat" />
-            <Skeleton variant="stat" />
-            <Skeleton variant="stat" />
+
+      {!loading && (
+        <div className="activity-stats">
+          <div className="overview-stat-card">
+            <div className="overview-stat-label">Active days</div>
+            <div className="overview-stat-value">{stats.activeDays}</div>
           </div>
-          <Skeleton variant="block" height={130} />
+          <div className="overview-stat-card">
+            <div className="overview-stat-label">Total sessions</div>
+            <div className="overview-stat-value">{stats.totalSessions}</div>
+          </div>
+          <div className="overview-stat-card">
+            <div className="overview-stat-label">Current streak</div>
+            <div className="overview-stat-value" style={{ color: "var(--accent)" }}>
+              {stats.streak} days
+            </div>
+          </div>
         </div>
+      )}
+
+      {loading ? (
+        <section className="panel-v2" aria-busy="true" style={{ marginBottom: "1.4rem" }}>
+          <Skeleton variant="title" width={160} />
+          <Skeleton variant="block" height={130} />
+        </section>
       ) : (
         <ActivityHeatmap
           dailyCounts={dailyCounts}
           source={source}
           leetcodeUsername={leetcodeUsername}
-          onDayClick={openDay}
+          weeks={53}
+          variant="design"
         />
       )}
 
-      {(dayDetail || dayLoading) && (
-        <div className="card day-detail mt-4">
-          <div className="day-detail-header">
-            <h3 className="card-title m-0">
-              {dayDetail
-                ? new Date(`${dayDetail.date}T12:00:00Z`).toLocaleDateString(undefined, {
-                    weekday: "long",
+      {!loading && recentSessions.length > 0 && (
+        <section className="panel-v2" style={{ marginTop: "1.4rem" }}>
+          <h3 className="panel-v2-title" style={{ marginBottom: "1.1rem" }}>
+            Recent sessions
+          </h3>
+          <div className="activity-recent">
+            {recentSessions.map((s) => (
+              <div key={s.id} className="activity-recent-row">
+                <span className="activity-recent-date">
+                  {new Date(s.date).toLocaleDateString(undefined, {
                     month: "short",
                     day: "numeric",
-                  })
-                : "Loading day…"}
-            </h3>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => setDayDetail(null)}
-            >
-              ✕ Close
-            </button>
+                  })}
+                </span>
+                <span className="activity-recent-topic">
+                  {s.topicId ? (topicNames.get(s.topicId) ?? "Study session") : "Study session"}
+                </span>
+                <span className="activity-recent-meta">
+                  {s.studyDuration ?? 0} min · {s.problemsSolved ?? 0} solved
+                </span>
+                <span
+                  className={`activity-recent-pct ${productivityClass(s.productivityScore)}`}
+                >
+                  {s.productivityScore ?? "—"}%
+                </span>
+              </div>
+            ))}
           </div>
-
-          {dayLoading && !dayDetail && <SkeletonLines lines={3} />}
-
-          {dayDetail && dayDetail.sessions.length === 0 && dayDetail.problems.length === 0 && (
-            <p className="muted text-sm">
-              No locally logged sessions for this day
-              {source === "leetcode" ? " (activity came from LeetCode)" : ""}.
-            </p>
-          )}
-
-          {dayDetail && dayDetail.sessions.length > 0 && (
-            <>
-              <div className="day-detail-label">Sessions</div>
-              <ul className="day-detail-list">
-                {dayDetail.sessions.map((s) => (
-                  <li key={s.id}>
-                    <span>{s.topicName ?? "Unknown topic"}</span>
-                    <span className="muted">
-                      {s.studyDuration ?? 0}m · {s.problemsSolved} solved ·{" "}
-                      {s.productivityScore ?? "—"}/100
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {dayDetail && dayDetail.problems.length > 0 && (
-            <>
-              <div className="day-detail-label">Problems</div>
-              <ul className="day-detail-list">
-                {dayDetail.problems.map((p, i) => (
-                  <li key={`${p.problemId}-${i}`}>
-                    <span>{p.problemName}</span>
-                    <span className="muted">
-                      {p.timeTaken != null ? `${p.timeTaken}m` : ""}
-                      {p.mistakeTags.length > 0
-                        ? ` · ${p.mistakeTags.map(mistakeTagLabel).join(", ")}`
-                        : ""}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
+        </section>
       )}
     </div>
   );

@@ -6,11 +6,12 @@ interface Props {
   dailyCounts: Map<string, number>;
   source: "leetcode" | "sessions";
   leetcodeUsername?: string;
-  /** Heatmap drill-down (5.4): click an active day to see its sessions/problems. */
   onDayClick?: (dateKey: string) => void;
+  weeks?: number;
+  variant?: "default" | "design";
 }
 
-const WEEKS = 26;
+const DEFAULT_WEEKS = 26;
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function buildCountsFromSessions(sessions: Session[]): Map<string, number> {
@@ -78,11 +79,20 @@ function formatCellDetail(
   return `${formatted} · ${formatCountLabel(count, source)}`;
 }
 
-export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayClick }: Props) {
+export function ActivityHeatmap({
+  dailyCounts,
+  source,
+  leetcodeUsername,
+  onDayClick,
+  weeks = DEFAULT_WEEKS,
+  variant = "default",
+}: Props) {
   const [hovered, setHovered] = useState<{ key: string; count: number } | null>(null);
+  const isDesign = variant === "design";
+  const cellSize = isDesign ? 11 : 14;
 
   const {
-    weeks,
+    gridWeeks,
     totalProblems,
     activeDays,
     streak,
@@ -92,7 +102,7 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
     end.setHours(0, 0, 0, 0);
 
     const gridStart = new Date(end);
-    gridStart.setDate(gridStart.getDate() - WEEKS * 7 + 1);
+    gridStart.setDate(gridStart.getDate() - weeks * 7 + 1);
     gridStart.setDate(gridStart.getDate() - gridStart.getDay());
 
     const computedWeeks: { key: string; count: number; date: Date }[][] = [];
@@ -119,18 +129,13 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
     });
 
     return {
-      weeks: computedWeeks,
+      gridWeeks: computedWeeks,
       totalProblems: windowKeys.reduce((sum, key) => sum + (dailyCounts.get(key) ?? 0), 0),
       activeDays: windowKeys.filter((key) => (dailyCounts.get(key) ?? 0) > 0).length,
       streak: computeStreak(dailyCounts, end),
       monthLabels: labels,
     };
-  }, [dailyCounts]);
-
-  const sourceLabel =
-    source === "leetcode" && leetcodeUsername
-      ? `Accepted submissions from LeetCode · @${leetcodeUsername}`
-      : "Problems solved from logged sessions";
+  }, [dailyCounts, weeks]);
 
   const selectCell = (cell: { key: string; count: number }) => {
     if (cell.count <= 0) return;
@@ -143,88 +148,127 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
     onDayClick?.(cell.key);
   };
 
-  if (totalProblems === 0) {
+  if (totalProblems === 0 && activeDays === 0) {
     return (
-      <div className="card">
-        <h3 className="card-section-title">Activity heatmap</h3>
+      <section className={isDesign ? "panel-v2" : "card"}>
+        <h3 className={isDesign ? "panel-v2-title" : "card-section-title"}>Study heatmap</h3>
         <EmptyState
           illustration={<HeatmapIllustration />}
-          title="No activity in the last 26 weeks"
+          title={`No activity in the last ${weeks} weeks`}
           hint={
             source === "leetcode"
               ? "Get an accepted submission on LeetCode and it will show up here."
               : "Log your first session and it will show up here."
           }
         />
-      </div>
+      </section>
     );
   }
 
-  return (
-    <div className="card">
-      <h3 className="card-section-title">Activity heatmap</h3>
-      <p className="muted text-sm mt-0 mb-3">
-        {sourceLabel}
-      </p>
+  const wrapperClass = isDesign ? "panel-v2" : "card";
 
-      <div className="heatmap-stats">
-        <div className="heatmap-stat">
-          <span className="heatmap-stat-value">{totalProblems}</span>
-          <span className="heatmap-stat-label">
-            {source === "leetcode" ? "submissions in 26 weeks" : "problems in 26 weeks"}
-          </span>
-        </div>
-        <div className="heatmap-stat">
-          <span className="heatmap-stat-value">{activeDays}</span>
-          <span className="heatmap-stat-label">active days</span>
-        </div>
-        <div className="heatmap-stat">
-          <span className="heatmap-stat-value" style={{ color: "var(--accent)" }}>{streak}d</span>
-          <span className="heatmap-stat-label">current streak</span>
-        </div>
+  return (
+    <section className={wrapperClass}>
+      <div className={isDesign ? "panel-v2-header" : undefined}>
+        <h3 className={isDesign ? "panel-v2-title" : "card-section-title"}>Study heatmap</h3>
+        {isDesign ? (
+          <div className="heatmap-legend-v2" aria-hidden>
+            less
+            <span className="heatmap-legend-swatch heatmap-legend-swatch--0" />
+            <span className="heatmap-legend-swatch heatmap-legend-swatch--1" />
+            <span className="heatmap-legend-swatch heatmap-legend-swatch--2" />
+            <span className="heatmap-legend-swatch heatmap-legend-swatch--3" />
+            more
+          </div>
+        ) : null}
       </div>
 
-      <div className="heatmap-wrap">
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${weeks.length}, 14px)`, gap: "3px", marginBottom: "4px" }}>
-          {weeks.map((_, i) => {
-            const label = monthLabels.find((m) => m.weekIdx === i);
-            return (
-              <div
-                key={i}
-                className="heatmap-month-label"
-                style={{ opacity: label ? 1 : 0 }}
-              >
-                {label?.label ?? ""}
-              </div>
-            );
-          })}
+      {!isDesign && (
+        <p className="muted text-sm mt-0 mb-3">
+          {source === "leetcode" && leetcodeUsername
+            ? `Accepted submissions from LeetCode · @${leetcodeUsername}`
+            : "Problems solved from logged sessions"}
+        </p>
+      )}
+
+      {!isDesign && (
+        <div className="heatmap-stats">
+          <div className="heatmap-stat">
+            <span className="heatmap-stat-value">{totalProblems}</span>
+            <span className="heatmap-stat-label">
+              {source === "leetcode" ? "submissions in window" : "problems in window"}
+            </span>
+          </div>
+          <div className="heatmap-stat">
+            <span className="heatmap-stat-value">{activeDays}</span>
+            <span className="heatmap-stat-label">active days</span>
+          </div>
+          <div className="heatmap-stat">
+            <span className="heatmap-stat-value" style={{ color: "var(--accent)" }}>
+              {streak}d
+            </span>
+            <span className="heatmap-stat-label">current streak</span>
+          </div>
         </div>
+      )}
+
+      <div className="heatmap-wrap">
+        {!isDesign && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
+              gap: "3px",
+              marginBottom: "4px",
+            }}
+          >
+            {gridWeeks.map((_, i) => {
+              const label = monthLabels.find((m) => m.weekIdx === i);
+              return (
+                <div
+                  key={i}
+                  className="heatmap-month-label"
+                  style={{ opacity: label ? 1 : 0 }}
+                >
+                  {label?.label ?? ""}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         <div
-          className="heatmap"
-          style={{
-            gridTemplateRows: "repeat(7, 14px)",
-            gridTemplateColumns: `repeat(${weeks.length}, 14px)`,
-            gridAutoFlow: "column",
-          }}
+          className={isDesign ? "heatmap-grid-v2" : "heatmap"}
+          style={
+            isDesign
+              ? undefined
+              : {
+                  gridTemplateRows: `repeat(7, ${cellSize}px)`,
+                  gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
+                  gridAutoFlow: "column",
+                }
+          }
         >
-          {weeks.flatMap((week, weekIdx) =>
+          {gridWeeks.flatMap((week, weekIdx) =>
             week.map((cell, dayIdx) => {
               const isActive = cell.count > 0;
+              const lvl = level(cell.count);
               const tipProps = {
-                "data-level": level(cell.count),
+                "data-level": lvl,
                 "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
                 "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
-                "data-tip-col": weekIdx >= weeks.length - 2 ? ("end" as const) : undefined,
+                "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
               };
 
-              // Days with activity are real buttons (keyboard + screen-reader
-              // reachable); empty days stay inert divs.
+              const cellClass = isDesign
+                ? `heatmap-cell-v2 heatmap-cell-v2--${lvl} heatmap-cell--interactive`
+                : "heatmap-cell heatmap-cell--interactive";
+
               return isActive ? (
                 <button
                   key={cell.key}
                   type="button"
-                  className="heatmap-cell heatmap-cell--interactive"
+                  className={cellClass}
                   aria-label={formatCellDetail(cell.key, cell.count, source)}
                   onMouseEnter={() => selectCell(cell)}
                   onMouseLeave={() => setHovered(null)}
@@ -238,20 +282,26 @@ export function ActivityHeatmap({ dailyCounts, source, leetcodeUsername, onDayCl
                   </span>
                 </button>
               ) : (
-                <div key={cell.key} className="heatmap-cell" {...tipProps} />
+                <div
+                  key={cell.key}
+                  className={isDesign ? "heatmap-cell-v2 heatmap-cell-v2--0" : "heatmap-cell"}
+                  {...tipProps}
+                />
               );
             }),
           )}
         </div>
       </div>
 
-      <div className="legend mt-3" aria-hidden="true">
-        <span className="muted">Less</span>
-        {[0, 1, 2, 3, 4].map((n) => (
-          <div key={n} className="heatmap-cell" data-level={n} />
-        ))}
-        <span className="muted">More</span>
-      </div>
-    </div>
+      {!isDesign && (
+        <div className="legend mt-3" aria-hidden="true">
+          <span className="muted">Less</span>
+          {[0, 1, 2, 3, 4].map((n) => (
+            <div key={n} className="heatmap-cell" data-level={n} />
+          ))}
+          <span className="muted">More</span>
+        </div>
+      )}
+    </section>
   );
 }

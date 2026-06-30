@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { SessionTracker } from "../components/SessionTracker.js";
 import { usePolling } from "../hooks/usePolling.js";
+import { PageHeader } from "../components/PageHeader.js";
 import type { Problem, Topic } from "../types/api.js";
 
 const SESSION_POLL_MS = 30_000;
@@ -45,13 +46,12 @@ export function SessionPage() {
   const error = staticError ?? sessionError;
 
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header-text">
-          <h2>Session tracker</h2>
-          <p>Start a timer, log your session, and watch recent activity update live.</p>
-        </div>
-      </header>
+    <div className="page-content page-content--session">
+      <PageHeader
+        eyebrow="Live session"
+        title="Focused study"
+        align="center"
+      />
       {error && <div className="error-banner">{error}</div>}
       <SessionTracker
         topics={topics}

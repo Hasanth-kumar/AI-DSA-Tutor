@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
 import { Skeleton } from "../components/Skeleton.js";
+import { PageHeader } from "../components/PageHeader.js";
 import type { Topic, WeaknessEvidence } from "../types/api.js";
 
 const KnowledgeGraph = lazy(() =>
@@ -65,13 +66,11 @@ export function GraphPage() {
   };
 
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header-text">
-          <h2>Knowledge graph</h2>
-          <p>Topics as nodes — color shows mastery, dashed ring means revision due. Click a node for details.</p>
-        </div>
-      </header>
+    <div className="page-content">
+      <PageHeader
+        title="Knowledge graph"
+        subtitle="Topics as nodes — color shows mastery. Click a node for details."
+      />
       {error && <div className="error-banner">{error}</div>}
       <div className={`graph-layout${selected ? " graph-layout--panel-open" : ""}`}>
         <Suspense
@@ -89,7 +88,7 @@ export function GraphPage() {
         </Suspense>
 
         {selected && (
-          <aside className="card graph-panel">
+          <aside className="panel-v2 graph-panel">
             <div className="graph-panel-header">
               <h3 className="card-title m-0">{selected.name}</h3>
               <button
@@ -147,11 +146,12 @@ export function GraphPage() {
 
             <button
               type="button"
-              className="btn btn-primary w-full mt-3"
+              className="btn-primary-v2"
+              style={{ width: "100%", marginTop: "1.3rem", justifyContent: "center" }}
               disabled={settingFocus}
               onClick={() => void studyNow()}
             >
-              {settingFocus ? "Setting…" : "▶ Study this now"}
+              {settingFocus ? "Setting…" : "Study this topic"}
             </button>
             {studyMessage && (
               <p className="muted text-xs mt-2 mb-0">

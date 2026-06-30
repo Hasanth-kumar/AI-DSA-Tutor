@@ -654,7 +654,18 @@ export function CoachingPage({ anchorProblemId }: Props) {
   return (
     <div className="coach-layout">
       <div className="coach-settings-bar">
-        <span className="coach-settings-title">Coach</span>
+        <div className="coach-settings-heading">
+          <h1 className="coach-settings-title">Coach</h1>
+          {anchoredProblem && (
+            <div className="coach-settings-anchor">
+              <span className="coach-settings-anchor-dot" aria-hidden />
+              <span>
+                Anchored to{" "}
+                <span className="coach-settings-anchor-topic">{anchoredProblem.name}</span>
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="coach-settings-actions">
           <button
@@ -677,10 +688,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
             onClick={() => void handleNewChat()}
             disabled={loading}
           >
-            <svg viewBox="0 0 14 14" fill="currentColor" width="12" height="12">
-              <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-            </svg>
-            New chat
+            + New chat
           </button>
         </div>
       </div>
@@ -716,26 +724,6 @@ export function CoachingPage({ anchorProblemId }: Props) {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-        </div>
-      )}
-
-      {anchoredProblem && (
-        <div className="coach-anchor-bar">
-          <span className="coach-anchor-chip">
-            anchored to: <strong>{anchoredProblem.name}</strong>
-            <button
-              type="button"
-              aria-label="Detach problem"
-              title="Detach problem"
-              onClick={() => setProblemId("")}
-            >
-              ✕
-            </button>
-          </span>
-          <span className="muted text-xs">
-            Coach sees this problem&apos;s history, your mistakes and notes — hints
-            escalate only when you ask.
-          </span>
         </div>
       )}
 

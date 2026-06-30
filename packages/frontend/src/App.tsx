@@ -6,11 +6,12 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type ReactNode,
 } from "react";
-import { BrandLogoMark } from "./components/BrandLogo.js";
+import { Sidebar, type AppTab } from "./components/Sidebar.js";
 import { SkeletonPage } from "./components/Skeleton.js";
+import { useAppPreferences } from "./hooks/useAppPreferences.js";
 import { useLiveEvents } from "./hooks/useLiveEvents.js";
+import { useNavMeta } from "./hooks/useNavMeta.js";
 
 const TodayPage = lazy(() =>
   import("./pages/TodayPage.js").then((m) => ({ default: m.TodayPage })),
@@ -33,91 +34,9 @@ const SessionPage = lazy(() =>
 const ReviewPage = lazy(() =>
   import("./pages/ReviewPage.js").then((m) => ({ default: m.ReviewPage })),
 );
-
-type Tab = "today" | "overview" | "review" | "graph" | "activity" | "session" | "coach";
-type Theme = "dark" | "light";
-
-const THEME_STORAGE_KEY = "dsa-theme";
-
-const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
-  {
-    id: "today",
-    label: "Today",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <path d="M8 1.5a1 1 0 011 1V3h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1h3v-.5a1 1 0 011-1zM4.5 6v6.5h7V6h-7zm2 2h3v3h-3V8z" />
-      </svg>
-    ),
-  },
-  {
-    id: "overview",
-    label: "Overview",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <path d="M2 2h5v5H2V2zm0 7h5v5H2V9zm7-7h5v5H9V2zm0 7h5v5H9V9z" />
-      </svg>
-    ),
-  },
-  {
-    id: "coach",
-    label: "Coach",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <path d="M14 2H2a1 1 0 00-1 1v8a1 1 0 001 1h2v2.5l3-2.5h7a1 1 0 001-1V3a1 1 0 00-1-1zM5 7a1 1 0 110-2 1 1 0 010 2zm3 0a1 1 0 110-2 1 1 0 010 2zm3 0a1 1 0 110-2 1 1 0 010 2z" />
-      </svg>
-    ),
-  },
-  {
-    id: "review",
-    label: "Review",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <rect x="2" y="3" width="9" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M5 1.5h9a1 1 0 011 1v10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="4.5" y1="6.5" x2="8.5" y2="6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="4.5" y1="9" x2="8.5" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    id: "graph",
-    label: "Knowledge graph",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <circle cx="3" cy="8" r="2" />
-        <circle cx="13" cy="3" r="2" />
-        <circle cx="13" cy="13" r="2" />
-        <circle cx="8" cy="8" r="1.5" />
-        <line x1="5" y1="8" x2="6.5" y2="8" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="9.5" y1="8" x2="11" y2="4.5" stroke="currentColor" strokeWidth="1.5" />
-        <line x1="9.5" y1="8" x2="11" y2="11.5" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
-    ),
-  },
-  {
-    id: "activity",
-    label: "Activity",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <rect x="1" y="10" width="2" height="5" rx="1" />
-        <rect x="4.5" y="7" width="2" height="8" rx="1" />
-        <rect x="8" y="4" width="2" height="11" rx="1" />
-        <rect x="11.5" y="1" width="2" height="14" rx="1" />
-      </svg>
-    ),
-  },
-  {
-    id: "session",
-    label: "Session tracker",
-    icon: (
-      <svg viewBox="0 0 16 16" fill="currentColor">
-        <circle cx="8" cy="9" r="5.5" stroke="currentColor" strokeWidth="1.5" fill="none" />
-        <path d="M8 6v3.5l2 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-        <path d="M6 1.5h4M8 1.5V3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-];
+const SettingsPage = lazy(() =>
+  import("./pages/SettingsPage.js").then((m) => ({ default: m.SettingsPage })),
+);
 
 const SHORTCUTS: { key: string; action: string }[] = [
   { key: "s", action: "Start session (Today)" },
@@ -126,58 +45,17 @@ const SHORTCUTS: { key: string; action: string }[] = [
   { key: "?", action: "Toggle this help" },
 ];
 
-function useIsMobile(breakpoint = 960) {
-  const [isMobile, setIsMobile] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(`(max-width: ${breakpoint}px)`).matches,
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [breakpoint]);
-
-  return isMobile;
-}
-
-/** System-preference default + manual toggle, persisted (5.4). */
-function useTheme(): [Theme, () => void] {
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem(THEME_STORAGE_KEY);
-    if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark";
-  });
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
-
-  const toggle = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-      return next;
-    });
-  }, []);
-
-  return [theme, toggle];
-}
-
 export function App() {
-  const [tab, setTab] = useState<Tab>("today");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [tab, setTab] = useState<AppTab>("today");
   const [coachAnchorId, setCoachAnchorId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [theme, toggleTheme] = useTheme();
-  const isMobile = useIsMobile();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { theme, toggleTheme } = useAppPreferences();
+  const navMeta = useNavMeta(tab, coachAnchorId);
   const shortcutsModalRef = useRef<HTMLDivElement>(null);
   const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null);
   useLiveEvents();
 
-  // Dialog focus management (6): move focus in on open, restore on close.
   useEffect(() => {
     if (showShortcuts) {
       shortcutsReturnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -209,15 +87,10 @@ export function App() {
     }
   }, []);
 
-  const selectTab = useCallback(
-    (id: Tab) => {
-      setTab(id);
-      if (isMobile) setSidebarCollapsed(true);
-    },
-    [isMobile],
-  );
+  const selectTab = useCallback((id: AppTab) => {
+    setTab(id);
+  }, []);
 
-  /** One click from a Today problem card into an anchored coach chat (1.2). */
   const openCoach = useCallback(
     (problemId: string) => {
       setCoachAnchorId(problemId || null);
@@ -226,9 +99,14 @@ export function App() {
     [selectTab],
   );
 
-  // Keyboard shortcuts (5.4): skip when typing or holding modifiers.
   useEffect(() => {
     const onKeyDown = (e: globalThis.KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+        return;
+      }
+
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
@@ -259,87 +137,25 @@ export function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectTab]);
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => !prev);
-  }, []);
-
-  const onBrandIconKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      toggleSidebar();
-    }
-  };
-
-  const showBrandIconInNav = isMobile && sidebarCollapsed;
-
-  const brandIcon = (
-    <div
-      className="brand-icon"
-      role="button"
-      tabIndex={0}
-      aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-      aria-expanded={!sidebarCollapsed}
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleSidebar();
-      }}
-      onKeyDown={onBrandIconKeyDown}
-    >
-      <BrandLogoMark />
-    </div>
-  );
-
   return (
     <div
-      className={`app-shell${isMobile ? " app-shell--mobile" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}${tab === "coach" ? " coach-active" : ""}`}
+      className={`app-shell-v2${tab === "coach" ? " coach-active" : ""}${
+        sidebarCollapsed ? " sidebar-v2-collapsed" : ""
+      }`}
     >
-      <aside className={`sidebar${sidebarCollapsed ? " sidebar--collapsed" : ""}`}>
-        {!showBrandIconInNav && (
-          <div className="brand">
-            {brandIcon}
-            <div className="brand-text">
-              <strong>DSA Mastery OS</strong>
-              <span>Learning Guide</span>
-            </div>
-          </div>
-        )}
-
-        <div className="nav-section-label">Navigate</div>
-
-        <nav className="nav">
-          {showBrandIconInNav && brandIcon}
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={tab === t.id ? "active" : ""}
-              aria-current={tab === t.id ? "page" : undefined}
-              onClick={() => selectTab(t.id)}
-            >
-              {t.icon}
-              <span className="nav-label">{t.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-footer">
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? "☀" : "☾"}
-            <span className="nav-label">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
-          </button>
-        </div>
-      </aside>
+      <Sidebar
+        tab={tab}
+        meta={navMeta}
+        theme={theme}
+        collapsed={sidebarCollapsed}
+        onSelect={selectTab}
+        onToggleTheme={toggleTheme}
+        onOpenShortcuts={() => setShowShortcuts(true)}
+        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+      />
 
       <main className="main">
         <Suspense fallback={<SkeletonPage />}>
-          {/* Coach owns the full viewport height, so it stays unwrapped; every
-              other tab gets a keyed wrapper that replays the page transition. */}
           {tab === "coach" ? (
             <CoachingPage anchorProblemId={coachAnchorId} />
           ) : (
@@ -350,6 +166,7 @@ export function App() {
               {tab === "graph" && <GraphPage />}
               {tab === "activity" && <ActivityPage />}
               {tab === "session" && <SessionPage />}
+              {tab === "settings" && <SettingsPage />}
             </div>
           )}
         </Suspense>

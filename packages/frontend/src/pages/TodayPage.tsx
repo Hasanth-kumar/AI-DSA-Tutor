@@ -4,17 +4,22 @@ import {
   useEffect,
   useMemo,
   useState,
-  type CSSProperties,
 } from "react";
 import { api } from "../api/client.js";
 import { CheckCircleIcon, EmptyState } from "../components/EmptyState.js";
+import { MasteryRing } from "../components/MasteryRing.js";
 import { MistakeCapture } from "../components/MistakeCapture.js";
+import { PageHeader } from "../components/PageHeader.js";
 import { ProblemNotePanel } from "../components/ProblemNotePanel.js";
 import { ScoreBar } from "../components/ScoreBar.js";
 import { Skeleton, SkeletonLines, SkeletonRows } from "../components/Skeleton.js";
 import { WarmupCard } from "../components/WarmupCard.js";
+import { useAppPreferences } from "../hooks/useAppPreferences.js";
 import { usePolling } from "../hooks/usePolling.js";
+import { formatRelativeTime } from "../lib/formatRelative.js";
+import { formatTodayDate, timeGreeting } from "../lib/greeting.js";
 import type {
+  CurriculumItem,
   ProblemNote,
   ScoreExplanation,
   Session,
@@ -24,14 +29,12 @@ import type {
 const PLAN_POLL_MS = 60_000;
 const SESSIONS_POLL_MS = 60_000;
 const STARTS_STORAGE_KEY = "dsa-problem-starts";
-/** Fallback when "Done" is hit without ever pressing Start. */
 const DEFAULT_MINUTES = 25;
 
 interface Props {
   onOpenCoach: (problemId: string) => void;
 }
 
-/** Session lifecycle shown as a step strip: Warm-up → Focus → Capture → Done. */
 const SESSION_STEPS = ["Warm-up", "Focus", "Capture", "Done"] as const;
 
 function SessionProgress({ step }: { step: number }) {
@@ -89,7 +92,54 @@ function sessionsThisMonth(sessions: Session[]): number {
   }).length;
 }
 
+function studyHoursThisMonth(sessions: Session[]): number {
+  const now = new Date();
+  const mins = sessions
+    .filter((s) => {
+      const d = new Date(s.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    })
+    .reduce((sum, s) => sum + (s.studyDuration ?? 0), 0);
+  return Math.round((mins / 60) * 10) / 10;
+}
+
+function UpNextTimeline({ items }: { items: CurriculumItem[] }) {
+  const visible = items.slice(0, 3);
+  return (
+    <div className="up-next-list">
+      {visible.map((item, i) => {
+        const isNow = item.status === "current";
+        const isLocked = item.status === "missing";
+        return (
+          <Fragment key={`${item.name}-${i}`}>
+            {i > 0 && <div className="up-next-connector" aria-hidden />}
+            <div className="up-next-item">
+              <span
+                className={`up-next-dot${isNow ? " up-next-dot--now" : " up-next-dot--future"}`}
+                aria-hidden
+              />
+              <span className={`up-next-name${isNow ? "" : " up-next-name--muted"}`}>
+                {item.name}
+              </span>
+              <span className={`up-next-tag${isNow ? " up-next-tag--now" : ""}`}>
+                {isNow
+                  ? "NOW"
+                  : isLocked
+                    ? "locked"
+                    : item.unsolvedCount > 0
+                      ? `${item.unsolvedCount} left`
+                      : "up next"}
+              </span>
+            </div>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TodayPage({ onOpenCoach }: Props) {
+  const { focusMode, accentGlow } = useAppPreferences();
   const fetchPlan = useCallback(() => api.getPlan(), []);
   const { data: plan, error, loading, refresh } = usePolling(fetchPlan, PLAN_POLL_MS);
 
@@ -100,6 +150,22 @@ export function TodayPage({ onOpenCoach }: Props) {
   const { data: sessions } = usePolling(fetchSessions, SESSIONS_POLL_MS, {
     initialLoading: false,
   });
+
+  const fetchTopics = useCallback(() => api.getTopics(), []);
+  const { data: topicsData } = usePolling(fetchTopics, PLAN_POLL_MS, {
+    initialLoading: false,
+  });
+
+  const fetchStreak = useCallback(() => api.getStreak(), []);
+  const { data: streak } = usePolling(fetchStreak, PLAN_POLL_MS, { initialLoading: false });
+
+  const fetchDashboard = useCallback(() => api.getDashboard(4), []);
+  const { data: dashboard } = usePolling(fetchDashboard, PLAN_POLL_MS, {
+    initialLoading: false,
+  });
+
+  const fetchSync = useCallback(() => api.getSyncStatus(), []);
+  const { data: sync } = usePolling(fetchSync, PLAN_POLL_MS, { initialLoading: false });
 
   const [flow, setFlow] = useState<Flow>({ kind: "idle" });
   const [starts, setStarts] = useState<Record<string, number>>(loadStarts);
@@ -112,11 +178,8 @@ export function TodayPage({ onOpenCoach }: Props) {
   const [logging, setLogging] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [syncing, setSyncing] = useState(false);
-  // Brief "Done" celebration so the progress strip lands on its final step.
   const [celebrateAt, setCelebrateAt] = useState<number | null>(null);
-  // Which problem's Done button is mid confirm-pulse.
   const [pulseId, setPulseId] = useState<string | null>(null);
-  /** True when today's warm-up was graded — session log must not reschedule. */
   const [warmupGraded, setWarmupGraded] = useState(false);
 
   useEffect(() => {
@@ -125,14 +188,10 @@ export function TodayPage({ onOpenCoach }: Props) {
     return () => clearTimeout(id);
   }, [celebrateAt]);
 
-  // Keyboard shortcuts from App (5.4): s = start session, l = focus first Done.
   useEffect(() => {
     const onStart = () => setFlow((f) => (f.kind === "idle" ? { kind: "warmup" } : f));
     const onFocusDone = () => {
-      const btn = document.querySelector<HTMLButtonElement>(
-        "[data-done-button='true']",
-      );
-      btn?.focus();
+      document.querySelector<HTMLButtonElement>("[data-done-button='true']")?.focus();
     };
     window.addEventListener("dsa:start-session", onStart);
     window.addEventListener("dsa:focus-done", onFocusDone);
@@ -142,7 +201,6 @@ export function TodayPage({ onOpenCoach }: Props) {
     };
   }, []);
 
-  // Obsidian notes for today's suggested problems (2.3).
   useEffect(() => {
     if (!plan) return;
     let cancelled = false;
@@ -180,7 +238,6 @@ export function TodayPage({ onOpenCoach }: Props) {
     return Math.max(1, Math.round((Date.now() - start) / 60_000));
   };
 
-  /** One-tap Done (1.3): time auto-tracked, everything else defaulted. */
   const markDone = async (problemId: string, problemName: string) => {
     if (!plan || logging) return;
     setLogging(problemId);
@@ -225,7 +282,7 @@ export function TodayPage({ onOpenCoach }: Props) {
       try {
         setExplain(await api.getScoreExplanation(plan.primaryTopic.id));
       } catch {
-        // tooltip is best-effort
+        // best-effort
       }
     }
   };
@@ -264,10 +321,20 @@ export function TodayPage({ onOpenCoach }: Props) {
   };
 
   const monthCount = useMemo(() => sessionsThisMonth(sessions ?? []), [sessions]);
+  const monthHours = useMemo(() => studyHoursThisMonth(sessions ?? []), [sessions]);
   const dueTotal = plan?.revisionTotalDue ?? plan?.revisionTopics.length ?? 0;
   const topRevision = plan?.revisionTopics[0] ?? null;
 
-  // Map the current flow onto the Warm-up → Focus → Capture → Done strip.
+  const topics = topicsData?.topics ?? [];
+  const masteredCount = topics.filter((t) => t.status === "Mastered").length;
+  const inProgressCount = topics.filter((t) => t.status === "In progress").length;
+  const totalTopics = topics.length || 1;
+  const masteryPct = Math.round((masteredCount / totalTopics) * 100);
+
+  const summary = dashboard?.summary;
+  const pace = summary?.problemsPerHour ?? 0;
+  const paceTrend = summary?.velocityTrend;
+
   const hasStarts = Object.keys(starts).length > 0;
   const sessionStep =
     flow.kind === "warmup"
@@ -280,136 +347,144 @@ export function TodayPage({ onOpenCoach }: Props) {
             ? 1
             : -1;
 
+  const curriculumItems = plan?.curriculum?.items ?? [];
+  const curriculumStep = plan?.curriculum
+    ? `${plan.curriculum.currentIndex + 1} of ${plan.curriculum.topicNames.length}`
+    : null;
+
+  const syncLabel = syncing
+    ? "Syncing…"
+    : sync?.lastSyncAt
+      ? `Synced ${formatRelativeTime(sync.lastSyncAt)}`
+      : "Sync now";
+
   if (loading && !plan) {
     return (
-      <div>
-        <header className="page-header">
-          <div className="page-header-text">
-            <h2>Today</h2>
-            <p>What to study right now — zero decisions needed.</p>
-          </div>
-        </header>
-        <div className="grid" aria-busy="true">
-          <div className="card">
-            <Skeleton variant="text" width={110} />
-            <Skeleton variant="title" width="45%" height={26} />
-            <SkeletonLines lines={2} />
-            <Skeleton variant="row" height={46} style={{ marginTop: "1rem" }} />
-          </div>
-          <div className="card">
-            <Skeleton variant="title" width={170} />
-            <SkeletonRows rows={3} />
-          </div>
+      <div className="page-content">
+        <PageHeader title="Today" subtitle="Loading your plan…" />
+        <div aria-busy="true">
+          <Skeleton variant="block" height={220} />
+          <SkeletonRows rows={3} />
         </div>
       </div>
     );
   }
 
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header-text">
-          <h2>Today</h2>
-          <p>What to study right now — zero decisions needed.</p>
-        </div>
-        <div className="today-header-meta">
-          <span className="today-month-chip" title="Sessions logged this month">
-            {monthCount} session{monthCount === 1 ? "" : "s"} this month
-          </span>
+    <div className="page-content">
+      <PageHeader
+        eyebrow={formatTodayDate()}
+        title={`${timeGreeting()}. Let's close one gap.`}
+        actions={
           <button
             type="button"
-            className="btn btn-ghost"
+            className="btn-ghost-v2"
             disabled={syncing}
             onClick={() => void runSync()}
             title="Sync with Notion now"
           >
-            {syncing ? "Syncing…" : "⟳ Sync"}
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9M13.5 2v3h-3" />
+            </svg>
+            {syncLabel}
           </button>
-        </div>
-      </header>
+        }
+      />
 
       {error && <div className="error-banner">{error}</div>}
       {message && (
-        <div className={message.ok ? "success-banner" : "error-banner"}>
-          {message.text}
-        </div>
+        <div className={message.ok ? "success-banner" : "error-banner"}>{message.text}</div>
       )}
 
       {plan && (
-        <div className="grid">
+        <>
           {sessionStep >= 0 && <SessionProgress step={sessionStep} />}
 
-          {/* ── 1. Primary topic ── */}
-          <div className="card today-topic-card">
-            <div className="today-topic-row">
+          <div className="focus-hero-wrap">
+            {accentGlow && <div className="focus-hero-glow" aria-hidden />}
+            <section className="focus-hero">
               <div>
-                <div className="today-topic-label">Today&apos;s topic</div>
-                <div className="today-topic-name-row">
-                  <span className="today-topic-name">{plan.primaryTopic.name}</span>
+                <div className="focus-hero-eyebrow">
+                  <span className="focus-hero-kicker">Today&apos;s focus</span>
+                  {curriculumStep && (
+                    <>
+                      <span className="focus-hero-dot" aria-hidden />
+                      <span className="focus-hero-step">curriculum · step {curriculumStep}</span>
+                    </>
+                  )}
+                </div>
+                <div className="focus-hero-title-row">
+                  <h2 className="focus-hero-title">{plan.primaryTopic.name}</h2>
                   {plan.memoryExecutionDivergence && (
-                    <span
-                      className="divergence-chip"
-                      title="Recall looks fine but execution is weak"
-                    >
+                    <span className="chip-v2">
+                      <span className="chip-v2-dot" aria-hidden />
                       Recall ≠ execution
                     </span>
                   )}
                 </div>
-                <p className="plan-reasoning" style={{ margin: "0.4rem 0 0" }}>
-                  {plan.reasoning}
-                </p>
-              </div>
-              <div className="today-topic-side">
-                <span className="plan-duration">~{plan.estimatedDuration} min</span>
-                <button type="button" className="btn btn-ghost" onClick={() => void toggleExplain()}>
-                  {showExplain ? "Hide" : "Why this?"}
-                </button>
-              </div>
-            </div>
-
-            {showExplain && (
-              <div className="today-explain">
-                {explain ? (
-                  <ScoreBar explanation={explain} />
-                ) : (
-                  <SkeletonLines lines={2} />
+                <p className="focus-hero-reason">{plan.reasoning}</p>
+                <div className="focus-hero-actions">
+                  {flow.kind === "idle" && (
+                    <button
+                      type="button"
+                      className="btn-primary-v2"
+                      onClick={() => {
+                        setCelebrateAt(null);
+                        setWarmupGraded(false);
+                        setFlow({ kind: "warmup" });
+                      }}
+                    >
+                      <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+                        <path d="M4 2.5v11l9-5.5z" />
+                      </svg>
+                      Start session
+                    </button>
+                  )}
+                  <button type="button" className="btn-ghost-v2" onClick={() => void toggleExplain()}>
+                    {showExplain ? "Hide" : "Why this?"}
+                  </button>
+                  <div className="warmup-queue-hint">
+                    <span className="warmup-queue-dots" aria-hidden>
+                      <span /><span /><span />
+                    </span>
+                    3 warm-up cards queued
+                  </div>
+                </div>
+                {showExplain && (
+                  <div className="today-explain" style={{ marginTop: "1rem" }}>
+                    {explain ? <ScoreBar explanation={explain} /> : <SkeletonLines lines={2} />}
+                  </div>
                 )}
               </div>
-            )}
-
-            {flow.kind === "idle" && (
-              <button
-                type="button"
-                className="btn btn-primary today-start-btn"
-                onClick={() => {
-                  setCelebrateAt(null);
-                  setWarmupGraded(false);
-                  setFlow({ kind: "warmup" });
-                }}
-              >
-                ▶ Start session
-              </button>
-            )}
+              <MasteryRing
+                percent={masteryPct}
+                sublabel={
+                  <>
+                    <strong>{masteredCount}</strong> of {totalTopics} topics
+                  </>
+                }
+              />
+            </section>
           </div>
 
-          {/* ── Warm-up flow (3.1) ── */}
           {flow.kind === "warmup" && (
-            <WarmupCard
-              topicId={plan.primaryTopic.id}
-              topicName={plan.primaryTopic.name}
-              firstProblemUrl={plan.suggestedProblems[0]?.leetcodeLink ?? null}
-              onComplete={(graded) => {
-                setWarmupGraded(graded);
-                setFlow({ kind: "idle" });
-                const first = plan.suggestedProblems[0];
-                if (first && !starts[first.problemId]) startProblem(first.problemId);
-              }}
-            />
+            <div style={{ marginBottom: "1.4rem" }}>
+              <WarmupCard
+                topicId={plan.primaryTopic.id}
+                topicName={plan.primaryTopic.name}
+                firstProblemUrl={plan.suggestedProblems[0]?.leetcodeLink ?? null}
+                onComplete={(graded) => {
+                  setWarmupGraded(graded);
+                  setFlow({ kind: "idle" });
+                  const first = plan.suggestedProblems[0];
+                  if (first && !starts[first.problemId]) startProblem(first.problemId);
+                }}
+              />
+            </div>
           )}
 
-          {/* ── Mistake capture (1.4) ── */}
           {flow.kind === "mistake" && (
-            <div className="card flow-reveal">
+            <div className="panel-v2 flow-reveal" style={{ marginBottom: "1.4rem" }}>
               <MistakeCapture
                 attemptId={flow.attemptId}
                 problemName={flow.problemName}
@@ -424,16 +499,15 @@ export function TodayPage({ onOpenCoach }: Props) {
             </div>
           )}
 
-          {/* ── Note template offer (2.4) ── */}
           {flow.kind === "note-offer" && (
-            <div className="card note-offer flow-reveal">
+            <div className="panel-v2 note-offer flow-reveal" style={{ marginBottom: "1.4rem" }}>
               <span>
                 Capture your insight on <strong>{flow.problemName}</strong> in Obsidian?
               </span>
               <div className="btn-row">
                 <button
                   type="button"
-                  className="btn"
+                  className="btn-secondary-v2"
                   onClick={() => {
                     const problemId = flow.problemId;
                     setFlow({ kind: "idle" });
@@ -456,11 +530,11 @@ export function TodayPage({ onOpenCoach }: Props) {
                       );
                   }}
                 >
-                  📓 Create note
+                  Create note
                 </button>
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="btn-ghost-v2"
                   onClick={() => {
                     setFlow({ kind: "idle" });
                     setCelebrateAt(Date.now());
@@ -472,71 +546,117 @@ export function TodayPage({ onOpenCoach }: Props) {
             </div>
           )}
 
-          {/* ── 2. Suggested problems (max 3) ── */}
-          <div className="card">
-            <h3 className="card-section-title mb-3">Suggested problems</h3>
-            {plan.suggestedProblems.length === 0 && (
-              <p className="muted text-sm">
-                No unsolved problems for this topic — add some in Notion or just revise.
-              </p>
-            )}
-            <ul className="today-problems">
+          {!focusMode && (
+            <section className="stats-strip">
+              <div className="stats-strip-cell">
+                <div className="stats-strip-label">Streak</div>
+                <div className="stats-strip-value">
+                  {streak?.currentStreakDays ?? 0}
+                  <span>days</span>
+                </div>
+                <div className="stats-strip-hint">
+                  best {streak?.longestStreakDays ?? 0}
+                </div>
+              </div>
+              <div className="stats-strip-cell">
+                <div className="stats-strip-label">This month</div>
+                <div className="stats-strip-value">
+                  {monthCount}
+                  <span>sessions</span>
+                </div>
+                <div className="stats-strip-hint">{monthHours} hrs logged</div>
+              </div>
+              <div className="stats-strip-cell">
+                <div className="stats-strip-label">Pace</div>
+                <div className="stats-strip-value">
+                  {pace.toFixed(1)}
+                  <span>/hr</span>
+                  {paceTrend === "up" && (
+                    <span className="stats-strip-trend"> ▲</span>
+                  )}
+                </div>
+                <div className="stats-strip-hint">problems solved</div>
+              </div>
+              <div className="stats-strip-cell">
+                <div className="stats-strip-label">Mastered</div>
+                <div className="stats-strip-value">
+                  {masteredCount}
+                  <span>/ {totalTopics}</span>
+                </div>
+                <div className="stats-strip-hint">{inProgressCount} in progress</div>
+              </div>
+            </section>
+          )}
+
+          <div className="today-grid">
+            <section className="panel-v2">
+              <div className="panel-v2-header">
+                <h3 className="panel-v2-title">Suggested problems</h3>
+                <span className="panel-v2-meta">
+                  {Math.min(plan.suggestedProblems.length, 3)} picked
+                </span>
+              </div>
+              {plan.suggestedProblems.length === 0 && (
+                <p className="muted text-sm">
+                  No unsolved problems for this topic — add some in Notion or just revise.
+                </p>
+              )}
               {plan.suggestedProblems.slice(0, 3).map((p, i) => {
                 const started = starts[p.problemId] != null;
                 const note = notes[p.problemId];
                 const minutes = elapsedMinutes(p.problemId);
+                const diffClass = `diff-${p.difficulty?.toLowerCase() ?? "medium"}`;
                 return (
-                  <li
+                  <div
                     key={p.problemId}
-                    className="today-problem reveal-stagger"
-                    style={{ "--reveal-i": i } as CSSProperties}
+                    className={`problem-row-v2${started ? " problem-row-v2--active" : ""}`}
                   >
-                    <div className="today-problem-main">
-                      <div className="today-problem-name">
-                        {p.leetcodeLink ? (
-                          <a href={p.leetcodeLink} target="_blank" rel="noreferrer">
-                            {p.name}
-                          </a>
-                        ) : (
-                          p.name
-                        )}
-                        <span
-                          className={`diff-badge diff-${p.difficulty?.toLowerCase() ?? "medium"}`}
+                    <div className="problem-row-top">
+                      <span className="problem-row-index">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      {p.leetcodeLink ? (
+                        <a
+                          href={p.leetcodeLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="problem-row-name"
                         >
-                          {p.difficulty ?? "?"}
-                        </span>
-                        {note && (
-                          <button
-                            type="button"
-                            className="note-chip"
-                            title="You have an Obsidian note for this problem"
-                            onClick={() =>
-                              setOpenNoteId(openNoteId === p.problemId ? null : p.problemId)
-                            }
-                          >
-                            📓 note
-                          </button>
-                        )}
-                      </div>
-                      {started && (
-                        <span className="today-problem-timer today-problem-timer--running">
-                          ⏱ {minutes ?? 0} min
+                          {p.name}
+                        </a>
+                      ) : (
+                        <span className="problem-row-name">{p.name}</span>
+                      )}
+                      <span className={`diff-badge ${diffClass}`}>
+                        {(p.difficulty ?? "?").slice(0, 3).toUpperCase()}
+                      </span>
+                      {note && (
+                        <button
+                          type="button"
+                          className="note-chip"
+                          onClick={() =>
+                            setOpenNoteId(openNoteId === p.problemId ? null : p.problemId)
+                          }
+                        >
+                          note
+                        </button>
+                      )}
+                      {started && minutes != null && (
+                        <span className="problem-row-timer">
+                          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.6">
+                            <circle cx="8" cy="8" r="6" />
+                            <path d="M8 5v3l2 1.4" strokeLinecap="round" />
+                          </svg>
+                          {minutes} min
                         </span>
                       )}
                     </div>
-
-                    <div className="today-problem-actions">
+                    <div className="problem-row-actions">
                       {!started && (
                         <button
                           type="button"
-                          className="btn"
-                          title={
-                            p.leetcodeLink
-                              ? "Open on LeetCode and start the timer"
-                              : "Start the timer"
-                          }
+                          className="btn-secondary-v2"
                           onClick={() => {
-                            // Open within the click gesture so it isn't blocked.
                             if (p.leetcodeLink) {
                               window.open(p.leetcodeLink, "_blank", "noopener,noreferrer");
                             }
@@ -548,89 +668,111 @@ export function TodayPage({ onOpenCoach }: Props) {
                       )}
                       <button
                         type="button"
-                        className={`btn btn-primary${pulseId === p.problemId ? " btn--confirm-pulse" : ""}`}
+                        className={`btn-primary-v2${pulseId === p.problemId ? " btn--confirm-pulse" : ""}`}
+                        style={{ padding: "0.4rem 0.95rem", fontSize: "0.8rem" }}
                         data-done-button="true"
                         disabled={logging === p.problemId}
                         onClick={() => {
                           setPulseId(p.problemId);
                           void markDone(p.problemId, p.name);
                         }}
-                        onAnimationEnd={() => setPulseId((id) => (id === p.problemId ? null : id))}
+                        onAnimationEnd={() =>
+                          setPulseId((id) => (id === p.problemId ? null : id))
+                        }
                       >
                         {logging === p.problemId ? "Saving…" : "✓ Done"}
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost today-coach-btn"
-                        title="Open coach anchored to this problem"
+                        className="btn-ghost-v2"
+                        style={{ marginLeft: "auto", padding: "0.4rem 0.7rem", fontSize: "0.8rem" }}
                         onClick={() => onOpenCoach(p.problemId)}
                       >
-                        💬 Coach <span className="today-coach-arrow" aria-hidden="true">↗</span>
+                        Coach <span className="today-coach-arrow" aria-hidden>↗</span>
                       </button>
                     </div>
-
-                    {openNoteId === p.problemId && note && (
-                      <ProblemNotePanel note={note} />
-                    )}
-                  </li>
+                    {openNoteId === p.problemId && note && <ProblemNotePanel note={note} />}
+                  </div>
                 );
               })}
-            </ul>
-          </div>
+            </section>
 
-          {/* ── 3. Revision — one item, never a guilt-list (1.5) ── */}
-          <div className="card">
-            <h3 className="card-section-title mb-2">Revision</h3>
-            {dueTotal === 0 && (
-              <EmptyState
-                compact
-                icon={<CheckCircleIcon />}
-                title="Nothing due today"
-                hint="Spaced repetition is happy — revisions will queue up here."
-              />
-            )}
-            {topRevision && (
-              <div className="today-revision">
-                <div>
-                  <div className="today-revision-name">{topRevision.name}</div>
-                  <div className="muted text-xs">
-                    confidence {topRevision.confidence}/100
-                    {topRevision.isWeakArea ? " · weak area" : ""}
-                  </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.4rem" }}>
+              <section className="panel-v2">
+                <div className="panel-v2-header">
+                  <h3 className="panel-v2-title">Revision</h3>
+                  <span className="panel-v2-meta">{dueTotal} due</span>
                 </div>
-              </div>
-            )}
-            {dueTotal > 1 && (
-              <button
-                type="button"
-                className="btn btn-ghost mt-2"
-                onClick={() => void toggleAllRevisions()}
-              >
-                {showAllRevisions ? "Show less" : `Show all (${dueTotal})`}
-              </button>
-            )}
-            {(plan.revisionDeferred ?? 0) > 0 && (
-              <p className="muted text-xs mt-2 mb-0">
-                {plan.revisionDeferred} overdue topics were rescheduled forward — no
-                backlog wall, they&apos;ll come back over the next days.
-              </p>
-            )}
-            {showAllRevisions && revisionQueue && (
-              <ul className="today-revision-list">
-                {revisionQueue.map((t) => (
-                  <li key={t.id}>
-                    <span>{t.name}</span>
-                    <span className="muted">
-                      {t.nextRevisionAt
-                        ? `due ${new Date(t.nextRevisionAt).toLocaleDateString()}`
+                {dueTotal === 0 && (
+                  <EmptyState
+                    compact
+                    icon={<CheckCircleIcon />}
+                    title="Nothing due today"
+                    hint="Spaced repetition is happy."
+                  />
+                )}
+                {topRevision && (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.55rem" }}>
+                      <span className="revision-hero-name">{topRevision.name}</span>
+                      {topRevision.isWeakArea && <span className="weak-badge">WEAK</span>}
+                    </div>
+                    <div className="revision-progress">
+                      <div className="revision-bar">
+                        <div
+                          className="revision-bar-fill"
+                          style={{ width: `${topRevision.confidence}%` }}
+                        />
+                      </div>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.74rem", color: "var(--text-muted)" }}>
+                        {topRevision.confidence}
+                      </span>
+                    </div>
+                    <div className="revision-meta">
+                      confidence ·{" "}
+                      {topRevision.lastRevised
+                        ? `last revised ${new Date(topRevision.lastRevised).toLocaleDateString()}`
                         : "never revised"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    </div>
+                  </>
+                )}
+                {dueTotal > 1 && (
+                  <button
+                    type="button"
+                    className="btn-ghost-v2"
+                    style={{ width: "100%", marginTop: "0.9rem", justifyContent: "center" }}
+                    onClick={() => void toggleAllRevisions()}
+                  >
+                    {showAllRevisions ? "Show less" : `Show all ${dueTotal}`}
+                  </button>
+                )}
+                {showAllRevisions && revisionQueue && (
+                  <ul className="today-revision-list">
+                    {revisionQueue.map((t) => (
+                      <li key={t.id}>
+                        <span>{t.name}</span>
+                        <span className="muted">
+                          {t.nextRevisionAt
+                            ? `due ${new Date(t.nextRevisionAt).toLocaleDateString()}`
+                            : "never revised"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              {!focusMode && curriculumItems.length > 0 && (
+                <section className="panel-v2">
+                  <h3 className="panel-v2-title" style={{ marginBottom: "1.1rem" }}>
+                    Up next
+                  </h3>
+                  <UpNextTimeline items={curriculumItems} />
+                </section>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

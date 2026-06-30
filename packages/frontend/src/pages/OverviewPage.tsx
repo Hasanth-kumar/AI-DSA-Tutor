@@ -1,26 +1,20 @@
 import { useCallback } from "react";
 import { api } from "../api/client.js";
+import { LeetCodeStatsCard } from "../components/LeetCodeStatsCard.js";
+import { OverviewDifficultyBars } from "../components/OverviewDifficultyBars.js";
+import { PageHeader } from "../components/PageHeader.js";
 import {
   SkeletonChartCard,
   SkeletonListCard,
-  SkeletonStatCards,
 } from "../components/Skeleton.js";
-import { DifficultyChart } from "../components/DifficultyChart.js";
-import { LeetCodeStatsCard } from "../components/LeetCodeStatsCard.js";
-import { StatsCards } from "../components/StatsCards.js";
-import { CurriculumPanel } from "../components/CurriculumPanel.js";
-import { TodayPlan } from "../components/TodayPlan.js";
 import { VelocityChart } from "../components/VelocityChart.js";
-import { WeaknessChart } from "../components/WeaknessChart.js";
-import { SyncConflictsPanel } from "../components/SyncConflictsPanel.js";
-import { WeaknessDrilldown } from "../components/WeaknessDrilldown.js";
+import { WeakAreasBars } from "../components/WeakAreasBars.js";
+import { useCountUp } from "../hooks/useCountUp.js";
 import { usePolling } from "../hooks/usePolling.js";
 import type {
   DifficultyAnalysis,
   LeetCodeUserStats,
   MasteryVelocityPoint,
-  StudyPlan,
-  WeaknessTrendPoint,
   WeeklySummary,
 } from "../types/api.js";
 
@@ -28,52 +22,84 @@ const DASHBOARD_WEEKS = 8;
 const DASHBOARD_POLL_MS = 30_000;
 const LEETCODE_POLL_MS = 3_600_000;
 
+function StatNumber({ value, decimals = 0 }: { value: number; decimals?: number }) {
+  const display = useCountUp(value, decimals);
+  return <>{display.toFixed(decimals)}</>;
+}
+
+function OverviewStatCard({
+  label,
+  value,
+  suffix,
+  hint,
+  hintClass,
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+  hint: string;
+  hintClass?: string;
+}) {
+  return (
+    <div className="overview-stat-card">
+      <div className="overview-stat-label">{label}</div>
+      <div className="overview-stat-value">
+        <StatNumber value={value} decimals={suffix === "h" ? 1 : 0} />
+        {suffix && (
+          <span style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginLeft: "0.2rem" }}>
+            {suffix}
+          </span>
+        )}
+      </div>
+      <div className={`overview-stat-hint${hintClass ? ` ${hintClass}` : ""}`}>{hint}</div>
+    </div>
+  );
+}
+
 export function OverviewPage() {
   const fetchDashboard = useCallback(
     () => api.getDashboard(DASHBOARD_WEEKS),
     [],
   );
 
-  const {
-    data: dashboard,
-    error,
-    loading,
-    refresh,
-  } = usePolling(fetchDashboard, DASHBOARD_POLL_MS);
+  const { data: dashboard, error, loading } = usePolling(fetchDashboard, DASHBOARD_POLL_MS);
 
   const fetchLeetCode = useCallback(() => api.getLeetCodeStats(), []);
-  const {
-    data: leetcodeData,
-    settled: leetcodeSettled,
-  } = usePolling(fetchLeetCode, LEETCODE_POLL_MS, { initialLoading: false });
+  const { data: leetcodeData, settled: leetcodeSettled } = usePolling(
+    fetchLeetCode,
+    LEETCODE_POLL_MS,
+    { initialLoading: false },
+  );
 
   const summary: WeeklySummary | null = dashboard?.summary ?? null;
-  const plan: StudyPlan | null = dashboard?.plan ?? null;
   const velocity: MasteryVelocityPoint[] = dashboard?.velocity.weekly ?? [];
-  const weakness: WeaknessTrendPoint[] = dashboard?.weaknessTrend ?? [];
   const difficulty: DifficultyAnalysis | null = dashboard?.difficulty ?? null;
   const leetcode: LeetCodeUserStats | null = leetcodeData ?? null;
   const leetcodeUnconfigured = leetcodeSettled && leetcodeData === null;
 
-  const refreshPlanAndDashboard = useCallback(() => {
-    void refresh();
-  }, [refresh]);
+  const studyHours = summary ? Math.round((summary.totalStudyMinutes / 60) * 10) / 10 : 0;
+  const dailyAvg = summary
+    ? (summary.totalStudyMinutes / 60 / 30).toFixed(1)
+    : "0";
+
+  const problemsHint =
+    summary?.velocityTrend === "up"
+      ? "▲ pace improving"
+      : summary?.velocityTrend === "down"
+        ? "▼ pace slowing"
+        : "steady this month";
+
+  const productivityHint =
+    summary && summary.averageProductivity >= 70
+      ? "▲ steady focus"
+      : "room to sharpen focus";
 
   if (loading && !dashboard) {
     return (
-      <div>
-        <header className="page-header">
-          <div className="page-header-text">
-            <h2>Overview</h2>
-            <p>Your learning command center</p>
-          </div>
-        </header>
-        <div className="grid" aria-busy="true">
-          <SkeletonStatCards />
-          <div className="grid grid-2">
-            <SkeletonListCard rows={3} />
-            <SkeletonListCard rows={3} />
-          </div>
+      <div className="page-content">
+        <PageHeader title="Overview" subtitle="Loading…" />
+        <div aria-busy="true">
+          <SkeletonListCard rows={4} />
           <SkeletonChartCard />
         </div>
       </div>
@@ -81,50 +107,70 @@ export function OverviewPage() {
   }
 
   return (
-    <div>
-      <header className="page-header">
-        <div className="page-header-text">
-          <h2>Overview</h2>
-          <p>Your learning command center</p>
-        </div>
-      </header>
+    <div className="page-content">
+      <PageHeader
+        title="Overview"
+        subtitle="Your last 30 days, measured."
+      />
 
       {error && <div className="error-banner">{error}</div>}
 
-      <div className="grid">
-        <StatsCards summary={summary} />
-
-        <SyncConflictsPanel />
-
-        <div className="grid grid-2">
-          <TodayPlan plan={plan} />
-          <CurriculumPanel onChanged={refreshPlanAndDashboard} />
+      {summary && (
+        <div className="overview-stats">
+          <OverviewStatCard
+            label="Problems solved"
+            value={summary.problemsSolved}
+            hint={problemsHint}
+            hintClass={summary.velocityTrend === "up" ? "overview-stat-hint--up" : undefined}
+          />
+          <OverviewStatCard
+            label="Study time"
+            value={studyHours}
+            suffix="h"
+            hint={`~${dailyAvg} h / day`}
+          />
+          <OverviewStatCard
+            label="Productivity"
+            value={summary.averageProductivity}
+            suffix="%"
+            hint={productivityHint}
+            hintClass={summary.averageProductivity >= 70 ? "overview-stat-hint--up" : undefined}
+          />
+          <OverviewStatCard
+            label="Longest streak"
+            value={summary.longestStreakDays}
+            suffix="d"
+            hint={`current ${summary.currentStreakDays} days`}
+          />
         </div>
+      )}
 
-        <div className="card">
-          <h3 className="card-section-title">Weakness trend</h3>
-          <WeaknessChart data={weakness} />
-          <WeaknessDrilldown weakTopics={summary?.weakTopics ?? []} />
-          {(summary?.divergentTopics?.length ?? 0) > 0 && (
-            <p className="divergence-callout muted text-sm mt-3 mb-0">
-              Recall ≠ execution (not due per SM-2, but weak when solving):{" "}
-              {summary!.divergentTopics!.map((t) => t.name).join(", ")}.
-            </p>
-          )}
-        </div>
-
-        <div className="grid grid-2">
-          <div className="card">
-            <h3 className="card-section-title">Difficulty analysis</h3>
-            <DifficultyChart data={difficulty} />
+      <div className="overview-grid-2">
+        <section className="panel-v2">
+          <div className="panel-v2-header">
+            <h3 className="panel-v2-title">Mastery velocity</h3>
+            <span className="panel-v2-meta">problems / week</span>
           </div>
-          <LeetCodeStatsCard stats={leetcode} configured={!leetcodeUnconfigured} />
-        </div>
-
-        <div className="card">
-          <h3 className="card-section-title">Mastery velocity (problems/hr)</h3>
           <VelocityChart data={velocity} />
-        </div>
+        </section>
+
+        <section className="panel-v2">
+          <h3 className="panel-v2-title" style={{ marginBottom: "1.3rem" }}>
+            By difficulty
+          </h3>
+          <OverviewDifficultyBars data={difficulty} />
+        </section>
+      </div>
+
+      <div className="overview-grid-2 overview-grid-2--flip">
+        <section className="panel-v2">
+          <h3 className="panel-v2-title" style={{ marginBottom: "1.2rem" }}>
+            Weak areas
+          </h3>
+          <WeakAreasBars topics={summary?.weakTopics ?? []} />
+        </section>
+
+        <LeetCodeStatsCard stats={leetcode} configured={!leetcodeUnconfigured} />
       </div>
     </div>
   );

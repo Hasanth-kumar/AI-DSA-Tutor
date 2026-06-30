@@ -1,8 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deriveProductivityFromDuration } from "@dsa/intelligence";
 import { api } from "../api/client.js";
-import { CalendarIcon, EmptyState } from "./EmptyState.js";
-import { SessionTimer } from "./SessionTimer.js";
 import type { Problem, Session, Topic } from "../types/api.js";
 
 interface Props {
@@ -12,40 +10,87 @@ interface Props {
   onLogged: () => void;
 }
 
-function productivityLabel(value: number): string {
-  if (value >= 90) return "In the zone";
-  if (value >= 70) return "Good focus";
-  if (value >= 50) return "Moderate";
-  if (value >= 30) return "Distracted";
-  return "Tough session";
+const SESSION_STEPS = [
+  { id: "warmup", label: "Warm-up" },
+  { id: "focus", label: "Focus" },
+  { id: "capture", label: "Capture" },
+  { id: "done", label: "Done" },
+] as const;
+
+function formatTimer(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function isToday(ts: number): boolean {
+  const d = new Date(ts);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
 }
 
 export function SessionTracker({ topics, problems, sessions, onLogged }: Props) {
   const [topicId, setTopicId] = useState("");
   const [problemId, setProblemId] = useState("");
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const elapsedRef = useRef(0);
-  const [timerKey, setTimerKey] = useState(0);
+  const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [showSetup, setShowSetup] = useState(true);
 
   const topicProblems = useMemo(
     () => problems.filter((p) => p.topicId === topicId),
     [problems, topicId],
   );
 
+  const selectedTopic = topics.find((t) => t.id === topicId);
+  const selectedProblem = problems.find((p) => p.id === problemId);
+
   const topicName = useCallback(
     (id: string | null) => topics.find((t) => t.id === id)?.name ?? "Unknown",
     [topics],
   );
 
-  const minutes = Math.max(1, Math.round(elapsedSeconds / 60) || 1);
+  useEffect(() => {
+    elapsedRef.current = elapsed;
+  }, [elapsed]);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setElapsed((v) => v + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  const minutes = Math.max(1, Math.round(elapsed / 60) || 1);
   const productivity = deriveProductivityFromDuration(minutes);
 
-  const handleElapsedChange = useCallback((seconds: number) => {
-    setElapsedSeconds(seconds);
-    elapsedRef.current = seconds;
-  }, []);
+  const todaySessions = sessions.filter((s) => isToday(s.date));
+  const solvedToday = todaySessions.reduce((sum, s) => sum + (s.problemsSolved ?? 0), 0);
+
+  const displayName =
+    selectedProblem?.name ?? selectedTopic?.name ?? "Pick a topic to begin";
+
+  const targetMinutes = selectedTopic?.averageTimeTaken
+    ? Math.max(15, Math.round(selectedTopic.averageTimeTaken))
+    : 25;
+
+  const difficultyLabel = selectedProblem?.difficulty ?? selectedTopic?.difficulty ?? "—";
+
+  const handleStart = () => {
+    if (!topicId) {
+      setMessage({ text: "Select a topic first.", ok: false });
+      setShowSetup(true);
+      return;
+    }
+    setShowSetup(false);
+    setRunning(true);
+    setMessage(null);
+  };
 
   const handleSubmit = async () => {
     if (!topicId) {
@@ -55,6 +100,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
 
     setSubmitting(true);
     setMessage(null);
+    setRunning(false);
     try {
       const result = await api.logSession({
         topicId,
@@ -64,29 +110,44 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
         pushToNotion: false,
       });
       setMessage({
-        text: `Logged! ${topicName(topicId)} · ${productivity}/100 productivity · confidence now ${result.confidence}/100`,
+        text: `Logged! ${topicName(topicId)} · ${productivity}/100 productivity · confidence ${result.confidence}/100`,
         ok: true,
       });
+      setElapsed(0);
       elapsedRef.current = 0;
-      setElapsedSeconds(0);
-      setTimerKey((key) => key + 1);
       onLogged();
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : "Failed to log session", ok: false });
+      setMessage({
+        text: err instanceof Error ? err.message : "Failed to log session",
+        ok: false,
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
+  const focusStep = running || elapsed > 0 ? 1 : showSetup ? 0 : 1;
+
   return (
-    <div className="grid grid-2">
-      <div className="card">
-        {/* Step 1 */}
-        <div className="step-group">
-          <div className="step-group-title">
-            <span className="step-number">1</span>
-            What are you studying?
+    <>
+      <div className="session-focus-strip" role="group" aria-label="Session progress">
+        {SESSION_STEPS.map((step, i) => (
+          <div key={step.id} className="session-focus-strip-item">
+            {i > 0 && <span className="session-focus-strip-line" aria-hidden />}
+            <span
+              className={`session-focus-step${
+                i < focusStep ? " session-focus-step--done" : ""
+              }${i === focusStep ? " session-focus-step--current" : ""}`}
+            >
+              <span className="session-focus-dot" aria-hidden />
+              {step.label}
+            </span>
           </div>
+        ))}
+      </div>
+
+      {showSetup && (
+        <section className="panel-v2 session-setup" style={{ marginBottom: "1.4rem" }}>
           <div className="form-row m-0">
             <label>
               Topic
@@ -106,7 +167,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
               </select>
             </label>
             <label>
-              Problem <span style={{ opacity: 0.5, fontWeight: 400 }}>(optional)</span>
+              Problem <span className="muted text-xs">(optional)</span>
               <select
                 value={problemId}
                 onChange={(e) => setProblemId(e.target.value)}
@@ -121,87 +182,82 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
               </select>
             </label>
           </div>
-        </div>
-
-        {/* Step 2 — Timer */}
-        <div className="step-group">
-          <div className="step-group-title">
-            <span className="step-number">2</span>
-            Track your time
-          </div>
-
-          <SessionTimer
-            key={timerKey}
-            elapsedRef={elapsedRef}
-            onElapsedChange={handleElapsedChange}
-          />
-        </div>
-
-        {/* Step 3 — Productivity preview + Log */}
-        <div className="step-group">
-          <div className="step-group-title">
-            <span className="step-number">3</span>
-            Productivity from your session length
-          </div>
-
-          <div style={{ padding: "0.5rem 0 0.75rem" }}>
-            <div className="productivity-row">
-              <span>Productivity</span>
-              <span className="productivity-value">{productivity}/100</span>
-            </div>
-            <div className="muted text-xs text-center mt-2">
-              {minutes} min · {productivityLabel(productivity)} · shorter sessions score higher
-            </div>
-          </div>
-
           <button
-            className="btn btn-primary w-full"
             type="button"
-            style={{ padding: "0.65rem" }}
-            onClick={() => void handleSubmit()}
-            disabled={submitting || !topicId}
+            className="btn-primary-v2"
+            style={{ marginTop: "0.75rem" }}
+            disabled={!topicId}
+            onClick={handleStart}
           >
-            {submitting ? "Saving…" : "Log session"}
+            Begin focus
           </button>
-        </div>
+        </section>
+      )}
 
-        {message && (
-          <div className={`${message.ok ? "success-banner" : "error-banner"} mt-2`}>
-            {message.text}
+      <section className="session-hero">
+        <div className="session-hero-glow" aria-hidden />
+        <div className="session-hero-body">
+          <div className="session-hero-kicker">Now solving</div>
+          <div className="session-hero-problem">{displayName}</div>
+          <div className="session-timer-display">{formatTimer(elapsed)}</div>
+          <div className="session-hero-meta">
+            target ~{targetMinutes} min · {difficultyLabel}
           </div>
-        )}
-      </div>
+          <div className="session-hero-actions">
+            <button
+              type="button"
+              className="btn-secondary-v2"
+              style={{ padding: "0.7rem 1.4rem", fontSize: "0.9rem" }}
+              onClick={() => setRunning((r) => !r)}
+              disabled={!topicId}
+            >
+              {running ? "Pause" : elapsed > 0 ? "Resume" : "Start timer"}
+            </button>
+            <button
+              type="button"
+              className="btn-primary-v2"
+              style={{ padding: "0.7rem 1.6rem", fontSize: "0.9rem" }}
+              disabled={submitting || !topicId || elapsed < 60}
+              onClick={() => void handleSubmit()}
+            >
+              {submitting ? "Saving…" : "✓ Log & finish"}
+            </button>
+          </div>
+          {!showSetup && (
+            <button
+              type="button"
+              className="btn-ghost-v2"
+              style={{ marginTop: "0.9rem", fontSize: "0.75rem" }}
+              onClick={() => setShowSetup(true)}
+            >
+              Change topic / problem
+            </button>
+          )}
+        </div>
+      </section>
 
-      {/* Recent sessions */}
-      <div className="card">
-        <h3 className="card-section-title">Recent sessions</h3>
-        {sessions.length === 0 ? (
-          <EmptyState
-            icon={<CalendarIcon />}
-            title="No sessions yet"
-            hint="Start your first timer and it will appear here."
-          />
-        ) : (
-          <ul className="session-list">
-            {sessions.slice(0, 8).map((s) => (
-              <li key={s.id} className="session-item">
-                <div>
-                  <div className="session-item-topic">{topicName(s.topicId)}</div>
-                  <div className="muted text-xs">
-                    {new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                  </div>
-                </div>
-                <div className="session-item-meta">
-                  <span className="session-duration-badge">{s.studyDuration ?? 0}m</span>
-                  <span style={{ color: s.productivityScore >= 70 ? "var(--success)" : "var(--text-muted)" }}>
-                    {s.productivityScore}/100
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+      {message && (
+        <div className={`${message.ok ? "success-banner" : "error-banner"} mt-3`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="session-stats-row">
+        <div className="session-stat-card">
+          <div className="session-stat-label">Warm-up</div>
+          <div className="session-stat-value session-stat-value--success">—</div>
+        </div>
+        <div className="session-stat-card">
+          <div className="session-stat-label">Mistakes</div>
+          <div className="session-stat-value">—</div>
+        </div>
+        <div className="session-stat-card">
+          <div className="session-stat-label">Solved today</div>
+          <div className="session-stat-value">
+            {solvedToday} problem{solvedToday === 1 ? "" : "s"}
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

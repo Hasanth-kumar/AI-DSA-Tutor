@@ -8,28 +8,33 @@ interface Props {
 }
 
 const DIFFICULTY_ORDER = ["Easy", "Medium", "Hard"] as const;
+const COLORS: Record<string, string> = {
+  Easy: "var(--success)",
+  Medium: "var(--warning)",
+  Hard: "var(--danger)",
+};
 
 export function LeetCodeStatsCard({ stats, configured }: Props) {
   if (!configured) {
     return (
-      <div className="card">
-        <h3 className="card-section-title">LeetCode profile</h3>
+      <section className="panel-v2">
+        <h3 className="panel-v2-title">LeetCode</h3>
         <EmptyState
           icon={<PlugIcon />}
           title="Not connected"
           hint="Set LEETCODE_USERNAME in your .env to pull your public solve stats here."
         />
-      </div>
+      </section>
     );
   }
 
   if (!stats) {
     return (
-      <div className="card" aria-busy="true">
-        <h3 className="card-section-title">LeetCode profile</h3>
+      <section className="panel-v2" aria-busy="true">
+        <h3 className="panel-v2-title">LeetCode</h3>
         <Skeleton variant="stat" />
         <SkeletonLines lines={3} />
-      </div>
+      </section>
     );
   }
 
@@ -37,48 +42,43 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
     stats.byDifficulty.find((b) => b.difficulty === d),
   ).filter(Boolean);
 
-  const profileUrl = `https://leetcode.com/u/${stats.username}/`;
+  const maxSolved = Math.max(...byDiff.map((b) => b!.solved), 1);
 
   return (
-    <div className="card">
-      <h3 className="card-section-title">
-        LeetCode ·{" "}
-        <a href={profileUrl} target="_blank" rel="noreferrer" className="link-muted">
-          @{stats.username}
-        </a>
-      </h3>
-
-      <div className="leetcode-hero">
-        <div>
-          <div className="stat-value">{stats.totalSolved}</div>
-          <div className="stat-label">problems solved</div>
-        </div>
+    <section className="panel-v2">
+      <div className="panel-v2-header">
+        <h3 className="panel-v2-title">LeetCode</h3>
         {stats.ranking != null && (
-          <div>
-            <div className="stat-value" style={{ fontSize: "1.35rem" }}>
-              #{stats.ranking.toLocaleString()}
-            </div>
-            <div className="stat-label">global rank</div>
-          </div>
+          <span className="panel-v2-meta">rank #{stats.ranking.toLocaleString()}</span>
         )}
       </div>
 
-      {byDiff.length > 0 && (
-        <div className="leetcode-breakdown">
+      <div className="leetcode-v2">
+        <div className="leetcode-v2-hero">
+          <div className="leetcode-v2-total">{stats.totalSolved}</div>
+          <div className="leetcode-v2-label">total solved</div>
+        </div>
+
+        <div className="leetcode-v2-bars">
           {byDiff.map((b) => (
-            <div key={b!.difficulty} className="leetcode-diff-row">
-              <span className={`diff-badge diff-${b!.difficulty.toLowerCase()}`}>
+            <div key={b!.difficulty} className="leetcode-v2-row">
+              <span className="leetcode-v2-diff" style={{ color: COLORS[b!.difficulty] }}>
                 {b!.difficulty}
               </span>
-              <span className="leetcode-diff-count">{b!.solved}</span>
+              <div className="leetcode-v2-track">
+                <div
+                  className="leetcode-v2-fill"
+                  style={{
+                    width: `${(b!.solved / maxSolved) * 100}%`,
+                    background: COLORS[b!.difficulty],
+                  }}
+                />
+              </div>
+              <span className="leetcode-v2-count">{b!.solved}</span>
             </div>
           ))}
         </div>
-      )}
-
-      <p className="muted text-xs mt-3 mb-0">
-        Cached up to 1h · updated {new Date(stats.fetchedAt).toLocaleString()}
-      </p>
-    </div>
+      </div>
+    </section>
   );
 }
