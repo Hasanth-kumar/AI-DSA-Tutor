@@ -48,21 +48,16 @@ done
 echo ""
 
 if curl -sf "$API_URL/health/live" >/dev/null 2>&1; then
-  echo "  • Running Notion sync…"
-  SYNC_RESULT=$(curl -sf -X POST "$API_URL/api/sync" 2>/dev/null || true)
-  if [ -n "$SYNC_RESULT" ]; then
-    echo "  ✓ Sync done"
-  else
-    echo "  ⚠ Sync skipped (Notion not configured or unreachable)"
-  fi
+  # 3. Open the Today view immediately — the UI serves from the SQLite
+  # mirror, so it's usable right away. Notion sync runs in the background.
+  case "$(uname)" in
+    Darwin) open "$WEB_URL" ;;
+    Linux) xdg-open "$WEB_URL" >/dev/null 2>&1 || true ;;
+  esac
+  echo "  • Notion sync running in background (log: $RUN_DIR/sync.log)…"
+  (curl -sf -X POST "$API_URL/api/sync" >"$RUN_DIR/sync.log" 2>&1 || true) &
 else
   echo "  ⚠ API didn't come up in time — check $RUN_DIR/backend.log"
 fi
-
-# 3. Open the Today view
-case "$(uname)" in
-  Darwin) open "$WEB_URL" ;;
-  Linux) xdg-open "$WEB_URL" >/dev/null 2>&1 || true ;;
-esac
 
 echo "✓ Ready. Today view: $WEB_URL  (stop with: pnpm study:stop)"
