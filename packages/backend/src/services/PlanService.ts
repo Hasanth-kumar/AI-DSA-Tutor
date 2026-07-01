@@ -80,9 +80,12 @@ export class PlanService {
     const scored = active.slice(0, options.maxRevisionTopics ?? 2);
 
     if (internal.rescheduleDeferred && deferred.length > 0) {
-      for (const { topic, nextRevisionAt } of deferred) {
-        this.topicRepo.update(topic.id, { nextRevisionAt });
-      }
+      this.topicRepo.bulkUpdate(
+        deferred.map(({ topic, nextRevisionAt }) => ({
+          id: topic.id,
+          patch: { nextRevisionAt },
+        })),
+      );
     }
 
     const estimatedDuration = this.estimateDuration(primaryTopic, scored);

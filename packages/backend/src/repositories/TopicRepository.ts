@@ -65,6 +65,13 @@ export class TopicRepository {
     this.mirrorCache.invalidate();
   }
 
+  /** Apply many updates with a single mirror invalidation at the end. */
+  bulkUpdate(updates: { id: string; patch: TopicUpdate }[]): void {
+    this.mirrorCache.batch(() => {
+      for (const { id, patch } of updates) this.update(id, patch);
+    });
+  }
+
   applyPendingFields(
     id: string,
     fields: {
