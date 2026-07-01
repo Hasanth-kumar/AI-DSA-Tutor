@@ -129,6 +129,9 @@ const CACHE_TTL = {
   leetcode: 3_600_000,
   curriculum: 60_000,
   activity: 60_000,
+  streak: 30_000,
+  syncStatus: 30_000,
+  review: 30_000,
 } as const;
 
 export const api = {
@@ -220,6 +223,7 @@ export const api = {
       invalidateCache("problems");
       invalidateCache("plan");
       invalidateCache("dashboard");
+      invalidateCache("streak");
       return result;
     }),
 
@@ -276,7 +280,9 @@ export const api = {
     }),
 
   getReviewQueue: (cap = 20) =>
-    request<ReviewQueue>(`/api/review/queue?cap=${cap}`),
+    cachedFetch(`review-queue:${cap}`, CACHE_TTL.review, () =>
+      request<ReviewQueue>(`/api/review/queue?cap=${cap}`),
+    ),
 
   gradeReviewCard: (cardId: string, quality: number) =>
     request<ReviewGradeResult>("/api/review/grade", {
@@ -286,19 +292,33 @@ export const api = {
       invalidateCache("topics");
       invalidateCache("plan");
       invalidateCache("dashboard");
+      invalidateCache("review-queue:");
       return result;
     }),
 
   suspendReviewCard: (cardId: string) =>
-    request<{ suspended: boolean }>(`/api/review/${cardId}/suspend`, { method: "POST" }),
+    request<{ suspended: boolean }>(`/api/review/${cardId}/suspend`, {
+      method: "POST",
+    }).then((result) => {
+      invalidateCache("review-queue:");
+      return result;
+    }),
 
   deleteReviewCard: (cardId: string) =>
-    request<{ deleted: boolean }>(`/api/review/${cardId}`, { method: "DELETE" }),
+    request<{ deleted: boolean }>(`/api/review/${cardId}`, {
+      method: "DELETE",
+    }).then((result) => {
+      invalidateCache("review-queue:");
+      return result;
+    }),
 
   editReviewCard: (cardId: string, front: string, back: string) =>
     request<ReviewCard>(`/api/review/${cardId}`, {
       method: "PATCH",
       body: JSON.stringify({ front, back }),
+    }).then((result) => {
+      invalidateCache("review-queue:");
+      return result;
     }),
 
   getScoreExplanation: (topicId: string) =>
@@ -319,7 +339,10 @@ export const api = {
       return result;
     }),
 
-  getSyncStatus: () => request<SyncStatusInfo>("/api/sync/status"),
+  getSyncStatus: () =>
+    cachedFetch("sync-status", CACHE_TTL.syncStatus, () =>
+      request<SyncStatusInfo>("/api/sync/status"),
+    ),
 
   getSyncConflicts: () =>
     request<{ conflicts: SyncConflict[]; count: number }>("/api/sync/conflicts"),
@@ -343,7 +366,10 @@ export const api = {
 
   getSummary: () => request<WeeklySummary>("/api/analytics/summary"),
 
-  getStreak: () => request<StreakInfo>("/api/analytics/streak"),
+  getStreak: () =>
+    cachedFetch("streak", CACHE_TTL.streak, () =>
+      request<StreakInfo>("/api/analytics/streak"),
+    ),
 
   getVelocity: (weeks = 8) =>
     request<{ weekly: MasteryVelocityPoint[] }>(

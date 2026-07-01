@@ -56,12 +56,15 @@ export function invalidateForDataChange(type: string): void {
       invalidateCache("activity:");
       invalidateCache("dashboard");
       invalidateCache("plan");
+      invalidateCache("streak");
       break;
     case "topic":
       invalidateCache("topics");
       invalidateCache("plan");
       invalidateCache("dashboard");
       invalidateCache("curriculum");
+      // Review/warm-up grades publish "topic" — keep the due queue fresh.
+      invalidateCache("review-queue:");
       break;
     case "problem":
       invalidateCache("problems");
@@ -76,6 +79,7 @@ export function invalidateForDataChange(type: string): void {
       break;
     case "sync":
       invalidateCache("health:");
+      invalidateCache("sync-status");
       break;
     case "note":
       invalidateCache("topics");
