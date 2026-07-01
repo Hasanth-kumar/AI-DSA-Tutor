@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { WeaknessEngine } from "../weakness-engine/WeaknessEngine.js";
 import { createAnalyticsEngine } from "./AnalyticsEngine.js";
+import { buildTopicStatesFromData } from "./build-topic-snapshot.js";
+import { computeWeaknessTrend } from "./metrics/weakness-trend.js";
 import type {
   AnalyticsProblemInput,
   AnalyticsSessionInput,
   AnalyticsTopicInput,
+  WeaknessTrendPoint,
 } from "./types.js";
 
 const NOW = new Date("2026-06-08T12:00:00.000Z");
@@ -117,6 +121,63 @@ describe("AnalyticsEngine", () => {
     const trend = engine.getWeaknessTrend(topics, problems, sessions, 4, NOW);
     expect(trend).toHaveLength(4);
     expect(trend.every((p) => p.weakTopicCount >= 0)).toBe(true);
+  });
+
+  it("weakness trend matches the per-week full-rebuild reference", () => {
+    // Unsorted input with same-date ties across topics to exercise the
+    // moving-cutoff path's ordering guarantees.
+    const sessions = [
+      session("2026-06-08", "t1", 1, 60, 40),
+      session("2026-05-20", "t2", 2, 90, 85),
+      session("2026-06-08", "t2", 1, 45, 55),
+      session("2026-04-15", "t1", 1, 30, 30),
+      session("2026-06-08", "t1", 2, 50, 45),
+      session("2026-05-20", "t1", 1, 60, 35),
+      session("2026-06-01", "t2", 1, 40, 90),
+      session("2026-05-31", "t1", 1, 55, 25),
+    ];
+
+    // Reference: rebuild states from a full filter for every week (the
+    // pre-optimization implementation).
+    const weaknessEngine = new WeaknessEngine();
+    const reference: WeaknessTrendPoint[] = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekEnd = new Date(NOW);
+      weekEnd.setHours(23, 59, 59, 999);
+      weekEnd.setDate(weekEnd.getDate() - i * 7);
+      const weekStart = new Date(weekEnd.getTime() - 6 * 86_400_000);
+      weekStart.setHours(0, 0, 0, 0);
+      const sessionsUpTo = sessions.filter((s) => s.date <= weekEnd.getTime());
+      const states = buildTopicStatesFromData(topics, problems, sessionsUpTo);
+      const report = weaknessEngine.detectAllWeaknesses(states);
+      const weak = report.weakTopics;
+      reference.push({
+        weekStart: weekStart.toISOString().slice(0, 10),
+        weekEnd: weekEnd.toISOString().slice(0, 10),
+        weakTopicCount: weak.length,
+        averageWeaknessScore:
+          weak.length > 0
+            ? Math.round(
+                (weak.reduce((sum, w) => sum + w.score, 0) / weak.length) * 100,
+              ) / 100
+            : 0,
+        topWeakTopics: weak.slice(0, 3).map((w) => ({
+          topicId: w.topicId,
+          name: topics.find((t) => t.id === w.topicId)?.name ?? w.topicId,
+          score: Math.round(w.score * 100) / 100,
+        })),
+      });
+    }
+
+    const trend = computeWeaknessTrend(
+      topics,
+      problems,
+      sessions,
+      weaknessEngine,
+      4,
+      NOW,
+    );
+    expect(trend).toStrictEqual(reference);
   });
 
   it("compares difficulty solve rates", () => {
