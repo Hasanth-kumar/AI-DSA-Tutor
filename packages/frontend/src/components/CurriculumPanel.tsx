@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client.js";
-import { SkeletonRows } from "./Skeleton.js";
 import type { CurriculumItem, CurriculumState } from "../types/api.js";
 
 interface Props {
   onChanged?: () => void;
 }
 
+function curriculumSummary(state: CurriculumState): string {
+  const items = state.selection?.items ?? [];
+  const current = items.find((item) => item.status === "current");
+  const index = state.selection?.index ?? 0;
+  const total = state.topicNames.length;
+  if (current) return `${index + 1} of ${total} · ${current.name}`;
+  if (total > 0) return `${total} topics`;
+  return "Not set";
+}
+
 export function CurriculumPanel({ onChanged }: Props) {
   const [state, setState] = useState<CurriculumState | null>(null);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,110 +119,144 @@ export function CurriculumPanel({ onChanged }: Props) {
     }
   };
 
-  if (!state) {
-    return (
-      <div className="card curriculum-panel" aria-busy="true">
-        <h3 className="card-section-title">Study curriculum</h3>
-        <SkeletonRows rows={4} />
-      </div>
-    );
-  }
+  const closePanel = () => {
+    setOpen(false);
+    setEditing(false);
+    setError(null);
+  };
 
-  const items = state.selection?.items ?? [];
+  const items = state?.selection?.items ?? [];
+  const summary = state ? curriculumSummary(state) : "…";
+  const focusHint = state?.activeTopicId ? "manual focus" : "auto-advance";
 
   return (
-    <div className="card curriculum-panel">
-      <div className="curriculum-header">
-        <h3 className="card-section-title m-0">Study curriculum</h3>
-        <div className="curriculum-actions">
-          {state.activeTopicId && (
-            <button
-              type="button"
-              className="curriculum-btn curriculum-btn--ghost"
-              onClick={() => void handleAutoAdvance()}
-              disabled={busy}
-            >
-              Auto-advance
-            </button>
-          )}
-          <button
-            type="button"
-            className="curriculum-btn curriculum-btn--ghost"
-            onClick={() => setEditing((v) => !v)}
-            disabled={busy}
-          >
-            {editing ? "Cancel" : "Edit topics"}
-          </button>
-        </div>
-      </div>
-
-      <p className="curriculum-hint muted">
-        Work through topics in order. When all problems in a topic are solved, the plan moves to the next one.
-      </p>
-
-      {error && <div className="error-banner curriculum-error">{error}</div>}
-
-      {editing ? (
-        <div className="curriculum-editor">
-          <label>
-            Topic order (one per line)
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              rows={8}
-              disabled={busy}
-            />
-          </label>
-          <div className="curriculum-editor-actions">
-            <button
-              type="button"
-              className="curriculum-btn"
-              onClick={() => void handleSaveTopics()}
-              disabled={busy}
-            >
-              Save order
-            </button>
-            <button
-              type="button"
-              className="curriculum-btn curriculum-btn--ghost"
-              onClick={() => void handleReset()}
-              disabled={busy}
-            >
-              Reset to default
-            </button>
+    <div className={`settings-curriculum${open ? " settings-curriculum--open" : ""}`}>
+      <button
+        type="button"
+        className="settings-row settings-row--expandable"
+        aria-expanded={open}
+        onClick={() => {
+          if (open) closePanel();
+          else setOpen(true);
+        }}
+      >
+        <div>
+          <div className="settings-row-label">Study curriculum</div>
+          <div className="settings-row-hint">
+            Topic order for today&apos;s focus · {state ? focusHint : "loading"}
           </div>
         </div>
-      ) : (
-        <ol className="curriculum-list">
-          {items.map((item) => (
-            <li
-              key={item.name}
-              className={`curriculum-item curriculum-item--${item.status}`}
-            >
-              <div className="curriculum-item-main">
-                <span className="curriculum-item-name">{item.name}</span>
-                {item.totalCount > 0 && (
-                  <span className="curriculum-item-progress">
-                    {item.totalCount - item.unsolvedCount}/{item.totalCount} done
-                  </span>
-                )}
-                {item.status === "missing" && (
-                  <span className="curriculum-item-missing">not in mirror</span>
-                )}
-              </div>
-              {item.topicId && item.status !== "current" && (
+        <span className="settings-row-value">
+          {summary}
+          <span className="settings-row-chevron" aria-hidden>
+            {open ? "▴" : "▾"}
+          </span>
+        </span>
+      </button>
+
+      {open && state && (
+        <div className="settings-expand settings-expand--curriculum">
+          {error && <div className="error-banner settings-expand-error">{error}</div>}
+
+          {editing ? (
+            <>
+              <label className="settings-curriculum-editor">
+                Topic order (one per line)
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={8}
+                  disabled={busy}
+                />
+              </label>
+              <div className="settings-expand-actions">
                 <button
                   type="button"
-                  className="curriculum-btn curriculum-btn--small"
-                  onClick={() => void handleSwitch(item)}
+                  className="btn-primary-v2"
+                  onClick={() => void handleSaveTopics()}
                   disabled={busy}
                 >
-                  Switch
+                  Save order
                 </button>
-              )}
-            </li>
-          ))}
-        </ol>
+                <button
+                  type="button"
+                  className="btn-ghost-v2"
+                  onClick={() => void handleReset()}
+                  disabled={busy}
+                >
+                  Reset default
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost-v2"
+                  onClick={() => {
+                    setEditing(false);
+                    setDraft(state.topicNames.join("\n"));
+                    setError(null);
+                  }}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <ol className="settings-curriculum-list">
+                {items.map((item) => (
+                  <li
+                    key={item.name}
+                    className={`settings-curriculum-item settings-curriculum-item--${item.status}`}
+                  >
+                    <div className="settings-curriculum-item-main">
+                      <span className="settings-curriculum-item-name">{item.name}</span>
+                      {item.totalCount > 0 && (
+                        <span className="settings-curriculum-item-meta">
+                          {item.totalCount - item.unsolvedCount}/{item.totalCount} done
+                        </span>
+                      )}
+                      {item.status === "missing" && (
+                        <span className="settings-curriculum-item-meta settings-curriculum-item-meta--warn">
+                          not in mirror
+                        </span>
+                      )}
+                    </div>
+                    {item.topicId && item.status !== "current" && (
+                      <button
+                        type="button"
+                        className="btn-ghost-v2 settings-curriculum-switch"
+                        onClick={() => void handleSwitch(item)}
+                        disabled={busy}
+                      >
+                        Switch
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ol>
+              <div className="settings-expand-actions">
+                {state.activeTopicId && (
+                  <button
+                    type="button"
+                    className="btn-ghost-v2"
+                    onClick={() => void handleAutoAdvance()}
+                    disabled={busy}
+                  >
+                    Auto-advance
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="btn-ghost-v2"
+                  onClick={() => setEditing(true)}
+                  disabled={busy}
+                >
+                  Edit order
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

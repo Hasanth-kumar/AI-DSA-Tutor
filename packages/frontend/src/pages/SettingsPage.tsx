@@ -8,6 +8,7 @@ import {
 } from "../hooks/useAppPreferences.js";
 import { usePolling } from "../hooks/usePolling.js";
 import { formatRelativeTime } from "../lib/formatRelative.js";
+import { CurriculumPanel } from "../components/CurriculumPanel.js";
 import { SyncConflictsPanel } from "../components/SyncConflictsPanel.js";
 
 const COACH_MODEL_KEY = "dsa-coach-model-id";
@@ -71,7 +72,6 @@ export function SettingsPage() {
   return (
     <div className="page-content page-content--settings">
       <PageHeader
-        eyebrow="Preferences"
         title="Settings"
         subtitle="Make it yours — changes apply live."
       />
@@ -143,35 +143,16 @@ export function SettingsPage() {
             <div className="settings-row-label">Warm-up cards</div>
             <div className="settings-row-hint">Due cards shown before solving</div>
           </div>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.95rem",
-              background: "var(--bg-surface)",
-              padding: "0.3rem 0.8rem",
-              borderRadius: "8px",
-            }}
-          >
-            3
-          </span>
+          <span className="settings-row-value">3</span>
         </div>
         <div className="settings-row">
           <div>
             <div className="settings-row-label">Daily review cap</div>
             <div className="settings-row-hint">Hard limit on interleaved cards</div>
           </div>
-          <span
-            style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "0.95rem",
-              background: "var(--bg-surface)",
-              padding: "0.3rem 0.8rem",
-              borderRadius: "8px",
-            }}
-          >
-            20
-          </span>
+          <span className="settings-row-value">20</span>
         </div>
+        <CurriculumPanel />
       </section>
 
       <section className="settings-section">
