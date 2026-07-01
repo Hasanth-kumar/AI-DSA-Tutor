@@ -3,6 +3,7 @@ import { copyToClipboard } from "../lib/copyToClipboard.js";
 import {
   createStreamingMarkdownRenderer,
   renderMarkdownToHtml,
+  useKatexReady,
 } from "../lib/renderMarkdown.js";
 
 interface Props {
@@ -39,10 +40,11 @@ export function CoachMarkdown({ content, className, streaming = false }: Props) 
     if (!streaming) streamRendererRef.current.reset();
   }, [streaming]);
 
+  const katexReady = useKatexReady(content);
   const streamView = streaming ? streamRendererRef.current.render(content) : null;
   const html = useMemo(
     () => (streaming ? "" : renderMarkdownToHtml(content)),
-    [content, streaming],
+    [content, streaming, katexReady],
   );
 
   useEffect(() => {

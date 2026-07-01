@@ -1,5 +1,9 @@
 import { useMemo } from "react";
-import { normalizeCardAnswerMarkdown, renderMarkdownToHtml } from "../lib/renderMarkdown.js";
+import {
+  normalizeCardAnswerMarkdown,
+  renderMarkdownToHtml,
+  useKatexReady,
+} from "../lib/renderMarkdown.js";
 
 interface Props {
   content: string;
@@ -8,9 +12,10 @@ interface Props {
 
 /** Renders a flashcard back with markdown and labeled-line list formatting. */
 export function CardAnswer({ content, className }: Props) {
+  const katexReady = useKatexReady(content);
   const html = useMemo(
     () => renderMarkdownToHtml(normalizeCardAnswerMarkdown(content)),
-    [content],
+    [content, katexReady],
   );
 
   return (

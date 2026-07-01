@@ -1,6 +1,46 @@
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import { marked, type Tokens } from "marked";
+import { useEffect, useReducer } from "react";
+
+/**
+ * KaTeX is lazy-loaded (with its CSS) the first time content actually contains
+ * math, so the common no-math case (flashcard backs, most coach replies) never
+ * pays for the ~260kB chunk. Until the chunk lands, math segments pass through
+ * as raw $...$ text; useKatexReady re-renders subscribers once it arrives.
+ */
+let katex: typeof import("katex").default | null = null;
+let katexLoading: Promise<void> | null = null;
+const katexWaiters = new Set<() => void>();
+
+function loadKatex(): Promise<void> {
+  katexLoading ??= Promise.all([
+    import("katex"),
+    import("katex/dist/katex.min.css"),
+  ]).then(([mod]) => {
+    katex = mod.default;
+    for (const notify of katexWaiters) notify();
+    katexWaiters.clear();
+  });
+  return katexLoading;
+}
+
+/**
+ * True once math in `content` can render (no math, or KaTeX loaded).
+ * Include the result in render memo deps so the raw-$ fallback upgrades
+ * in place when the lazy chunk arrives.
+ */
+export function useKatexReady(content: string): boolean {
+  const [, bump] = useReducer((n: number) => n + 1, 0);
+  const ready = katex != null || !content.includes("$");
+  useEffect(() => {
+    if (ready) return;
+    katexWaiters.add(bump);
+    void loadKatex();
+    return () => {
+      katexWaiters.delete(bump);
+    };
+  }, [ready]);
+  return ready;
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -47,23 +87,27 @@ function renderMathSegments(markdown: string): { text: string; math: string[] } 
   const math: string[] = [];
   let text = markdown;
 
-  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, tex) => {
+  const renderTex = (raw: string, tex: string, displayMode: boolean): string => {
+    if (!katex) {
+      // Not loaded yet: keep the raw $-source visible and fetch the chunk.
+      void loadKatex();
+      return raw;
+    }
     const html = katex.renderToString(tex.trim(), {
-      displayMode: true,
+      displayMode,
       throwOnError: false,
     });
     math.push(html);
     return `⟪MATH:${math.length - 1}⟫`;
-  });
+  };
 
-  text = text.replace(/\$([^$\n]+?)\$/g, (_, tex) => {
-    const html = katex.renderToString(tex.trim(), {
-      displayMode: false,
-      throwOnError: false,
-    });
-    math.push(html);
-    return `⟪MATH:${math.length - 1}⟫`;
-  });
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (raw, tex: string) =>
+    renderTex(raw, tex, true),
+  );
+
+  text = text.replace(/\$([^$\n]+?)\$/g, (raw, tex: string) =>
+    renderTex(raw, tex, false),
+  );
 
   return { text, math };
 }

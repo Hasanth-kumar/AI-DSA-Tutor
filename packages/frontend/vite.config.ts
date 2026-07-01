@@ -34,7 +34,14 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          d3: ["d3"],
+          d3: [
+            "d3-drag",
+            "d3-ease",
+            "d3-force",
+            "d3-selection",
+            "d3-transition",
+            "d3-zoom",
+          ],
           vendor: ["react", "react-dom"],
         },
       },

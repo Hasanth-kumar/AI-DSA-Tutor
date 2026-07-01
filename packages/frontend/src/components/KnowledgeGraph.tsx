@@ -1,10 +1,26 @@
 import { buildTopicGraphEdges } from "@dsa/intelligence";
-import * as d3 from "d3";
+import { drag as d3drag } from "d3-drag";
+import { easeCubicOut } from "d3-ease";
+import {
+  forceCenter,
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceX,
+  forceY,
+  type SimulationLinkDatum,
+  type SimulationNodeDatum,
+} from "d3-force";
+import { select } from "d3-selection";
+import { zoom as d3zoom, zoomIdentity } from "d3-zoom";
+// Side effect: adds .transition() to d3 selections.
+import "d3-transition";
 import { useEffect, useRef } from "react";
 import { EmptyState, GraphIllustration } from "./EmptyState.js";
 import type { Topic } from "../types/api.js";
 
-interface GraphNode extends d3.SimulationNodeDatum {
+interface GraphNode extends SimulationNodeDatum {
   id: string;
   name: string;
   confidence: number;
@@ -13,7 +29,7 @@ interface GraphNode extends d3.SimulationNodeDatum {
   isDue: boolean;
 }
 
-type GraphLink = d3.SimulationLinkDatum<GraphNode>;
+type GraphLink = SimulationLinkDatum<GraphNode>;
 
 interface Props {
   topics: Topic[];
@@ -95,14 +111,13 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
       }
     }
 
-    const svg = d3.select(ref.current);
+    const svg = select(ref.current);
     svg.selectAll("*").remove();
     svg.attr("viewBox", `0 0 ${width} ${height}`);
 
     const g = svg.append("g");
 
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
+    const zoom = d3zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.25, 4])
       .on("zoom", (event) => {
         g.attr("transform", event.transform.toString());
@@ -128,7 +143,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
       const scale = Math.min(1.5, 0.95 / Math.max(boundsW / width, boundsH / height));
       const tx = width / 2 - scale * (minX + boundsW / 2);
       const ty = height / 2 - scale * (minY + boundsH / 2);
-      svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      svg.call(zoom.transform, zoomIdentity.translate(tx, ty).scale(scale));
     };
     fitRef.current = fitView;
 
@@ -137,22 +152,20 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
     const collideRadius = (d: GraphNode) =>
       Math.min(nodeRadius(d) + 8 + d.name.length * 1.9, 68);
 
-    const simulation = d3
-      .forceSimulation(nodes)
+    const simulation = forceSimulation(nodes)
       .force(
         "link",
-        d3
-          .forceLink<GraphNode, GraphLink>(links)
+        forceLink<GraphNode, GraphLink>(links)
           .id((d) => d.id)
           .distance(95),
       )
-      .force("charge", d3.forceManyBody().strength(-160))
-      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("charge", forceManyBody().strength(-160))
+      .force("center", forceCenter(width / 2, height / 2))
       // Gentle gravity shaped to the wide canvas: stronger on y so the
       // cloud spreads horizontally instead of ballooning vertically.
-      .force("x", d3.forceX(width / 2).strength(0.045))
-      .force("y", d3.forceY(height / 2).strength(0.16))
-      .force("collision", d3.forceCollide<GraphNode>().radius(collideRadius).strength(0.8));
+      .force("x", forceX(width / 2).strength(0.045))
+      .force("y", forceY(height / 2).strength(0.16))
+      .force("collision", forceCollide<GraphNode>().radius(collideRadius).strength(0.8));
 
     // Settle most of the layout synchronously so the first paint is already
     // organized and can be fitted right away.
@@ -167,8 +180,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
       .join("line")
       .attr("stroke-width", 1.5);
 
-    const drag = d3
-      .drag<SVGGElement, GraphNode>()
+    const drag = d3drag<SVGGElement, GraphNode>()
       .on("start", (event, d) => {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
@@ -219,7 +231,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
     // Hover: grow the node and bloom a soft coral ring (not a hard border).
     node
       .on("mouseenter", function (_event, d) {
-        d3.select(this)
+        select(this)
           .select<SVGCircleElement>("circle.graph-node-circle")
           .transition()
           .duration(dur(160))
@@ -228,7 +240,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
           .attr("stroke-width", 3);
       })
       .on("mouseleave", function (_event, d) {
-        d3.select(this)
+        select(this)
           .select<SVGCircleElement>("circle.graph-node-circle")
           .transition()
           .duration(dur(200))
@@ -322,7 +334,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
           .attr("stroke-dashoffset", circumference)
           .transition()
           .duration(dur(420))
-          .ease(d3.easeCubicOut)
+          .ease(easeCubicOut)
           .attr("stroke-dashoffset", 0);
       }
     };
