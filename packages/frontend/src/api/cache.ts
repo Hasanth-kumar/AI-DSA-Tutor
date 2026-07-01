@@ -71,6 +71,7 @@ export function invalidateForDataChange(type: string): void {
       invalidateCache("topics");
       invalidateCache("plan");
       invalidateCache("dashboard");
+      invalidateCache("problem-note:");
       break;
     case "attempt":
       invalidateCache("topics");
@@ -83,6 +84,7 @@ export function invalidateForDataChange(type: string): void {
       break;
     case "note":
       invalidateCache("topics");
+      invalidateCache("problem-note:");
       break;
     default:
       invalidateCache();

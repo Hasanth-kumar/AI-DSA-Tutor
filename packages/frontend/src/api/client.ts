@@ -129,6 +129,9 @@ const CACHE_TTL = {
   leetcode: 3_600_000,
   curriculum: 60_000,
   activity: 60_000,
+  // Longer than the 60s plan poll so note refetches stay cache hits; the SSE
+  // "note" event invalidates on real changes.
+  note: 300_000,
   streak: 30_000,
   syncStatus: 30_000,
   review: 30_000,
@@ -239,19 +242,20 @@ export const api = {
     }),
 
   /** Returns null when no note matched this problem (404). */
-  async getProblemNote(problemId: string): Promise<ProblemNote | null> {
-    const path = `/api/problems/${problemId}/note`;
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { Accept: "application/json" },
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `Request failed: ${res.status}`);
-    }
-    const data = await parseJsonBody<{ note: ProblemNote }>(res, path);
-    return data.note;
-  },
+  getProblemNote: (problemId: string): Promise<ProblemNote | null> =>
+    cachedFetch(`problem-note:${problemId}`, CACHE_TTL.note, async () => {
+      const path = `/api/problems/${problemId}/note`;
+      const res = await fetch(`${BASE}${path}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (res.status === 404) return null;
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Request failed: ${res.status}`);
+      }
+      const data = await parseJsonBody<{ note: ProblemNote }>(res, path);
+      return data.note;
+    }),
 
   createNoteTemplate: (problemId: string) =>
     request<{ created: boolean; path?: string }>(
