@@ -6,6 +6,7 @@ import type {
   IntelligenceSnapshot,
   IntelligenceUpdate,
   PlanOptions,
+  PriorityScore,
   PriorityWeights,
   ProblemSuggestion,
   SessionSnapshot,
@@ -121,6 +122,12 @@ export class IntelligenceOrchestrator {
 
   getDifficultyRecommendation(topic: TopicState) {
     return this.difficulty.recommendDifficulty(topic);
+  }
+
+  /** Priority scores only — same array as buildSnapshot().topicScores without
+   * running the revision/weakness/prerequisite passes. */
+  scoreTopics(topics: TopicState[]): PriorityScore[] {
+    return this.topicPriority.scoreAll(topics).map((s) => s.score);
   }
 
   buildSnapshot(topics: TopicState[]): IntelligenceSnapshot {

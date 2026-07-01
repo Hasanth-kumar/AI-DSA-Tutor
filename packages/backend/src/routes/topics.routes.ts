@@ -8,7 +8,7 @@ export async function topicsRoutes(
 ): Promise<void> {
   app.get("/topics", async (_request, reply) => {
     const topics = ctx.topicRepo.findAll();
-    const scores = ctx.intelligence.buildSnapshot(topics).topicScores;
+    const scores = ctx.intelligence.scoreTopics(topics);
     return reply.send(
       serializeForJson({
         topics,
@@ -23,7 +23,7 @@ export async function topicsRoutes(
     if (!topic) {
       return reply.status(404).send({ error: "Topic not found" });
     }
-    const scores = ctx.intelligence.buildSnapshot([topic]).topicScores;
+    const scores = ctx.intelligence.scoreTopics([topic]);
     return reply.send(serializeForJson({ topic, score: scores[0] ?? null }));
   });
 
