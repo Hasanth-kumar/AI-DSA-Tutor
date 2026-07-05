@@ -1,6 +1,7 @@
 import type {
   IntelligenceOrchestrator,
   PlanOptions,
+  RevisionProblem,
   StudyPlan,
   TopicState,
 } from "@dsa/intelligence";
@@ -10,7 +11,7 @@ import type { TopicRepository } from "../repositories/TopicRepository.js";
 import { formatDateKey } from "../lib/json.js";
 import type { CacheService } from "./CacheService.js";
 import type { CurriculumService } from "./CurriculumService.js";
-import { ProblemSuggestionService } from "./ProblemSuggestionService.js";
+import { asDifficulty, ProblemSuggestionService } from "./ProblemSuggestionService.js";
 
 export class PlanService {
   private readonly problemSuggestions: ProblemSuggestionService;
@@ -18,7 +19,7 @@ export class PlanService {
   constructor(
     private readonly intelligence: IntelligenceOrchestrator,
     private readonly topicRepo: TopicRepository,
-    problemRepo: ProblemRepository,
+    private readonly problemRepo: ProblemRepository,
     private readonly cache: CacheService,
     private readonly curriculumService: CurriculumService,
   ) {
@@ -108,6 +109,7 @@ export class PlanService {
       date: new Date(),
       primaryTopic,
       revisionTopics: scored,
+      revisionProblems: this.selectRevisionProblems(scored),
       suggestedProblems,
       estimatedDuration,
       reasoning,
@@ -117,6 +119,29 @@ export class PlanService {
       memoryExecutionDivergence: primaryScore.memoryExecutionDivergence,
       divergentTopics,
     };
+  }
+
+  /**
+   * One concrete solved problem per due revision topic (max 2/day via the
+   * already-compressed `scored` list) — clickable revision instead of bare
+   * topic names. Never takes the new-problem slot.
+   */
+  private selectRevisionProblems(scored: TopicState[]): RevisionProblem[] {
+    const picks: RevisionProblem[] = [];
+    for (const topic of scored) {
+      const problem = this.problemRepo.findSolvedByTopicId(topic.id, { limit: 1 })[0];
+      if (!problem) continue;
+      picks.push({
+        problemId: problem.id,
+        name: problem.name,
+        difficulty: asDifficulty(problem.difficulty),
+        leetcodeLink: problem.leetcodeLink ?? undefined,
+        topicId: topic.id,
+        topicName: topic.name,
+        mode: topic.isWeakArea || topic.confidence < 40 ? "resolve" : "recall",
+      });
+    }
+    return picks;
   }
 
   private estimateDuration(primary: TopicState, revisions: TopicState[]): number {

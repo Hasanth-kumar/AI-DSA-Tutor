@@ -61,6 +61,10 @@ export const problemAttempts = sqliteTable("problem_attempts", {
   timeTaken: integer("time_taken"),
   /** JSON array of mistake tags (legacy rows may hold a single bare tag string). */
   mistakeTag: text("mistake_tag"),
+  /** Solved with coach help (D) — weaker mastery signal than a cold solve. */
+  usedCoach: integer("used_coach").default(0),
+  /** Coach interactions (hints + chat messages) recorded for this problem. */
+  hintCount: integer("hint_count").default(0),
   createdAt: integer("created_at").notNull(),
 });
 

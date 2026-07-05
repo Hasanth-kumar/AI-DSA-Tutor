@@ -70,10 +70,24 @@ export interface CurriculumState {
   } | null;
 }
 
+/** A concrete solved problem surfaced for revision (C). */
+export interface RevisionProblem {
+  problemId: string;
+  name: string;
+  difficulty: TopicDifficulty | null;
+  leetcodeLink?: string;
+  topicId: string;
+  topicName: string;
+  /** recall ≈ 5 min check; resolve = full re-solve (weak topic). */
+  mode: "recall" | "resolve";
+}
+
 export interface StudyPlan {
   date: string;
   primaryTopic: Topic;
   revisionTopics: Topic[];
+  /** Optional: cached plans from before this field existed won't have it. */
+  revisionProblems?: RevisionProblem[];
   suggestedProblems: {
     problemId: string;
     name: string;
@@ -321,6 +335,8 @@ export interface SessionResult {
   topicId: string;
   problemId?: string;
   attemptId?: string;
+  /** Auto-captured coach usage (D2) — pre-checks the capture-step toggle. */
+  usedCoach?: boolean;
   confidence: number;
   isWeakArea: boolean;
   summary: string;

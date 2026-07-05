@@ -10,6 +10,7 @@ export type {
   PriorityWeights,
   PrerequisiteViolation,
   ProblemSuggestion,
+  RevisionProblem,
   SessionSnapshot,
   SM2State,
   StudyPlan,

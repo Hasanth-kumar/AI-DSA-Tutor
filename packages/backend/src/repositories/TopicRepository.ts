@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { topics } from "@dsa/database/schema";
+import { eq, isNotNull } from "drizzle-orm";
+import { problems, topics } from "@dsa/database/schema";
 import type { TopicState } from "@dsa/intelligence";
 import type { SqliteDb } from "@dsa/integrations";
 import type { MirrorCache } from "../services/MirrorCache.js";
@@ -30,6 +30,19 @@ export class TopicRepository {
 
   findById(id: string): TopicState | null {
     return this.mirrorCache.getTopicById(id);
+  }
+
+  /** Topics with no problems attached (E) — the plan degrades silently on these. */
+  findOrphans(): TopicState[] {
+    const withProblems = new Set(
+      this.db
+        .selectDistinct({ topicId: problems.topicId })
+        .from(problems)
+        .where(isNotNull(problems.topicId))
+        .all()
+        .map((r) => r.topicId),
+    );
+    return this.findAll().filter((t) => !withProblems.has(t.id));
   }
 
   update(id: string, patch: TopicUpdate): void {

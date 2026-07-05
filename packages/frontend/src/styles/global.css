@@ -1635,6 +1635,7 @@ button:focus-visible,
 }
 
 .coach-composer-inner {
+  position: relative;
   max-width: 46rem;
   margin: 0 auto;
   background: var(--bg-card);
@@ -1766,7 +1767,9 @@ button:focus-visible,
 }
 
 .coach-composer-inner textarea {
-  flex: 1;
+  /* flex-basis: auto (not the flex:1 default of 0%) so the inline height the
+     autosize effect sets is actually honored instead of being flexed away. */
+  flex: 1 1 auto;
   min-width: 0;
   width: 100%;
   background: transparent;
@@ -1777,9 +1780,72 @@ button:focus-visible,
   font-size: 0.9375rem;
   line-height: 1.55;
   min-height: 26px;
-  max-height: 200px;
-  padding: 0.2rem 0.15rem;
+  max-height: 70vh;
+  padding: 0.2rem 2rem 0.2rem 0.15rem;
   overflow-y: auto;
+}
+
+/* B2: manual expand toggle — roomier, monospace-friendly for pasted code */
+.coach-composer-inner--expanded textarea {
+  font-family: var(--font-mono);
+}
+
+/* Floating top-right corner control (Claude/ChatGPT composer pattern) */
+.coach-composer-expand-btn {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.85rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-subtle);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.coach-composer-expand-btn:hover {
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+}
+
+.coach-composer-expand-btn--active {
+  color: var(--accent);
+}
+
+.coach-composer-truncation-hint {
+  max-width: 46rem;
+  margin: 0.3rem auto 0;
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--warning);
+}
+
+/* D3: "used coach" toggle in the mistake-capture step */
+.mistake-capture-coach {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.65rem 0 0.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+/* C: concrete revision problems in the Today revision panel */
+.revision-problem-row {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.revision-problem-row .btn-row {
+  margin-top: 0.55rem;
 }
 
 .coach-composer-inner textarea::placeholder {

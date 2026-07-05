@@ -55,3 +55,8 @@ export {
   createSeedVocabularyResolver,
   createDbNoteProvider,
 } from "./resolvers.js";
+export {
+  buildSuggestionPrompt,
+  parseProblemSuggestions,
+  type ProblemSuggestionDraft,
+} from "./problemSuggestions.js";

@@ -12,6 +12,7 @@ const KnowledgeGraph = lazy(() =>
 
 export function GraphPage() {
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [orphans, setOrphans] = useState<Topic[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<WeaknessEvidence | null>(null);
@@ -25,6 +26,10 @@ export function GraphPage() {
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load topics"),
       );
+    api
+      .getOrphanTopics()
+      .then((res) => setOrphans(res.orphans))
+      .catch(() => setOrphans([]));
   }, []);
 
   const selected = selectedId ? topics.find((t) => t.id === selectedId) ?? null : null;
@@ -72,6 +77,13 @@ export function GraphPage() {
         subtitle="Topics as nodes — color shows mastery. Click a node for details."
       />
       {error && <div className="error-banner">{error}</div>}
+      {orphans.length > 0 && (
+        <div className="info-banner">
+          {orphans.length} topic{orphans.length === 1 ? " has" : "s have"} no problems:{" "}
+          {orphans.map((t) => t.name).join(", ")} — add some in Notion or run{" "}
+          <code>pnpm db:suggest-problems</code>.
+        </div>
+      )}
       <div className={`graph-layout${selected ? " graph-layout--panel-open" : ""}`}>
         <Suspense
           fallback={

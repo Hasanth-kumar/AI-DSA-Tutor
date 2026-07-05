@@ -28,6 +28,8 @@ export interface ChatHistoryMessage {
 
 export interface LLMServiceConfig {
   model: string;
+  /** Fallback chain tried in order after `model` fails (A1). */
+  models?: string[];
   timeoutMs?: number;
   openrouter: {
     apiKey: string;
@@ -46,6 +48,7 @@ export class LLMService {
       createOpenRouterClient({
         apiKey: config.openrouter.apiKey,
         model: config.model,
+        models: config.models,
         baseUrl: config.openrouter.baseUrl,
         siteUrl: config.openrouter.siteUrl,
         siteName: config.openrouter.siteName,
@@ -218,8 +221,7 @@ export class LLMService {
       }
       return text;
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "Unknown error";
-      throw new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
+      throw toChatError(err);
     }
   }
 
@@ -248,8 +250,7 @@ export class LLMService {
       }
     } catch (err) {
       if (signal?.aborted) return;
-      const detail = err instanceof Error ? err.message : "Unknown error";
-      throw new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
+      throw toChatError(err);
     }
   }
 
@@ -262,10 +263,57 @@ export class LLMService {
     const systemPrompt = buildChatSystemPrompt(learningContext, options);
     return [
       { role: "system" as const, content: systemPrompt },
-      ...history,
-      { role: "user" as const, content: userMessage },
+      ...capHistory(history),
+      { role: "user" as const, content: truncateUserMessage(userMessage) },
     ];
   }
+}
+
+const HISTORY_MAX_MESSAGES = 12;
+const HISTORY_MAX_CHARS = 8_000;
+const USER_MESSAGE_MAX_CHARS = 24_000;
+const TRUNCATION_HEAD_CHARS = 12_000;
+const TRUNCATION_TAIL_CHARS = 8_000;
+
+/** Keeps the most recent N messages, then trims further if they still exceed the char budget (A3). */
+function capHistory(history: ChatHistoryMessage[]): ChatHistoryMessage[] {
+  const recent = history.slice(-HISTORY_MAX_MESSAGES);
+  let total = recent.reduce((sum, m) => sum + m.content.length, 0);
+  let start = 0;
+  while (total > HISTORY_MAX_CHARS && start < recent.length - 1) {
+    total -= recent[start]!.content.length;
+    start++;
+  }
+  return recent.slice(start);
+}
+
+/** Keeps head + tail (code endings matter) and marks what was cut (A3). */
+function truncateUserMessage(message: string): string {
+  if (message.length <= USER_MESSAGE_MAX_CHARS) return message;
+  const head = message.slice(0, TRUNCATION_HEAD_CHARS);
+  const tail = message.slice(-TRUNCATION_TAIL_CHARS);
+  const cut = message.length - TRUNCATION_HEAD_CHARS - TRUNCATION_TAIL_CHARS;
+  return `${head}\n\n[...truncated ${cut} chars...]\n\n${tail}`;
+}
+
+function isContextLengthError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("context length") ||
+    m.includes("context_length") ||
+    m.includes("maximum context") ||
+    m.includes("too many tokens") ||
+    m.includes("input too large")
+  );
+}
+
+/** Normalizes a failed chat call into a user-facing error (A3/A4). */
+function toChatError(err: unknown): Error {
+  const detail = err instanceof Error ? err.message : "Unknown error";
+  if (isContextLengthError(detail)) {
+    return new Error("Input too large for the current model — trim your code or switch models.");
+  }
+  return new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
 }
 
 /** Extract a JSON string-array of answers from LLM output. */
@@ -337,7 +385,7 @@ function fallbackHint(ctx: HintContext): string {
 function fallbackChatReply(): string {
   return (
     "Coach is unavailable right now. Check your OpenRouter coach key (`OPENROUTER_COACH_API_KEY` " +
-    "or `OPENROUTER_API_KEY`) and model (`COACH_LLM_MODEL`, e.g. `deepseek/deepseek-r1:free`)."
+    "or `OPENROUTER_API_KEY`) and model (`COACH_LLM_MODEL`, e.g. `openai/gpt-oss-120b:free`)."
   );
 }
 

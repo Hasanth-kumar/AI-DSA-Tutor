@@ -47,6 +47,12 @@ export async function coachingRoutes(
   app: FastifyInstance,
   ctx: AppContext,
 ): Promise<void> {
+  /** D2: auto-capture — every coach interaction anchored to a problem counts. */
+  const recordCoachUse = (problemId: string | null | undefined): void => {
+    if (!problemId) return;
+    ctx.coachUsage.set(problemId, (ctx.coachUsage.get(problemId) ?? 0) + 1);
+  };
+
   app.get("/coaching/debrief", async (_request, reply) => {
     try {
       const result = await ctx.debriefService.generateLatest();
@@ -95,6 +101,7 @@ export async function coachingRoutes(
         parseHintLevel(request.query.level),
       );
       const hint = await ctx.hintService.generateHint(hintCtx);
+      recordCoachUse(problem.id);
       return reply.send(serializeForJson({ problemId: problem.id, hint }));
     },
   );
@@ -125,6 +132,7 @@ export async function coachingRoutes(
         parseHintLevel(request.query.level),
       );
       const hint = await ctx.hintService.generateHint(hintCtx);
+      recordCoachUse(problem.id);
       return reply.send(serializeForJson({ problemId: problem.id, hint }));
     },
   );
@@ -153,6 +161,7 @@ export async function coachingRoutes(
       return reply.status(400).send({ error: "message is required" });
     }
 
+    recordCoachUse(request.body.problemId);
     try {
       const result = await ctx.chatService.sendMessage({
         threadId: request.body.threadId,
@@ -185,6 +194,7 @@ export async function coachingRoutes(
       return reply.status(400).send({ error: "message is required" });
     }
 
+    recordCoachUse(request.body.problemId);
     const abortController = new AbortController();
     request.raw.on("aborted", () => abortController.abort());
 

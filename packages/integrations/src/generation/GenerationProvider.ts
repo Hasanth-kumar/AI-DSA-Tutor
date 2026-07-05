@@ -9,7 +9,7 @@
  *
  * The contract is the `generate(prompt)` subset of the existing `LLMClient`
  * (`llm.factory`), so the repo's OpenRouter client (free models like
- * `deepseek/...:free`) can serve as the cloud fallback with zero adaptation.
+ * `google/gemma-4-31b-it:free`) can serve as the cloud fallback with zero adaptation.
  */
 
 /** Minimal generation contract — a subset of {@link LLMClient}. */

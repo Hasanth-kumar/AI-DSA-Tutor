@@ -3,6 +3,8 @@ import type { LLMChatMessage, LLMClient } from "./LLMClient.js";
 export interface OpenRouterConfig {
   apiKey: string;
   model: string;
+  /** Fallback chain tried in order after `model` fails (A1). Defaults to `[model]`. */
+  models?: string[];
   baseUrl?: string;
   siteUrl?: string;
   siteName?: string;
@@ -27,6 +29,11 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 529;
 }
 
+/** Matches OpenRouter's generic upstream-provider failure regardless of HTTP status (A2). */
+function isProviderError(message: string): boolean {
+  return message.toLowerCase().includes("provider returned error");
+}
+
 function isRetryableError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   if (err.name === "TimeoutError" || err.name === "AbortError") return true;
@@ -42,14 +49,16 @@ function isRetryableError(err: unknown): boolean {
 export class OpenRouterClient implements LLMClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly models: string[];
 
   constructor(private readonly config: OpenRouterConfig) {
     this.baseUrl = (config.baseUrl ?? "https://openrouter.ai/api/v1").replace(/\/$/, "");
     this.timeoutMs = config.timeoutMs ?? 120_000;
+    this.models = config.models && config.models.length > 0 ? config.models : [config.model];
   }
 
   isConfigured(): boolean {
-    return Boolean(this.config.apiKey && this.config.model);
+    return Boolean(this.config.apiKey && this.models[0]);
   }
 
   async generate(prompt: string): Promise<string | null> {
@@ -64,7 +73,41 @@ export class OpenRouterClient implements LLMClient {
     return full.trim() || null;
   }
 
+  /** Tries each configured model in order; only advances once the failing model has yielded nothing. */
   async *chatStream(
+    messages: LLMChatMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
+    const attempted: string[] = [];
+    let lastError: Error | null = null;
+
+    for (let i = 0; i < this.models.length; i++) {
+      const model = this.models[i]!;
+      attempted.push(model);
+      const isLastModel = i === this.models.length - 1;
+      let yieldedAny = false;
+
+      try {
+        for await (const chunk of this.chatStreamModel(model, messages, signal)) {
+          yieldedAny = true;
+          yield chunk;
+        }
+        return;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (signal?.aborted || yieldedAny || isLastModel) {
+          throw attempted.length > 1
+            ? new Error(`All models failed (tried: ${attempted.join(", ")}): ${lastError.message}`)
+            : lastError;
+        }
+      }
+    }
+
+    throw lastError ?? new Error("OpenRouter request failed after retries");
+  }
+
+  private async *chatStreamModel(
+    model: string,
     messages: LLMChatMessage[],
     signal?: AbortSignal,
   ): AsyncIterable<string> {
@@ -81,7 +124,9 @@ export class OpenRouterClient implements LLMClient {
     }
 
     const body = JSON.stringify({
-      model: this.config.model,
+      model,
+      // OpenRouter native fallback (A1): tries the rest of the chain server-side too.
+      models: this.models,
       messages,
       stream: true,
     });
@@ -101,7 +146,11 @@ export class OpenRouterClient implements LLMClient {
           const data = (await res.json().catch(() => ({}))) as ChatCompletionResponse;
           const detail = data.error?.message ?? `HTTP ${res.status}`;
           const err = new Error(`OpenRouter error: ${detail}`);
-          if (isRetryableStatus(res.status) && attempt < MAX_RETRIES - 1) {
+          if (
+            !isProviderError(detail) &&
+            isRetryableStatus(res.status) &&
+            attempt < MAX_RETRIES - 1
+          ) {
             lastError = err;
             await sleep(RETRY_BASE_MS * 2 ** attempt);
             continue;
@@ -135,7 +184,11 @@ export class OpenRouterClient implements LLMClient {
 
               const data = JSON.parse(payload) as {
                 choices?: Array<{ delta?: { content?: string } }>;
+                error?: { message?: string };
               };
+              if (data.error) {
+                throw new Error(`OpenRouter error: ${data.error.message ?? "Unknown error"}`);
+              }
               const content = data.choices?.[0]?.delta?.content;
               if (content) yield content;
             }

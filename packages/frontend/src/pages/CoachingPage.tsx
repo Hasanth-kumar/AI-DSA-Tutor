@@ -7,7 +7,10 @@ import type { ChatMessage, CoachModel, HealthInfo, Problem } from "../types/api.
 
 const THREAD_STORAGE_KEY = "dsa-coach-thread-id";
 const MODEL_STORAGE_KEY = "dsa-coach-model-id";
+const EXPANDED_STORAGE_KEY = "dsa-coach-composer-expanded";
 const STREAMING_ID = "__streaming__";
+/** Mirrors the backend truncation threshold (LLMService.ts USER_MESSAGE_MAX_CHARS, A3). */
+const TRUNCATION_WARN_CHARS = 24_000;
 
 interface Props {
   /** Pre-anchor the chat to a problem (1.2) — set when arriving from Today. */
@@ -82,6 +85,24 @@ function SendIcon() {
   );
 }
 
+function ExpandIcon({ expanded }: { expanded: boolean }) {
+  return expanded ? (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="10,2 10,6 14,6" />
+      <polyline points="6,14 6,10 2,10" />
+      <line x1="10" y1="6" x2="14" y2="2" />
+      <line x1="6" y1="10" x2="2" y2="14" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="6,2 2,2 2,6" />
+      <polyline points="10,14 14,14 14,10" />
+      <line x1="2" y1="2" x2="6" y2="6" />
+      <line x1="14" y1="14" x2="10" y2="10" />
+    </svg>
+  );
+}
+
 function ScrollDownIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -100,6 +121,9 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const [modelId, setModelId] = useState("");
   const [includeContext, setIncludeContext] = useState(true);
   const [directMode, setDirectMode] = useState(false);
+  const [expanded, setExpanded] = useState(
+    () => localStorage.getItem(EXPANDED_STORAGE_KEY) === "true",
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -188,6 +212,14 @@ export function CoachingPage({ anchorProblemId }: Props) {
     localStorage.setItem(MODEL_STORAGE_KEY, id);
   };
 
+  const toggleExpanded = () => {
+    setExpanded((prev) => {
+      const next = !prev;
+      localStorage.setItem(EXPANDED_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     void (async () => {
       try {
@@ -217,8 +249,9 @@ export function CoachingPage({ anchorProblemId }: Props) {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, [input]);
+    const cap = window.innerHeight * (expanded ? 0.7 : 0.4);
+    ta.style.height = `${Math.min(ta.scrollHeight, cap)}px`;
+  }, [input, expanded]);
 
   useEffect(() => {
     if (!editingId) return;
@@ -560,10 +593,28 @@ export function CoachingPage({ anchorProblemId }: Props) {
         </div>
       )}
       {error && <div className="error-banner coach-error">{error}</div>}
+      {input.length > TRUNCATION_WARN_CHARS && (
+        <div className="coach-composer-truncation-hint">
+          Message is {input.length.toLocaleString()} chars — it will be trimmed to fit the model.
+        </div>
+      )}
       <div
-        className={`coach-composer-inner${loading ? " coach-composer-inner--busy" : ""}${promptsOpen ? " coach-composer-inner--prompts-open" : ""}`}
+        className={`coach-composer-inner${loading ? " coach-composer-inner--busy" : ""}${promptsOpen ? " coach-composer-inner--prompts-open" : ""}${expanded ? " coach-composer-inner--expanded" : ""}`}
         onClick={handleComposerInnerClick}
       >
+        <button
+          type="button"
+          className={`coach-composer-expand-btn${expanded ? " coach-composer-expand-btn--active" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleExpanded();
+          }}
+          title={expanded ? "Collapse composer" : "Expand composer"}
+          aria-label={expanded ? "Collapse composer" : "Expand composer"}
+          aria-pressed={expanded}
+        >
+          <ExpandIcon expanded={expanded} />
+        </button>
         <textarea
           ref={textareaRef}
           value={input}

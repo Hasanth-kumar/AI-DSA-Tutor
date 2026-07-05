@@ -37,6 +37,8 @@ const envSchema = z.object({
   CARDS_SYNC_FLUSH_INTERVAL_MS: z.coerce.number().default(300_000),
   /** Model override for the coach (defaults to OPENROUTER_MODEL). */
   COACH_LLM_MODEL: z.string().optional(),
+  /** Comma-separated models tried in order after COACH_LLM_MODEL fails (A1). */
+  COACH_LLM_FALLBACK_MODELS: z.string().optional(),
   /** Model for warm-up quizzes (defaults to OPENROUTER_MODEL). */
   WARMUP_LLM_MODEL: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
@@ -82,7 +84,7 @@ const envSchema = z.object({
 
 /** A coach LLM the user can pick from in the UI. */
 export type CoachModelOption = {
-  /** Stable id used by the picker and chat requests (e.g. "openrouter:deepseek/deepseek-r1:free"). */
+  /** Stable id used by the picker and chat requests (e.g. "openrouter:openai/gpt-oss-120b:free"). */
   id: string;
   /** Human-friendly name shown in the picker. */
   label: string;
@@ -142,6 +144,8 @@ export type AppConfig = {
     defaultModelId: string;
     /** Models the user can switch between in the coach UI. */
     models: CoachModelOption[];
+    /** Fallback models tried in order after `model` fails (A1, COACH_LLM_FALLBACK_MODELS). */
+    fallbackModels: string[];
   };
   whatsapp: {
     phoneNumberId?: string;
@@ -295,12 +299,16 @@ function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
   const model = env.COACH_LLM_MODEL ?? env.OPENROUTER_MODEL;
   const apiKey = coachOpenRouterKey(env);
   const models = buildCoachModels(env, { model, apiKey });
+  const fallbackModels = env.COACH_LLM_FALLBACK_MODELS
+    ? env.COACH_LLM_FALLBACK_MODELS.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
   return {
     model,
     openrouter: { apiKey },
     defaultModelId: coachModelId(model),
     models,
+    fallbackModels,
   };
 }
 
@@ -308,7 +316,7 @@ function coachModelId(model: string): string {
   return `openrouter:${model}`;
 }
 
-/** "deepseek/deepseek-r1:free" → "Deepseek R1". */
+/** "openai/gpt-oss-120b:free" → "Gpt Oss 120b". */
 function prettyModelLabel(model: string): string {
   const base = (model.split("/").pop() ?? model).split(":")[0] ?? model;
   return base

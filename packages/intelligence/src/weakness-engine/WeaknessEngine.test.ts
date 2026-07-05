@@ -29,4 +29,25 @@ describe("WeaknessEngine", () => {
     expect(report.weakTopics.length).toBeGreaterThan(0);
     expect(report.summary).toContain("weak");
   });
+
+  it("coach-reliant solving raises the weakness score (D)", () => {
+    const base = {
+      id: "c",
+      name: "Coached",
+      confidence: 75,
+      problemsSolved: 4,
+      totalAttempts: 5,
+    };
+    const cold = engine.analyzeWeakness(makeTopic(base));
+    const assisted = engine.analyzeWeakness(
+      makeTopic({ ...base, coachAssist: { assisted: 3, solved: 4 } }),
+    );
+    expect(assisted.score).toBeGreaterThan(cold.score);
+    expect(assisted.signals.some((s) => s.name === "coach_reliance")).toBe(true);
+    // Below the 2-solve floor the signal stays silent — no verdict on thin data.
+    const thin = engine.analyzeWeakness(
+      makeTopic({ ...base, coachAssist: { assisted: 1, solved: 1 } }),
+    );
+    expect(thin.signals.some((s) => s.name === "coach_reliance")).toBe(false);
+  });
 });

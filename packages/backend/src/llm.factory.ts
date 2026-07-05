@@ -75,6 +75,7 @@ export function createWarmupLLMService(config: AppConfig): LLMService {
 export function toCoachLLMServiceConfig(config: AppConfig): LLMServiceConfig {
   return {
     model: config.coachLlm.model,
+    models: [config.coachLlm.model, ...config.coachLlm.fallbackModels],
     openrouter: {
       apiKey: config.coachLlm.openrouter.apiKey ?? config.llm.openrouter.apiKey ?? "",
       baseUrl: config.llm.openrouter.baseUrl,
@@ -90,7 +91,7 @@ export function createCoachLLMService(config: AppConfig): LLMService {
 
 /**
  * Build a coach LLM for a specific user-selected model (from config.coachLlm.models),
- * so the coach chat can switch between models (e.g. DeepSeek R1 vs Gemma 4) at runtime.
+ * so the coach chat can switch between models (e.g. GPT-OSS 120B vs Gemma 4) at runtime.
  */
 export function toCoachModelServiceConfig(
   config: AppConfig,

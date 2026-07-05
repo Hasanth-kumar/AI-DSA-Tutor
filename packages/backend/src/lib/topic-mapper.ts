@@ -42,6 +42,8 @@ export interface TopicSignalExtras {
   mistakeTagCounts?: Record<string, number>;
   /** Problem ids that have a matched Obsidian note. */
   notedProblemIds?: Set<string>;
+  /** Coach-assisted vs total recent attempts (D4). */
+  coachAssist?: { assisted: number; solved: number };
 }
 
 export function buildTopicState(
@@ -87,6 +89,7 @@ export function buildTopicState(
     prerequisites: parsePrerequisites(topic.prerequisites),
     recentSessions,
     mistakeTagCounts: extras.mistakeTagCounts ?? {},
+    coachAssist: extras.coachAssist,
     noteCoverage: {
       solved: solved.length,
       withNotes: extras.notedProblemIds

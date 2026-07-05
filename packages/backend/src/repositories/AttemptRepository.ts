@@ -13,6 +13,9 @@ export interface CreateAttemptInput {
   solvedAt?: Date;
   timeTaken?: number | null;
   mistakeTag?: string | null;
+  /** Solved with coach help (D) — auto-captured from coach interactions. */
+  usedCoach?: boolean;
+  hintCount?: number;
 }
 
 const MISTAKE_WINDOW_DAYS = 90;
@@ -51,6 +54,8 @@ export class AttemptRepository {
         solvedAt: (input.solvedAt ?? new Date()).getTime(),
         timeTaken: input.timeTaken ?? null,
         mistakeTag: input.mistakeTag ?? null,
+        usedCoach: input.usedCoach ? 1 : 0,
+        hintCount: input.hintCount ?? 0,
         createdAt: now,
       })
       .run();
@@ -91,13 +96,20 @@ export class AttemptRepository {
    * Save the captured mistake tags (stored as a JSON array). Empty tags clears
    * them (a "smooth solve"). Free-text reflection lives in the Obsidian note.
    */
-  setMistake(id: string, input: { tags: string[] }): AttemptRow | null {
+  setMistake(
+    id: string,
+    input: { tags: string[]; usedCoach?: boolean },
+  ): AttemptRow | null {
     const existing = this.findById(id);
     if (!existing) return null;
     const tags = input.tags.filter((t) => t.trim().length > 0);
     this.db
       .update(problemAttempts)
-      .set({ mistakeTag: tags.length > 0 ? JSON.stringify(tags) : null })
+      .set({
+        mistakeTag: tags.length > 0 ? JSON.stringify(tags) : null,
+        // Manual override from the capture step (D3) — absent leaves auto-capture.
+        ...(input.usedCoach != null ? { usedCoach: input.usedCoach ? 1 : 0 } : {}),
+      })
       .where(eq(problemAttempts.id, id))
       .run();
     this.mirrorCache.invalidate();

@@ -86,6 +86,7 @@ export class MirrorCache {
     const sessionsByTopic = groupBy(sessionRows, (s) => s.topicId);
     const mistakeTagsByTopic = this.loadMistakeTagCounts();
     const notedProblemIds = this.loadNotedProblemIds();
+    const coachAssistByTopic = this.loadCoachAssist();
 
     const topicStates = topicRows.map((topic) =>
       buildTopicState(
@@ -95,6 +96,7 @@ export class MirrorCache {
         {
           mistakeTagCounts: mistakeTagsByTopic.get(topic.id),
           notedProblemIds,
+          coachAssist: coachAssistByTopic.get(topic.id),
         },
       ),
     );
@@ -147,6 +149,28 @@ export class MirrorCache {
       const counts = byTopic.get(row.topicId) ?? {};
       counts[row.mistakeTag] = row.count;
       byTopic.set(row.topicId, counts);
+    }
+    return byTopic;
+  }
+
+  /** D4: coach-assisted vs total recent attempts per topic (weakness/difficulty input). */
+  private loadCoachAssist(): Map<string, { assisted: number; solved: number }> {
+    const since = Date.now() - MISTAKE_WINDOW_DAYS * 86_400_000;
+    const rows = this.db
+      .select({
+        topicId: problemAttempts.topicId,
+        assisted: sql<number>`coalesce(sum(case when ${problemAttempts.usedCoach} = 1 then 1 else 0 end), 0)`,
+        solved: sql<number>`count(*)`,
+      })
+      .from(problemAttempts)
+      .where(gte(problemAttempts.solvedAt, since))
+      .groupBy(problemAttempts.topicId)
+      .all();
+
+    const byTopic = new Map<string, { assisted: number; solved: number }>();
+    for (const row of rows) {
+      if (!row.topicId) continue;
+      byTopic.set(row.topicId, { assisted: row.assisted, solved: row.solved });
     }
     return byTopic;
   }
