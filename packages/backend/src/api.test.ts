@@ -202,6 +202,17 @@ describe("API routes", () => {
     await app.close();
   });
 
+  it("GET /api/topics/orphans returns topics with no problems (E)", async () => {
+    const app = buildApp(config, ctx);
+    const response = await app.inject({ method: "GET", url: "/api/topics/orphans" });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    // topic-a has problems; topic-b has none.
+    expect(body.count).toBe(1);
+    expect(body.orphans[0].id).toBe("topic-b");
+    await app.close();
+  });
+
   it("GET /api/revision returns queue", async () => {
     const app = buildApp(config, ctx);
     const response = await app.inject({ method: "GET", url: "/api/revision" });

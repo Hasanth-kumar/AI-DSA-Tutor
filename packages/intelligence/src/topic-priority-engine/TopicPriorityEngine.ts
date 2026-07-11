@@ -74,6 +74,8 @@ export class TopicPriorityEngine {
       date: now,
       primaryTopic: primary.topic,
       revisionTopics,
+      // Engines are I/O-free — the backend (PlanService) enriches with real problems.
+      revisionProblems: [],
       suggestedProblems: this.selectProblems(primary.topic),
       estimatedDuration: this.estimateDuration(primary.topic, revisionTopics),
       reasoning: this.explainPlan(primary, revisionTopics),
@@ -115,6 +117,7 @@ export class TopicPriorityEngine {
       date: new Date(),
       primaryTopic: primary.topic,
       revisionTopics,
+      revisionProblems: [],
       suggestedProblems: problems,
       estimatedDuration: this.estimateDuration(primary.topic, revisionTopics),
       reasoning: this.explainPlan(primary, revisionTopics),

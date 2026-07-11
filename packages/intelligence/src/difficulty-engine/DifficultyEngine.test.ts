@@ -30,6 +30,23 @@ describe("DifficultyEngine", () => {
     expect(rec.secondary).toBeNull();
   });
 
+  it("discounts coach-assisted solves — no Hard promotion on borrowed confidence (D)", () => {
+    const sessions = [
+      { date: new Date(), problemsSolved: 2, productivityScore: 80, duration: 45 },
+      { date: new Date(), problemsSolved: 2, productivityScore: 78, duration: 45 },
+    ];
+    const cold = makeTopic({ id: "cold", name: "Cold", confidence: 85, recentSessions: sessions });
+    const assisted = makeTopic({
+      id: "assisted",
+      name: "Assisted",
+      confidence: 85,
+      recentSessions: sessions,
+      coachAssist: { assisted: 3, solved: 4 },
+    });
+    expect(engine.recommendDifficulty(cold).primary).toBe("Hard");
+    expect(engine.recommendDifficulty(assisted).primary).toBe("Medium");
+  });
+
   it("picks problem difficulties by ratio", () => {
     const rec = { primary: "Medium" as const, secondary: "Hard" as const, ratio: [0.8, 0.2] as [number, number] };
     const picks = engine.pickProblemDifficulties(rec, 5);

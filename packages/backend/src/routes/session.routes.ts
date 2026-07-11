@@ -126,13 +126,14 @@ export async function sessionRoutes(
   });
 
   // Mistake capture (1.4) — PATCHes the attempt created by POST /session.
-  // Multi-select tags + optional free-text note; empty = a smooth solve.
+  // Multi-select tags + optional "used coach" override (D3); empty = a smooth solve.
   app.patch<{
     Params: { id: string };
-    Body: { tags?: string[] };
+    Body: { tags?: string[]; usedCoach?: boolean };
   }>("/attempts/:id/mistake", async (request, reply) => {
     const attempt = ctx.attemptRepo.setMistake(request.params.id, {
       tags: request.body.tags ?? [],
+      usedCoach: request.body.usedCoach,
     });
     if (!attempt) {
       return reply.status(404).send({ error: "Attempt not found" });

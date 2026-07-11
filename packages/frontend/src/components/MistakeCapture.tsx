@@ -5,6 +5,8 @@ import { MISTAKE_TAG_OPTIONS } from "../types/api.js";
 interface Props {
   attemptId: string;
   problemName: string;
+  /** Auto-captured coach usage (D2) — pre-checks the manual toggle. */
+  usedCoach?: boolean;
   /** Called once tags are saved (or skipped) — return to Today flow. */
   onDone: (tagged: boolean) => void;
 }
@@ -15,8 +17,9 @@ interface Props {
  * zero-friction exit for a clean solve. Free-text reflection lives in the
  * Obsidian note (offered next in the flow), so this stays tap-only.
  */
-export function MistakeCapture({ attemptId, problemName, onDone }: Props) {
+export function MistakeCapture({ attemptId, problemName, usedCoach, onDone }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [coachUsed, setCoachUsed] = useState(usedCoach ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +37,7 @@ export function MistakeCapture({ attemptId, problemName, onDone }: Props) {
     setSaving(true);
     setError(null);
     try {
-      await api.setMistake(attemptId, { tags });
+      await api.setMistake(attemptId, { tags, usedCoach: coachUsed });
       onDone(tags.length > 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -67,6 +70,16 @@ export function MistakeCapture({ attemptId, problemName, onDone }: Props) {
           );
         })}
       </div>
+
+      <label className="mistake-capture-coach">
+        <input
+          type="checkbox"
+          checked={coachUsed}
+          disabled={saving}
+          onChange={(e) => setCoachUsed(e.target.checked)}
+        />
+        Used coach on this problem
+      </label>
 
       <div className="mistake-capture-actions">
         <button

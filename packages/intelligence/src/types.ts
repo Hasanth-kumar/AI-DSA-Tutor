@@ -28,6 +28,8 @@ export interface TopicState {
   mistakeTagCounts?: Record<string, number>;
   /** Note coverage: solved problems vs solved problems that have an Obsidian note. */
   noteCoverage?: { solved: number; withNotes: number };
+  /** Recent attempts solved with coach help vs total (D) — "with coach" < "cold". */
+  coachAssist?: { assisted: number; solved: number };
 }
 
 /** One-tap mistake taxonomy captured after logging a problem. */
@@ -99,10 +101,24 @@ export interface CurriculumProgress {
   items: CurriculumItem[];
 }
 
+/** A concrete solved problem surfaced for revision (C). */
+export interface RevisionProblem {
+  problemId: string;
+  name: string;
+  difficulty: TopicDifficulty | null;
+  leetcodeLink?: string;
+  topicId: string;
+  topicName: string;
+  /** recall ≈ 5 min check; resolve = full re-solve (weak topic). */
+  mode: "recall" | "resolve";
+}
+
 export interface StudyPlan {
   date: Date;
   primaryTopic: TopicState;
   revisionTopics: TopicState[];
+  /** Clickable solved problems for the due revision topics (max 2/day). */
+  revisionProblems: RevisionProblem[];
   suggestedProblems: ProblemSuggestion[];
   estimatedDuration: number;
   reasoning: string;

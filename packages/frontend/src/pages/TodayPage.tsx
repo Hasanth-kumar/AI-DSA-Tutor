@@ -21,6 +21,8 @@ import { formatTodayDate, timeGreeting } from "../lib/greeting.js";
 import type {
   CurriculumItem,
   ProblemNote,
+  RecallGradeResult,
+  RevisionProblem,
   ScoreExplanation,
   Session,
   Topic,
@@ -29,6 +31,8 @@ import type {
 const PLAN_POLL_MS = 60_000;
 const SESSIONS_POLL_MS = 60_000;
 const STARTS_STORAGE_KEY = "dsa-problem-starts";
+/** Date marker — once graded or skipped, the revision offer never nags again that day (C). */
+const REVISION_OFFER_KEY = "dsa-revision-offer-day";
 const DEFAULT_MINUTES = 25;
 
 interface Props {
@@ -36,11 +40,19 @@ interface Props {
 }
 
 const SESSION_STEPS = ["Warm-up", "Focus", "Capture", "Done"] as const;
+/** Optional "Revise" segment shown only while the revision offer is active (C). */
+const SESSION_STEPS_REVISE = ["Warm-up", "Focus", "Capture", "Revise", "Done"] as const;
 
-function SessionProgress({ step }: { step: number }) {
+function SessionProgress({
+  step,
+  steps = SESSION_STEPS,
+}: {
+  step: number;
+  steps?: readonly string[];
+}) {
   return (
     <div className="session-progress" role="group" aria-label="Session progress">
-      {SESSION_STEPS.map((label, i) => (
+      {steps.map((label, i) => (
         <Fragment key={label}>
           {i > 0 && (
             <span
@@ -66,8 +78,46 @@ function SessionProgress({ step }: { step: number }) {
 type Flow =
   | { kind: "idle" }
   | { kind: "warmup" }
-  | { kind: "mistake"; attemptId: string; problemId: string; problemName: string }
-  | { kind: "note-offer"; problemId: string; problemName: string };
+  | {
+      kind: "mistake";
+      attemptId: string;
+      problemId: string;
+      problemName: string;
+      usedCoach?: boolean;
+    }
+  | { kind: "note-offer"; problemId: string; problemName: string }
+  | { kind: "revision-offer"; problem: RevisionProblem }
+  | { kind: "revision-active"; problem: RevisionProblem };
+
+/** Got it (5) / Shaky (3) / Forgot (1) — same SM-2 grades the warm-up uses. */
+function RevisionGradeButtons({
+  busy,
+  onGrade,
+}: {
+  busy: boolean;
+  onGrade: (quality: number) => void;
+}) {
+  const options = [
+    { label: "Got it", quality: 5 },
+    { label: "Shaky", quality: 3 },
+    { label: "Forgot", quality: 1 },
+  ];
+  return (
+    <div className="btn-row">
+      {options.map(({ label, quality }) => (
+        <button
+          key={label}
+          type="button"
+          className="btn warmup-grade-btn"
+          disabled={busy}
+          onClick={() => onGrade(quality)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function loadStarts(): Record<string, number> {
   try {
@@ -126,9 +176,11 @@ function UpNextTimeline({ items }: { items: CurriculumItem[] }) {
                   ? "NOW"
                   : isLocked
                     ? "locked"
-                    : item.unsolvedCount > 0
-                      ? `${item.unsolvedCount} left`
-                      : "up next"}
+                    : item.topicId && item.totalCount === 0
+                      ? "no problems"
+                      : item.unsolvedCount > 0
+                        ? `${item.unsolvedCount} left`
+                        : "up next"}
               </span>
             </div>
           </Fragment>
@@ -175,6 +227,8 @@ export function TodayPage({ onOpenCoach }: Props) {
   const [showExplain, setShowExplain] = useState(false);
   const [showAllRevisions, setShowAllRevisions] = useState(false);
   const [revisionQueue, setRevisionQueue] = useState<Topic[] | null>(null);
+  const [revisionGrades, setRevisionGrades] = useState<Record<string, RecallGradeResult>>({});
+  const [gradingTopic, setGradingTopic] = useState<string | null>(null);
   const [logging, setLogging] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -238,14 +292,14 @@ export function TodayPage({ onOpenCoach }: Props) {
     return Math.max(1, Math.round((Date.now() - start) / 60_000));
   };
 
-  const markDone = async (problemId: string, problemName: string) => {
+  const markDone = async (problemId: string, problemName: string, topicId?: string) => {
     if (!plan || logging) return;
     setLogging(problemId);
     setMessage(null);
     try {
       const minutes = elapsedMinutes(problemId) ?? DEFAULT_MINUTES;
       const result = await api.logSession({
-        topicId: plan.primaryTopic.id,
+        topicId: topicId ?? plan.primaryTopic.id,
         problemId,
         studyDuration: minutes,
         warmupGraded,
@@ -256,7 +310,13 @@ export function TodayPage({ onOpenCoach }: Props) {
       saveStarts(next);
 
       if (result.attemptId) {
-        setFlow({ kind: "mistake", attemptId: result.attemptId, problemId, problemName });
+        setFlow({
+          kind: "mistake",
+          attemptId: result.attemptId,
+          problemId,
+          problemName,
+          usedCoach: result.usedCoach,
+        });
       } else {
         setMessage({ text: `Logged ${problemName} (${minutes} min).`, ok: true });
         setCelebrateAt(Date.now());
@@ -269,6 +329,46 @@ export function TodayPage({ onOpenCoach }: Props) {
       });
     } finally {
       setLogging(null);
+    }
+  };
+
+  /** One-tap SM-2 grade for a revision problem's topic (C). */
+  const gradeRevisionProblem = async (p: RevisionProblem, quality: number) => {
+    if (gradingTopic) return;
+    setGradingTopic(p.topicId);
+    setMessage(null);
+    try {
+      const result = await api.gradeRevision(p.topicId, quality);
+      setRevisionGrades((g) => ({ ...g, [p.topicId]: result }));
+      localStorage.setItem(REVISION_OFFER_KEY, new Date().toDateString());
+      setMessage({
+        text: `${p.topicName} revised — next review ${
+          result.nextRevisionAt
+            ? new Date(result.nextRevisionAt).toLocaleDateString()
+            : "unscheduled"
+        }.`,
+        ok: true,
+      });
+      void refresh();
+    } catch (err) {
+      setMessage({
+        text: err instanceof Error ? err.message : "Grade failed",
+        ok: false,
+      });
+    } finally {
+      setGradingTopic(null);
+    }
+  };
+
+  /** After the capture chain: offer optional revision once per day (C). */
+  const finishCapture = () => {
+    setCelebrateAt(Date.now());
+    const problem = plan?.revisionProblems?.[0];
+    const today = new Date().toDateString();
+    if (problem && localStorage.getItem(REVISION_OFFER_KEY) !== today) {
+      setFlow({ kind: "revision-offer", problem });
+    } else {
+      setFlow({ kind: "idle" });
     }
   };
 
@@ -336,16 +436,19 @@ export function TodayPage({ onOpenCoach }: Props) {
   const paceTrend = summary?.velocityTrend;
 
   const hasStarts = Object.keys(starts).length > 0;
+  const revisionFlow = flow.kind === "revision-offer" || flow.kind === "revision-active";
   const sessionStep =
     flow.kind === "warmup"
       ? 0
       : flow.kind === "mistake" || flow.kind === "note-offer"
         ? 2
-        : celebrateAt != null
+        : revisionFlow
           ? 3
-          : hasStarts
-            ? 1
-            : -1;
+          : celebrateAt != null
+            ? 3
+            : hasStarts
+              ? 1
+              : -1;
 
   const curriculumItems = plan?.curriculum?.items ?? [];
   const curriculumStep = plan?.curriculum
@@ -398,7 +501,12 @@ export function TodayPage({ onOpenCoach }: Props) {
 
       {plan && (
         <>
-          {sessionStep >= 0 && <SessionProgress step={sessionStep} />}
+          {sessionStep >= 0 && (
+            <SessionProgress
+              step={sessionStep}
+              steps={revisionFlow ? SESSION_STEPS_REVISE : SESSION_STEPS}
+            />
+          )}
 
           <div className="focus-hero-wrap">
             {accentGlow && <div className="focus-hero-glow" aria-hidden />}
@@ -488,6 +596,7 @@ export function TodayPage({ onOpenCoach }: Props) {
               <MistakeCapture
                 attemptId={flow.attemptId}
                 problemName={flow.problemName}
+                usedCoach={flow.usedCoach}
                 onDone={() =>
                   setFlow({
                     kind: "note-offer",
@@ -510,8 +619,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                   className="btn-secondary-v2"
                   onClick={() => {
                     const problemId = flow.problemId;
-                    setFlow({ kind: "idle" });
-                    setCelebrateAt(Date.now());
+                    finishCapture();
                     api
                       .createNoteTemplate(problemId)
                       .then((res) =>
@@ -535,14 +643,86 @@ export function TodayPage({ onOpenCoach }: Props) {
                 <button
                   type="button"
                   className="btn-ghost-v2"
+                  onClick={() => finishCapture()}
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          )}
+
+          {flow.kind === "revision-offer" && (
+            <div className="panel-v2 note-offer flow-reveal" style={{ marginBottom: "1.4rem" }}>
+              <span>
+                Optional: quick revision — <strong>{flow.problem.name}</strong> (
+                {flow.problem.topicName}) ·{" "}
+                {flow.problem.mode === "resolve" ? "full re-solve" : "~5 min recall"}.
+              </span>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn-secondary-v2"
                   onClick={() => {
+                    const p = flow.problem;
+                    localStorage.setItem(REVISION_OFFER_KEY, new Date().toDateString());
+                    if (p.leetcodeLink) {
+                      window.open(p.leetcodeLink, "_blank", "noopener,noreferrer");
+                    }
+                    if (p.mode === "resolve") startProblem(p.problemId);
+                    setFlow({ kind: "revision-active", problem: p });
+                  }}
+                >
+                  Start
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost-v2"
+                  onClick={() => {
+                    localStorage.setItem(REVISION_OFFER_KEY, new Date().toDateString());
                     setFlow({ kind: "idle" });
-                    setCelebrateAt(Date.now());
                   }}
                 >
                   Skip
                 </button>
               </div>
+            </div>
+          )}
+
+          {flow.kind === "revision-active" && (
+            <div className="panel-v2 note-offer flow-reveal" style={{ marginBottom: "1.4rem" }}>
+              <span>
+                Revising <strong>{flow.problem.name}</strong> ({flow.problem.topicName}) —{" "}
+                {flow.problem.mode === "resolve"
+                  ? "mark done when re-solved."
+                  : "grade your recall."}
+              </span>
+              {flow.problem.mode === "resolve" ? (
+                <div className="btn-row">
+                  <button
+                    type="button"
+                    className="btn-primary-v2"
+                    disabled={logging === flow.problem.problemId}
+                    onClick={() =>
+                      void markDone(
+                        flow.problem.problemId,
+                        flow.problem.name,
+                        flow.problem.topicId,
+                      )
+                    }
+                  >
+                    {logging === flow.problem.problemId ? "Saving…" : "✓ Done"}
+                  </button>
+                </div>
+              ) : (
+                <RevisionGradeButtons
+                  busy={gradingTopic != null}
+                  onGrade={(quality) => {
+                    void gradeRevisionProblem(flow.problem, quality).then(() =>
+                      setFlow({ kind: "idle" }),
+                    );
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -736,6 +916,49 @@ export function TodayPage({ onOpenCoach }: Props) {
                     </div>
                   </>
                 )}
+                {(plan.revisionProblems ?? []).map((p) => {
+                  const graded = revisionGrades[p.topicId];
+                  return (
+                    <div key={p.problemId} className="revision-problem-row">
+                      <div className="problem-row-top">
+                        {p.leetcodeLink ? (
+                          <a
+                            href={p.leetcodeLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="problem-row-name"
+                          >
+                            {p.name}
+                          </a>
+                        ) : (
+                          <span className="problem-row-name">{p.name}</span>
+                        )}
+                        <span
+                          className={`diff-badge diff-${p.difficulty?.toLowerCase() ?? "medium"}`}
+                        >
+                          {(p.difficulty ?? "?").slice(0, 3).toUpperCase()}
+                        </span>
+                        <span className="chip-v2">
+                          {p.mode === "resolve" ? "re-solve" : "recall"}
+                        </span>
+                      </div>
+                      <div className="revision-meta">{p.topicName}</div>
+                      {graded ? (
+                        <div className="revision-meta">
+                          next review{" "}
+                          {graded.nextRevisionAt
+                            ? new Date(graded.nextRevisionAt).toLocaleDateString()
+                            : "unscheduled"}
+                        </div>
+                      ) : (
+                        <RevisionGradeButtons
+                          busy={gradingTopic != null}
+                          onGrade={(quality) => void gradeRevisionProblem(p, quality)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 {dueTotal > 1 && (
                   <button
                     type="button"

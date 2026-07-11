@@ -14,14 +14,6 @@ export interface ProblemUpdate {
   githubUrl?: string;
 }
 
-export interface ProblemUpdate {
-  status?: string;
-  attempts?: number;
-  timeTaken?: number | null;
-  notes?: string;
-  githubUrl?: string;
-}
-
 export class ProblemRepository {
   constructor(
     private readonly db: SqliteDb,
@@ -73,6 +65,20 @@ export class ProblemRepository {
         sql`CASE ${problems.difficulty} WHEN 'Easy' THEN 0 WHEN 'Medium' THEN 1 WHEN 'Hard' THEN 2 ELSE 1 END`,
       )
       .limit(limit)
+      .all();
+  }
+
+  /** Solved problems for a topic, oldest update first (most decayed first). */
+  findSolvedByTopicId(
+    topicId: string,
+    options: { limit?: number } = {},
+  ): ProblemRow[] {
+    return this.db
+      .select()
+      .from(problems)
+      .where(and(eq(problems.topicId, topicId), eq(problems.status, "Solved")))
+      .orderBy(problems.updatedAt)
+      .limit(options.limit ?? 1)
       .all();
   }
 

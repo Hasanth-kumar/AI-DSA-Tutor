@@ -18,6 +18,12 @@ export async function topicsRoutes(
     );
   });
 
+  /** Topics with no problems attached (E) — populate via pnpm db:suggest-problems. */
+  app.get("/topics/orphans", async (_request, reply) => {
+    const orphans = ctx.topicRepo.findOrphans();
+    return reply.send(serializeForJson({ orphans, count: orphans.length }));
+  });
+
   app.get<{ Params: { id: string } }>("/topics/:id", async (request, reply) => {
     const topic = ctx.topicRepo.findById(request.params.id);
     if (!topic) {

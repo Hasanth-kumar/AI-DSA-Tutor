@@ -1,5 +1,6 @@
 import type { TopicState, WeaknessAnalysis, WeaknessReport } from "../types.js";
 import {
+  coachRelianceSignal,
   confidenceSignal,
   MISTAKE_TAG_ADVICE,
   mistakeTagSignal,
@@ -21,6 +22,7 @@ export class WeaknessEngine {
       revisionFailureSignal(topic),
       mistakeTagSignal(topic),
       noteCoverageSignal(topic),
+      coachRelianceSignal(topic),
     ];
 
     const score = signals.reduce((acc, s) => acc + s.weight * s.value, 0);

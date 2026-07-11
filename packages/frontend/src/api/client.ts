@@ -230,7 +230,7 @@ export const api = {
       return result;
     }),
 
-  setMistake: (attemptId: string, input: { tags: string[] }) =>
+  setMistake: (attemptId: string, input: { tags: string[]; usedCoach?: boolean }) =>
     request<{ attempt: { id: string; mistakeTag: string | null } }>(
       `/api/attempts/${attemptId}/mistake`,
       { method: "PATCH", body: JSON.stringify(input) },
@@ -325,6 +325,9 @@ export const api = {
       return result;
     }),
 
+  getOrphanTopics: () =>
+    request<{ orphans: Topic[]; count: number }>("/api/topics/orphans"),
+
   getScoreExplanation: (topicId: string) =>
     request<ScoreExplanation>(`/api/topics/${topicId}/score/explain`),
 
@@ -333,6 +336,17 @@ export const api = {
 
   getRevisionQueue: () =>
     request<{ queue: Topic[]; count: number }>("/api/revision"),
+
+  gradeRevision: (topicId: string, quality: number) =>
+    request<RecallGradeResult>(`/api/revision/${topicId}/grade`, {
+      method: "POST",
+      body: JSON.stringify({ quality }),
+    }).then((result) => {
+      invalidateCache("topics");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      return result;
+    }),
 
   triggerSync: () =>
     request<{ topics: number; problems: number; sessions: number; syncedAt: string }>(

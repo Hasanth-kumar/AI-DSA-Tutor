@@ -20,6 +20,7 @@
     "db:seed-cards": "tsx src/scripts/seed-cards.ts",
     "db:embed-cards": "tsx src/scripts/embed-cards.ts",
     "db:generate-cards": "tsx src/scripts/generate-cards.ts",
+    "db:suggest-problems": "tsx src/scripts/suggest-problems.ts",
     "db:dedupe-problems": "tsx src/scripts/dedupe-notion-problems.ts"
   },
   "dependencies": {

@@ -259,6 +259,51 @@ export class NotionClient {
     return response.id;
   }
 
+  /** Create a problem page (E3: approved orphan-topic suggestions). */
+  async createProblem(problem: {
+    name: string;
+    topicId: string;
+    difficulty?: string;
+    leetcodeLink?: string;
+  }): Promise<string> {
+    const dbId = this.config.problemsDbId;
+    const titleProperty = await this.getTitlePropertyName(dbId);
+    const schema = await this.getDatabaseProperties(dbId);
+
+    const properties: Record<string, unknown> = {
+      [titleProperty]: { title: [{ text: { content: problem.name } }] },
+    };
+
+    const statusProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.Status);
+    if (statusProp) {
+      const value = { name: toNotionProblemStatus("Not started") };
+      properties[statusProp] =
+        schema[statusProp]?.type === "status" ? { status: value } : { select: value };
+    }
+    const diffProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.Difficulty);
+    if (diffProp && problem.difficulty && schema[diffProp]?.type === "select") {
+      properties[diffProp] = { select: { name: problem.difficulty } };
+    }
+    const linkProp = resolveSchemaPropertyName(schema, PROBLEM_PROPERTIES.LeetCodeLink);
+    if (linkProp && problem.leetcodeLink && schema[linkProp]?.type === "url") {
+      properties[linkProp] = { url: problem.leetcodeLink };
+    }
+    if (schema.Topic?.type === "relation") {
+      properties.Topic = { relation: [{ id: problem.topicId }] };
+    }
+
+    const response = await this.requestQueue.add(() =>
+      this.client.pages.create({
+        parent: { database_id: dbId },
+        properties: properties as Parameters<Client["pages"]["create"]>[0]["properties"],
+      }),
+    );
+    if (!response?.id) {
+      throw new Error("Notion did not return a page id for the new problem");
+    }
+    return response.id;
+  }
+
   async archivePage(pageId: string): Promise<void> {
     await this.requestQueue.add(() =>
       this.client.pages.update({ page_id: pageId, archived: true }),

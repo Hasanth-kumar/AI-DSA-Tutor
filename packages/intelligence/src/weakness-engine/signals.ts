@@ -8,6 +8,9 @@ const SIGNAL_WEIGHTS = {
   revisionFailure: 0.125,
   mistakeTags: 0.1,
   noteCoverage: 0.05,
+  // D: additive on top of the original 1.0 — the threshold is absolute, so a
+  // coach-reliant topic simply reads weaker; it never dilutes other signals.
+  coachReliance: 0.1,
 } as const;
 
 export function confidenceSignal(topic: TopicState): WeaknessSignal {
@@ -127,6 +130,32 @@ export function mistakeTagSignal(topic: TopicState): WeaknessSignal {
       value > 0 && dominant
         ? `${total} recent mistake tags (mostly "${dominant[0]}")`
         : "No repeated mistake pattern",
+  };
+}
+
+/** D: "solved with coach" is a weaker mastery signal than "solved cold". */
+export function coachRelianceSignal(topic: TopicState): WeaknessSignal {
+  const assist = topic.coachAssist;
+  if (!assist || assist.solved < 2) {
+    return {
+      name: "coach_reliance",
+      weight: SIGNAL_WEIGHTS.coachReliance,
+      value: 0,
+      description: "Not enough recent solves to judge coach reliance",
+    };
+  }
+
+  const rate = assist.assisted / assist.solved;
+  const value = rate >= 0.5 ? 1 : rate >= 0.25 ? 0.5 : 0;
+
+  return {
+    name: "coach_reliance",
+    weight: SIGNAL_WEIGHTS.coachReliance,
+    value,
+    description:
+      value > 0
+        ? `${assist.assisted}/${assist.solved} recent solves needed the coach`
+        : "Solving without coach help",
   };
 }
 

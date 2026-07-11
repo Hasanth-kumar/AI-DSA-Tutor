@@ -41,6 +41,8 @@ export interface SessionResult {
   problemId?: string;
   /** Attempt record id — target for the post-log mistake-capture PATCH. */
   attemptId?: string;
+  /** Auto-captured coach usage (D2) — pre-checks the capture-step toggle. */
+  usedCoach?: boolean;
   nextRevisionAt: string | null;
   confidence: number;
   isWeakArea: boolean;
@@ -65,6 +67,8 @@ export class SessionService {
     private readonly notionSync: NotionSyncService,
     private readonly syncMetaRepo: SyncMetaRepository,
     private readonly attemptRepo?: AttemptRepository,
+    /** Coach interactions per problemId (D2) — read + cleared when the attempt is stamped. */
+    private readonly coachUsage?: Map<string, number>,
   ) {}
 
   list(limit = 50): SessionRow[] {
@@ -173,6 +177,7 @@ export class SessionService {
 
     let solvedProblem = problem;
     let attemptId: string | undefined;
+    let usedCoach: boolean | undefined;
     if (input.problemId && problem) {
       solvedProblem = this.problemRepo.recordSolve(
         input.problemId,
@@ -181,6 +186,9 @@ export class SessionService {
       if (solvedProblem) {
         this.notionSync.markProblemDirty(input.problemId, solvedProblem);
       }
+      const hintCount = this.coachUsage?.get(input.problemId) ?? 0;
+      usedCoach = hintCount > 0;
+      this.coachUsage?.delete(input.problemId);
       attemptId = this.attemptRepo?.create({
         problemId: input.problemId,
         topicId: input.topicId,
@@ -188,6 +196,8 @@ export class SessionService {
         solvedAt: sessionSnapshot.date,
         timeTaken: input.studyDuration,
         mistakeTag: input.mistakeTag ?? null,
+        usedCoach,
+        hintCount,
       }).id;
     }
 
@@ -220,6 +230,7 @@ export class SessionService {
       topicId: input.topicId,
       problemId: input.problemId,
       attemptId,
+      usedCoach,
       nextRevisionAt: topicSnapshot.nextRevisionAt?.toISOString() ?? null,
       confidence: topicSnapshot.confidence,
       isWeakArea: topicSnapshot.isWeakArea,

@@ -153,6 +153,27 @@ export class LeetCodeClient {
     };
   }
 
+  /**
+   * Does a problem slug exist on LeetCode? (E3 suggestion validation — no
+   * username needed, it's a public query.) `null` = couldn't check (network),
+   * so callers should keep the suggestion rather than drop it.
+   */
+  async validateProblemSlug(slug: string): Promise<boolean | null> {
+    try {
+      const payload = await this.graphql<{
+        question?: { titleSlug?: string } | null;
+      }>(
+        `query questionTitle($titleSlug: String!) {
+          question(titleSlug: $titleSlug) { titleSlug }
+        }`,
+        { titleSlug: slug },
+      );
+      return Boolean(payload.question?.titleSlug);
+    } catch {
+      return null;
+    }
+  }
+
   private async graphql<T>(
     query: string,
     variables: Record<string, unknown>,

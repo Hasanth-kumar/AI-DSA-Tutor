@@ -7,7 +7,7 @@ import type {
 } from "@dsa/intelligence";
 import type { ProblemRepository } from "../repositories/ProblemRepository.js";
 
-function asDifficulty(value: string | null | undefined): TopicDifficulty | null {
+export function asDifficulty(value: string | null | undefined): TopicDifficulty | null {
   if (value === "Easy" || value === "Medium" || value === "Hard") return value;
   return null;
 }

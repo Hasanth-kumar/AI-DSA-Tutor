@@ -24,4 +24,28 @@ export async function revisionRoutes(
       }),
     );
   });
+
+  /** One-tap recall grade (C) — SM-2 quality 0–5 for a revision problem's topic. */
+  app.post<{ Params: { topicId: string }; Body: { quality?: number } }>(
+    "/revision/:topicId/grade",
+    async (request, reply) => {
+      const quality = request.body?.quality;
+      if (quality == null) {
+        return reply.status(400).send({ error: "quality (0–5) is required" });
+      }
+      try {
+        const result = ctx.sessionService.applyRecallQuality(
+          request.params.topicId,
+          quality,
+        );
+        await ctx.planService.invalidateTodaysPlan();
+        ctx.events.publish("topic");
+        return reply.send(serializeForJson(result));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Grade failed";
+        const status = message.includes("not found") ? 404 : 500;
+        return reply.status(status).send({ error: message });
+      }
+    },
+  );
 }

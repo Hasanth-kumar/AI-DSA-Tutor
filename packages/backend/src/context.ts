@@ -67,6 +67,12 @@ export interface AppContext {
   notionSync: NotionSyncService;
   obsidianNotes: ObsidianNoteService;
   backupService: BackupService;
+  /**
+   * Coach interactions per problemId since boot (D2) — stamped onto the attempt
+   * at logSession, then cleared. ponytail: in-memory (lost on restart) is fine —
+   * a coach session and its solve happen in the same process lifetime.
+   */
+  coachUsage: Map<string, number>;
   close: () => Promise<void>;
 }
 
@@ -114,6 +120,7 @@ export function createAppContext(
     cache,
     curriculumService,
   );
+  const coachUsage = new Map<string, number>();
   const sessionService = new SessionService(
     config,
     intelligence,
@@ -124,6 +131,7 @@ export function createAppContext(
     notionSync,
     syncMetaRepo,
     attemptRepo,
+    coachUsage,
   );
   const analyticsService = new AnalyticsService(
     intelligence,
@@ -206,6 +214,7 @@ export function createAppContext(
     notionSync,
     obsidianNotes,
     backupService,
+    coachUsage,
     async close() {
       cardBankSync.stopPeriodicFlush();
       try {

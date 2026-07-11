@@ -11,7 +11,13 @@ export class DifficultyEngine {
       topic.recentSessions,
       3,
     );
-    const { confidence } = topic;
+    // D: coach-assisted solves shouldn't promote difficulty — discount the
+    // confidence that fed on them before applying the tier gates below.
+    const assist = topic.coachAssist;
+    const assistRate =
+      assist && assist.solved >= 2 ? assist.assisted / assist.solved : 0;
+    const confidence =
+      topic.confidence - (assistRate >= 0.5 ? 15 : assistRate >= 0.25 ? 8 : 0);
 
     if (confidence >= 80 && recentAvgProductivity >= 75) {
       return { primary: "Hard", secondary: "Medium", ratio: [0.7, 0.3] };
