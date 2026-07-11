@@ -73,11 +73,17 @@ export function createWarmupLLMService(config: AppConfig): LLMService {
 
 /** Coaching/hint/debrief LLM — honors COACH_LLM_MODEL for a stronger coach model. */
 export function toCoachLLMServiceConfig(config: AppConfig): LLMServiceConfig {
+  const modelApiKeys = coachModelApiKeys(config);
   return {
     model: config.coachLlm.model,
     models: [config.coachLlm.model, ...config.coachLlm.fallbackModels],
+    modelApiKeys,
     openrouter: {
-      apiKey: config.coachLlm.openrouter.apiKey ?? config.llm.openrouter.apiKey ?? "",
+      apiKey:
+        modelApiKeys[config.coachLlm.model] ??
+        config.coachLlm.openrouter.apiKey ??
+        config.llm.openrouter.apiKey ??
+        "",
       baseUrl: config.llm.openrouter.baseUrl,
       siteUrl: config.llm.openrouter.siteUrl,
       siteName: config.llm.openrouter.siteName,
@@ -97,11 +103,16 @@ export function toCoachModelServiceConfig(
   config: AppConfig,
   option: CoachModelOption,
 ): LLMServiceConfig {
+  const modelApiKeys = coachModelApiKeys(config);
   return {
     model: option.model,
+    // When the user picks a specific model, still fall back to the configured chain.
+    models: [option.model, ...config.coachLlm.fallbackModels.filter((m) => m !== option.model)],
+    modelApiKeys,
     openrouter: {
       apiKey:
         option.apiKey ??
+        modelApiKeys[option.model] ??
         config.coachLlm.openrouter.apiKey ??
         config.llm.openrouter.apiKey ??
         "",
@@ -117,4 +128,12 @@ export function createCoachModelLLMService(
   option: CoachModelOption,
 ): LLMService {
   return createLLMService(toCoachModelServiceConfig(config, option));
+}
+
+function coachModelApiKeys(config: AppConfig): Record<string, string> {
+  const keys: Record<string, string> = {};
+  for (const opt of config.coachLlm.models) {
+    if (opt.apiKey) keys[opt.model] = opt.apiKey;
+  }
+  return keys;
 }

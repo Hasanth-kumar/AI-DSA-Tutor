@@ -1,6 +1,7 @@
 import type {
   IntelligenceOrchestrator,
   PlanOptions,
+  ResolvePlanSlot,
   RevisionProblem,
   StudyPlan,
   TopicState,
@@ -12,6 +13,7 @@ import { formatDateKey } from "../lib/json.js";
 import type { CacheService } from "./CacheService.js";
 import type { CurriculumService } from "./CurriculumService.js";
 import { asDifficulty, ProblemSuggestionService } from "./ProblemSuggestionService.js";
+import { resolveSlotMinutes, type ProblemReviewService } from "./ProblemReviewService.js";
 
 export class PlanService {
   private readonly problemSuggestions: ProblemSuggestionService;
@@ -22,6 +24,7 @@ export class PlanService {
     private readonly problemRepo: ProblemRepository,
     private readonly cache: CacheService,
     private readonly curriculumService: CurriculumService,
+    private readonly problemReviews?: ProblemReviewService,
   ) {
     this.problemSuggestions = new ProblemSuggestionService(problemRepo);
   }
@@ -89,7 +92,36 @@ export class PlanService {
       );
     }
 
-    const estimatedDuration = this.estimateDuration(primaryTopic, scored);
+    // Re-solve slots (re-solve design §6): additive to the primary topic's new
+    // problems, capacity-fitted, overflow deferred forward like compressQueue.
+    let resolveSlots: ResolvePlanSlot[] = [];
+    let resolveTotalDue = 0;
+    let resolveDeferred = 0;
+    if (this.problemReviews) {
+      const selection = this.problemReviews.dueSlots(Date.now(), {
+        persistDeferrals: internal.rescheduleDeferred,
+      });
+      resolveSlots = selection.slots;
+      resolveTotalDue = selection.totalDue;
+      resolveDeferred = selection.deferredCount;
+    }
+
+    let estimatedDuration =
+      this.estimateDuration(primaryTopic, scored) +
+      resolveSlots.reduce((n, s) => n + resolveSlotMinutes(s.difficulty), 0);
+
+    // Over daily budget → drop re-solve slots first (§6); new learning keeps
+    // priority. Escalation promotions are the one thing not allowed to drop.
+    if (options.availableMinutes != null) {
+      while (
+        estimatedDuration > options.availableMinutes &&
+        resolveSlots.some((s) => !s.promoted)
+      ) {
+        const dropped = resolveSlots.pop()!;
+        estimatedDuration -= resolveSlotMinutes(dropped.difficulty);
+        resolveDeferred += 1;
+      }
+    }
     const topicsMap = new Map(topics.map((t) => [t.id, t]));
     const primaryScore = computePriorityScore(primaryTopic, topicsMap);
     const divergentTopics = topics
@@ -103,6 +135,9 @@ export class PlanService {
     if (primaryScore.memoryExecutionDivergence) {
       reasoning +=
         " Recall looks fine but execution is weak — practice anyway despite a far-out review date.";
+    }
+    for (const slot of resolveSlots.filter((s) => s.promoted)) {
+      reasoning += ` Re-solve promoted: ${slot.name} is ${slot.daysOverdue} days overdue.`;
     }
 
     return {
@@ -118,6 +153,9 @@ export class PlanService {
       revisionDeferred: deferred.length,
       memoryExecutionDivergence: primaryScore.memoryExecutionDivergence,
       divergentTopics,
+      resolveSlots,
+      resolveTotalDue,
+      resolveDeferred,
     };
   }
 

@@ -243,7 +243,7 @@ describe("API routes", () => {
     await app.close();
   });
 
-  it("POST /api/session with problemId marks problem solved", async () => {
+  it("POST /api/session with problemId records an attempt and defers status to mistake capture", async () => {
     const app = buildApp(config, ctx);
     const response = await app.inject({
       method: "POST",
@@ -259,9 +259,23 @@ describe("API routes", () => {
     });
 
     expect(response.statusCode).toBe(201);
-    const problem = ctx.problemRepo.findById("problem-1");
-    expect(problem?.status).toBe("Solved");
+    const attemptId = response.json().attemptId as string;
+    expect(attemptId).toBeDefined();
+    // Status is deferred until the mistake-capture PATCH (resolve design §9)
+    // resolves a smooth solve vs. a tagged mistake — see PATCH /attempts/:id/mistake.
+    let problem = ctx.problemRepo.findById("problem-1");
+    expect(problem?.status).toBe("Not started");
     expect(problem?.attempts).toBe(1);
+
+    const mistakeResponse = await app.inject({
+      method: "PATCH",
+      url: `/api/attempts/${attemptId}/mistake`,
+      payload: { tags: [] },
+    });
+    expect(mistakeResponse.statusCode).toBe(200);
+
+    problem = ctx.problemRepo.findById("problem-1");
+    expect(problem?.status).toBe("Solved");
     await app.close();
   });
 

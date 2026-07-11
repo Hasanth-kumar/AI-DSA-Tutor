@@ -4453,3 +4453,278 @@ button:focus-visible,
     scroll-behavior: auto !important;
   }
 }
+
+/* ─── Re-solve ledger (re-solve design §10) ─────────────────────────────────
+   One schedule spine split by a literal TODAY rule: overdue rows above it
+   (filled markers — execution debt), upcoming rows below (hollow markers),
+   paused rows off the rail entirely. Schedule math is set in mono. */
+
+.rsv-ledger {
+  max-width: 860px;
+}
+
+.rsv-rail {
+  position: relative;
+  padding-left: 1.9rem;
+}
+
+/* The spine itself. */
+.rsv-rail::before {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  top: 0.4rem;
+  bottom: -0.9rem;
+  width: 1px;
+  background: linear-gradient(var(--border-strong), var(--border));
+  transform-origin: top;
+  animation: rsv-spine 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.rsv-rail--debt::before {
+  background: linear-gradient(var(--accent), var(--border-strong));
+}
+
+.rsv-rail-label {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 0 0 0.7rem;
+}
+
+.rsv-row {
+  position: relative;
+  padding: 0.55rem 0 0.8rem;
+  animation: rsv-rise 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+.rsv-row + .rsv-row {
+  border-top: 1px solid var(--border-soft);
+}
+
+.rsv-marker {
+  position: absolute;
+  left: -1.9rem;
+  top: 1.05rem;
+  width: 9px;
+  height: 9px;
+  margin-left: 0.235rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-subtle);
+  background: var(--bg);
+}
+
+.rsv-marker--filled {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.rsv-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.rsv-name {
+  font-size: 0.95rem;
+  font-weight: 550;
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.rsv-name:hover {
+  color: var(--accent-hover);
+}
+
+.rsv-distance {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.rsv-distance--overdue {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rsv-line--meta {
+  margin-top: 0.15rem;
+}
+
+.rsv-reason {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.rsv-fsrs {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.rsv-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.rsv-actions .rsv-btn {
+  padding: 0.34rem 0.85rem;
+  font-size: 0.78rem;
+  box-shadow: none;
+}
+
+/* Pause/Retire stay quiet until the row is engaged. */
+.rsv-quiet-actions {
+  display: inline-flex;
+  gap: 0.45rem;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.rsv-row:hover .rsv-quiet-actions,
+.rsv-row:focus-within .rsv-quiet-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .rsv-quiet-actions {
+    opacity: 1;
+  }
+}
+
+.rsv-form {
+  margin-top: 0.6rem;
+}
+
+/* The TODAY rule — the page's one bold gesture. */
+.rsv-today {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.4rem 0 1.1rem;
+}
+
+.rsv-today::before {
+  content: "";
+  width: 1.25rem;
+  height: 1px;
+  background: var(--accent);
+}
+
+.rsv-today::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, var(--accent), var(--border-soft));
+}
+
+.rsv-today-tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.rsv-today-meta {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+/* Paused rows live off the rail — no spine, quieter ink. */
+.rsv-paused {
+  margin-top: 2rem;
+  padding-top: 1.1rem;
+  border-top: 1px dashed var(--border);
+}
+
+.rsv-paused .rsv-row {
+  opacity: 0.72;
+}
+
+.rsv-paused .rsv-row:hover,
+.rsv-paused .rsv-row:focus-within {
+  opacity: 1;
+}
+
+.rsv-flag {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--warning);
+  border: 1px solid var(--warning-soft);
+  background: var(--warning-soft);
+  border-radius: var(--radius-xs);
+  padding: 0.08rem 0.4rem;
+}
+
+.rsv-admit {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 1.1rem;
+}
+
+.rsv-admit select {
+  flex: 1;
+  min-width: 0;
+}
+
+.rsv-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  max-width: 46ch;
+}
+
+@keyframes rsv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes rsv-spine {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (max-width: 640px) {
+  .rsv-distance,
+  .rsv-fsrs {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+
+  .rsv-quiet-actions {
+    opacity: 1;
+    margin-left: 0;
+  }
+
+  .rsv-today-meta {
+    white-space: normal;
+  }
+}

@@ -138,7 +138,12 @@ export async function sessionRoutes(
     if (!attempt) {
       return reply.status(404).send({ error: "Attempt not found" });
     }
+    await ctx.sessionService.finalizeProblemAfterMistake(
+      attempt.problemId,
+      parseMistakeTags(attempt.mistakeTag),
+    );
     ctx.events.publish("attempt");
+    ctx.events.publish("problem");
     return reply.send(serializeForJson({ attempt }));
   });
 

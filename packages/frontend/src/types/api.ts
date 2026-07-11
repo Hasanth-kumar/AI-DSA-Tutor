@@ -101,6 +101,61 @@ export interface StudyPlan {
   revisionDeferred?: number;
   memoryExecutionDivergence?: boolean;
   divergentTopics?: { id: string; name: string }[];
+  resolveSlots?: ResolvePlanSlot[];
+  resolveTotalDue?: number;
+  resolveDeferred?: number;
+}
+
+/** One committed re-solve on today's plan (re-solve design §6, §10). */
+export interface ResolvePlanSlot {
+  problemId: string;
+  name: string;
+  difficulty: TopicDifficulty | null;
+  leetcodeLink: string | null;
+  daysOverdue: number;
+  promoted: boolean;
+  reason: string;
+}
+
+export type ResolveRating = "again" | "hard" | "good" | "easy";
+export type ResolveOutcomeKind = "solved" | "assisted" | "failed";
+export type ResolveStatus = "overdue" | "due" | "scheduled" | "retired" | "suspended";
+
+/** One pooled problem on the Re-solve page (re-solve design §10). */
+export interface ResolveQueueItem {
+  problemId: string;
+  name: string;
+  difficulty: TopicDifficulty | null;
+  leetcodeLink: string | null;
+  topicId: string | null;
+  admissionReason: "mistake" | "coach" | "slow" | "hard" | "manual";
+  admittedAt: number;
+  reason: string;
+  status: ResolveStatus;
+  due: number | null;
+  daysOverdue: number;
+  stability: number | null;
+  state: number;
+  reps: number;
+  lapses: number;
+}
+
+export interface ResolveQueueResponse {
+  items: ResolveQueueItem[];
+  slots: ResolvePlanSlot[];
+  capacity: number;
+  dueCount: number;
+  slowThresholdMin: Record<TopicDifficulty, number>;
+}
+
+export interface ResolveCompleteResult {
+  problemId: string;
+  inferredRating: ResolveRating;
+  rating: ResolveRating;
+  due: number;
+  intervalDays: number;
+  leech: boolean;
+  retired: boolean;
 }
 
 export type MistakeTag =

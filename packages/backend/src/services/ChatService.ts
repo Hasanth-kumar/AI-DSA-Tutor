@@ -210,22 +210,20 @@ export class ChatService {
       }
 
       const trimmed = reply.trim();
-      if (!trimmed && !signal?.aborted) {
-        this.chatRepo.deleteMessage(userMessage.id);
-        yield { type: "error", message: "Coach returned an empty response. Please try again." };
-        return;
-      }
-
       if (signal?.aborted && !trimmed) {
         this.chatRepo.deleteMessage(userMessage.id);
         yield { type: "error", message: "Generation stopped" };
         return;
       }
 
+      // Soft degradation: always persist whatever we got (including LLM fallback text).
+      const assistantContent =
+        trimmed ||
+        "Coach is temporarily unavailable. Please try again or switch models.";
       const assistantMessage = this.chatRepo.addMessage(
         thread.id,
         "assistant",
-        trimmed || reply,
+        assistantContent,
       );
       yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
     } catch (err) {
@@ -346,20 +344,18 @@ export class ChatService {
       }
 
       const trimmed = reply.trim();
-      if (!trimmed && !signal?.aborted) {
-        yield { type: "error", message: "Coach returned an empty response. Please try again." };
-        return;
-      }
-
       if (signal?.aborted && !trimmed) {
         yield { type: "error", message: "Generation stopped" };
         return;
       }
 
+      const assistantContent =
+        trimmed ||
+        "Coach is temporarily unavailable. Please try again or switch models.";
       const assistantMessage = this.chatRepo.addMessage(
         input.threadId,
         "assistant",
-        trimmed || reply,
+        assistantContent,
       );
       yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
     } catch (err) {
@@ -492,20 +488,18 @@ export class ChatService {
       }
 
       const trimmed = reply.trim();
-      if (!trimmed && !signal?.aborted) {
-        yield { type: "error", message: "Coach returned an empty response. Please try again." };
-        return;
-      }
-
       if (signal?.aborted && !trimmed) {
         yield { type: "error", message: "Generation stopped" };
         return;
       }
 
+      const assistantContent =
+        trimmed ||
+        "Coach is temporarily unavailable. Please try again or switch models.";
       const assistantMessage = this.chatRepo.addMessage(
         input.threadId,
         "assistant",
-        trimmed || reply,
+        assistantContent,
       );
       yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
     } catch (err) {

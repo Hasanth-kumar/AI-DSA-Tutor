@@ -18,6 +18,7 @@ import { syncRoutes } from "./routes/sync.routes.js";
 import { notesRoutes } from "./routes/notes.routes.js";
 import { warmupRoutes } from "./routes/warmup.routes.js";
 import { reviewRoutes } from "./routes/review.routes.js";
+import { resolveRoutes } from "./routes/resolve.routes.js";
 import { exportRoutes } from "./routes/export.routes.js";
 import { eventsRoutes } from "./routes/events.routes.js";
 import {
@@ -150,6 +151,7 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       await notesRoutes(instance, ctx);
       await warmupRoutes(instance, ctx);
       await reviewRoutes(instance, ctx);
+      await resolveRoutes(instance, ctx);
       await exportRoutes(instance, ctx);
       await eventsRoutes(instance, ctx);
       await whatsappNotificationRoutes(instance, ctx);

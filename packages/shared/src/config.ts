@@ -37,7 +37,7 @@ const envSchema = z.object({
   CARDS_SYNC_FLUSH_INTERVAL_MS: z.coerce.number().default(300_000),
   /** Model override for the coach (defaults to OPENROUTER_MODEL). */
   COACH_LLM_MODEL: z.string().optional(),
-  /** Comma-separated models tried in order after COACH_LLM_MODEL fails (A1). */
+  /** Comma-separated models tried in order after COACH_LLM_MODEL fails. */
   COACH_LLM_FALLBACK_MODELS: z.string().optional(),
   /** Model for warm-up quizzes (defaults to OPENROUTER_MODEL). */
   WARMUP_LLM_MODEL: z.string().optional(),
@@ -76,6 +76,17 @@ const envSchema = z.object({
     .transform((v) => v === "true"),
   WEEKLY_DIGEST_CRON: z.string().default("0 20 * * 0"),
   SCHEDULER_TIMEZONE: z.string().default("UTC"),
+  /** Problem re-solve capacity (spaced-repetition design §6, §12). Tune after ~2 weeks. */
+  RESOLVE_SLOTS_WEEKDAY: z.coerce.number().default(1),
+  RESOLVE_SLOTS_WEEKEND: z.coerce.number().default(2),
+  /** Admission slow-solve cutoffs in minutes (§4). */
+  RESOLVE_SLOW_THRESHOLD_EASY_MIN: z.coerce.number().default(25),
+  RESOLVE_SLOW_THRESHOLD_MEDIUM_MIN: z.coerce.number().default(45),
+  RESOLVE_SLOW_THRESHOLD_HARD_MIN: z.coerce.number().default(75),
+  RESOLVE_RETIRE_CLEAN_STREAK: z.coerce.number().default(3),
+  RESOLVE_RETIRE_MIN_STABILITY_DAYS: z.coerce.number().default(90),
+  RESOLVE_LEECH_LAPSES: z.coerce.number().default(4),
+  RESOLVE_ESCALATE_DAYS: z.coerce.number().default(14),
   LEETCODE_USERNAME: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_REPO: z.string().optional(),
@@ -144,7 +155,7 @@ export type AppConfig = {
     defaultModelId: string;
     /** Models the user can switch between in the coach UI. */
     models: CoachModelOption[];
-    /** Fallback models tried in order after `model` fails (A1, COACH_LLM_FALLBACK_MODELS). */
+    /** Fallback models tried in order after `model` fails (COACH_LLM_FALLBACK_MODELS). */
     fallbackModels: string[];
   };
   whatsapp: {
@@ -177,6 +188,19 @@ export type AppConfig = {
     token?: string;
     repo?: string;
     solutionsPath: string;
+  };
+  /** Problem re-solve scheduling (spaced-repetition design §6, §12). `engine`
+   *  is shape-compatible with @dsa/intelligence ProblemReviewConfig. */
+  resolve: {
+    slotsWeekday: number;
+    slotsWeekend: number;
+    engine: {
+      slowThresholdMin: { Easy: number; Medium: number; Hard: number };
+      retireCleanStreak: number;
+      retireMinStabilityDays: number;
+      leechLapses: number;
+      escalateDays: number;
+    };
   };
 };
 
@@ -281,6 +305,21 @@ export function loadConfig(envPath?: string): AppConfig {
       repo: env.GITHUB_REPO,
       solutionsPath: env.GITHUB_SOLUTIONS_PATH,
     },
+    resolve: {
+      slotsWeekday: env.RESOLVE_SLOTS_WEEKDAY,
+      slotsWeekend: env.RESOLVE_SLOTS_WEEKEND,
+      engine: {
+        slowThresholdMin: {
+          Easy: env.RESOLVE_SLOW_THRESHOLD_EASY_MIN,
+          Medium: env.RESOLVE_SLOW_THRESHOLD_MEDIUM_MIN,
+          Hard: env.RESOLVE_SLOW_THRESHOLD_HARD_MIN,
+        },
+        retireCleanStreak: env.RESOLVE_RETIRE_CLEAN_STREAK,
+        retireMinStabilityDays: env.RESOLVE_RETIRE_MIN_STABILITY_DAYS,
+        leechLapses: env.RESOLVE_LEECH_LAPSES,
+        escalateDays: env.RESOLVE_ESCALATE_DAYS,
+      },
+    },
   };
 
   return cached;
@@ -293,15 +332,26 @@ function coachOpenRouterKey(env: ParsedEnv): string | undefined {
 }
 
 /**
+ * Split rate-limit pools across the two OpenRouter keys:
+ * - Gemma / general `OPENROUTER_MODEL` → OPENROUTER_API_KEY
+ * - GPT-OSS / other coach models → OPENROUTER_COACH_API_KEY (falls back to general)
+ */
+function apiKeyForCoachModel(env: ParsedEnv, model: string): string | undefined {
+  if (model === env.OPENROUTER_MODEL || model.startsWith("google/")) {
+    return env.OPENROUTER_API_KEY ?? coachOpenRouterKey(env);
+  }
+  return coachOpenRouterKey(env);
+}
+
+/**
  * The coach can use a stronger model than the general LLM via COACH_LLM_MODEL.
+ * Fallback chain: COACH_LLM_FALLBACK_MODELS, or OPENROUTER_MODEL when it differs.
  */
 function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
   const model = env.COACH_LLM_MODEL ?? env.OPENROUTER_MODEL;
-  const apiKey = coachOpenRouterKey(env);
+  const apiKey = apiKeyForCoachModel(env, model);
   const models = buildCoachModels(env, { model, apiKey });
-  const fallbackModels = env.COACH_LLM_FALLBACK_MODELS
-    ? env.COACH_LLM_FALLBACK_MODELS.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
+  const fallbackModels = resolveCoachFallbackModels(env, model);
 
   return {
     model,
@@ -310,6 +360,19 @@ function resolveCoachLlm(env: ParsedEnv): AppConfig["coachLlm"] {
     models,
     fallbackModels,
   };
+}
+
+function resolveCoachFallbackModels(env: ParsedEnv, primary: string): string[] {
+  if (env.COACH_LLM_FALLBACK_MODELS) {
+    return env.COACH_LLM_FALLBACK_MODELS.split(",")
+      .map((s) => s.trim())
+      .filter((m) => m.length > 0 && m !== primary);
+  }
+  // Auto-fallback to the general model when it differs from the coach primary.
+  if (env.OPENROUTER_MODEL && env.OPENROUTER_MODEL !== primary) {
+    return [env.OPENROUTER_MODEL];
+  }
+  return [];
 }
 
 function coachModelId(model: string): string {
@@ -330,6 +393,7 @@ function prettyModelLabel(model: string): string {
  * Models offered in the coach picker: the configured coach model (default,
  * listed first) and the general model (e.g. Gemma 4). Entries without an
  * OpenRouter key are dropped; duplicates are de-duplicated.
+ * GPT-OSS uses the coach key; Gemma / OPENROUTER_MODEL uses the general key.
  */
 function buildCoachModels(
   env: ParsedEnv,
@@ -346,13 +410,24 @@ function buildCoachModels(
 
   add(coach);
   if (env.WARMUP_LLM_MODEL && env.WARMUP_LLM_MODEL !== coach.model) {
-    add({ model: env.WARMUP_LLM_MODEL, apiKey: coachOpenRouterKey(env) });
+    add({
+      model: env.WARMUP_LLM_MODEL,
+      apiKey: apiKeyForCoachModel(env, env.WARMUP_LLM_MODEL),
+    });
   }
   if (
     env.OPENROUTER_MODEL !== coach.model &&
     env.OPENROUTER_MODEL !== env.WARMUP_LLM_MODEL
   ) {
-    add({ model: env.OPENROUTER_MODEL, apiKey: env.OPENROUTER_API_KEY });
+    add({
+      model: env.OPENROUTER_MODEL,
+      apiKey: apiKeyForCoachModel(env, env.OPENROUTER_MODEL),
+    });
+  }
+  // Surface fallback-chain models in the picker so a working option is selectable
+  // when the primary free models are rate-limited upstream.
+  for (const model of resolveCoachFallbackModels(env, coach.model)) {
+    add({ model, apiKey: apiKeyForCoachModel(env, model) });
   }
 
   return models;

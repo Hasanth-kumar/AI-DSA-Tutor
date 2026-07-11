@@ -18,6 +18,7 @@ import {
   type Card as FsrsCard,
   type Grade,
 } from "ts-fsrs";
+import type { ResolveRating } from "@dsa/intelligence";
 import type { CardRow, ReviewPatch } from "./cardTypes.js";
 
 const MS_PER_DAY = 86_400_000;
@@ -45,8 +46,26 @@ export function selfGradeToRating(quality: number): Grade {
   return Rating.Easy;
 }
 
-/** A stored `cards` row → the ts-fsrs `Card` shape (epoch ms → Date). */
-export function rowToFsrsCard(row: CardRow, nowMs: number): FsrsCard {
+/**
+ * The FSRS column set shared by `cards` and `problem_reviews` rows — the
+ * scheduling functions below only touch these fields.
+ */
+export type FsrsFields = Pick<
+  CardRow,
+  | "stability"
+  | "difficulty"
+  | "due"
+  | "lastReview"
+  | "reps"
+  | "lapses"
+  | "state"
+  | "elapsedDays"
+  | "scheduledDays"
+  | "learningSteps"
+>;
+
+/** A stored FSRS row (card or problem review) → the ts-fsrs `Card` shape (epoch ms → Date). */
+export function rowToFsrsCard(row: FsrsFields, nowMs: number): FsrsCard {
   return {
     due: row.due != null ? new Date(row.due) : new Date(nowMs),
     stability: row.stability ?? 0,
@@ -75,6 +94,27 @@ export function fsrsCardToPatch(card: FsrsCard): ReviewPatch {
     scheduledDays: card.scheduled_days,
     learningSteps: card.learning_steps,
   };
+}
+
+/** ProblemReviewEngine rating names → ts-fsrs grades (1:1 by design). */
+const RESOLVE_RATING_GRADE: Record<ResolveRating, Grade> = {
+  again: Rating.Again,
+  hard: Rating.Hard,
+  good: Rating.Good,
+  easy: Rating.Easy,
+};
+
+export function resolveRatingToGrade(rating: ResolveRating): Grade {
+  return RESOLVE_RATING_GRADE[rating];
+}
+
+/**
+ * Apply one explicit FSRS rating to any FSRS-bearing row (problem re-solve
+ * path — cards go through {@link reviewRow}'s self-grade scale instead).
+ */
+export function applyFsrsRating(row: FsrsFields, rating: Grade, nowMs: number): ReviewPatch {
+  const { card } = scheduler.next(rowToFsrsCard(row, nowMs), new Date(nowMs), rating);
+  return fsrsCardToPatch(card);
 }
 
 export interface ReviewOutcome {

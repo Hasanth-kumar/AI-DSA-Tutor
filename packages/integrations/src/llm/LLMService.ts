@@ -28,8 +28,10 @@ export interface ChatHistoryMessage {
 
 export interface LLMServiceConfig {
   model: string;
-  /** Fallback chain tried in order after `model` fails (A1). */
+  /** Fallback chain tried after `model` fails (coach resilience). */
   models?: string[];
+  /** Optional per-model OpenRouter keys for mixed-key fallback chains. */
+  modelApiKeys?: Record<string, string>;
   timeoutMs?: number;
   openrouter: {
     apiKey: string;
@@ -49,6 +51,7 @@ export class LLMService {
         apiKey: config.openrouter.apiKey,
         model: config.model,
         models: config.models,
+        modelApiKeys: config.modelApiKeys,
         baseUrl: config.openrouter.baseUrl,
         siteUrl: config.openrouter.siteUrl,
         siteName: config.openrouter.siteName,
@@ -202,6 +205,12 @@ export class LLMService {
     }
   }
 
+  /**
+   * Non-streaming chat turn. Callers (`ChatService.sendMessage` /
+   * `regenerateMessage`) don't catch failures here — they propagate to the
+   * route as a structured error (A3/A4) so the client can show a real error
+   * state instead of silently persisting a canned reply.
+   */
   async generateChatReply(
     learningContext: ChatLearningContext | null,
     history: ChatHistoryMessage[],
@@ -225,6 +234,13 @@ export class LLMService {
     }
   }
 
+  /**
+   * Streaming chat turn. Once a stream has started, we can't cleanly surface
+   * an HTTP error — soft-degrade instead (partial content kept, otherwise a
+   * fallback message chunk) so `ChatService.sendMessageStream` always has
+   * something to persist. `generateChatReply` above stays throw-based since
+   * it runs before any content is committed.
+   */
   async *generateChatReplyStream(
     learningContext: ChatLearningContext | null,
     history: ChatHistoryMessage[],
@@ -239,18 +255,24 @@ export class LLMService {
 
     const messages = this.buildChatMessages(learningContext, history, userMessage, options);
 
+    let hasContent = false;
     try {
-      let hasContent = false;
       for await (const chunk of this.client.chatStream(messages, signal)) {
         hasContent = true;
         yield chunk;
       }
       if (!hasContent) {
-        throw new Error("Coach returned an empty response. Please try again.");
+        yield fallbackChatReply();
       }
     } catch (err) {
       if (signal?.aborted) return;
-      throw toChatError(err);
+      // Partial content already yielded — finish quietly (OpenRouterClient keeps partials).
+      if (hasContent) return;
+      if (isContextLengthError(err instanceof Error ? err.message : "")) {
+        yield toChatError(err).message;
+        return;
+      }
+      yield fallbackChatReply(err);
     }
   }
 
@@ -275,8 +297,8 @@ const USER_MESSAGE_MAX_CHARS = 24_000;
 const TRUNCATION_HEAD_CHARS = 12_000;
 const TRUNCATION_TAIL_CHARS = 8_000;
 
-/** Keeps the most recent N messages, then trims further if they still exceed the char budget (A3). */
-function capHistory(history: ChatHistoryMessage[]): ChatHistoryMessage[] {
+/** Keeps the most recent N messages, then trims further if they still exceed the char budget. */
+export function capHistory(history: ChatHistoryMessage[]): ChatHistoryMessage[] {
   const recent = history.slice(-HISTORY_MAX_MESSAGES);
   let total = recent.reduce((sum, m) => sum + m.content.length, 0);
   let start = 0;
@@ -287,8 +309,8 @@ function capHistory(history: ChatHistoryMessage[]): ChatHistoryMessage[] {
   return recent.slice(start);
 }
 
-/** Keeps head + tail (code endings matter) and marks what was cut (A3). */
-function truncateUserMessage(message: string): string {
+/** Keeps head + tail (code endings matter) and marks what was cut. */
+export function truncateUserMessage(message: string): string {
   if (message.length <= USER_MESSAGE_MAX_CHARS) return message;
   const head = message.slice(0, TRUNCATION_HEAD_CHARS);
   const tail = message.slice(-TRUNCATION_TAIL_CHARS);
@@ -307,7 +329,7 @@ function isContextLengthError(message: string): boolean {
   );
 }
 
-/** Normalizes a failed chat call into a user-facing error (A3/A4). */
+/** Normalizes a failed chat call into a user-facing error message. */
 function toChatError(err: unknown): Error {
   const detail = err instanceof Error ? err.message : "Unknown error";
   if (isContextLengthError(detail)) {
@@ -382,10 +404,14 @@ function fallbackHint(ctx: HintContext): string {
   return `💡 LLM unavailable (check OpenRouter API key).\n\nFor ${ctx.problemName} (${ctx.difficulty}): focus on ${ctx.topicName}. ${depth}`;
 }
 
-function fallbackChatReply(): string {
+function fallbackChatReply(err?: unknown): string {
+  const detail = err instanceof Error ? err.message : null;
+  const suffix = detail ? ` (${detail})` : "";
   return (
-    "Coach is unavailable right now. Check your OpenRouter coach key (`OPENROUTER_COACH_API_KEY` " +
-    "or `OPENROUTER_API_KEY`) and model (`COACH_LLM_MODEL`, e.g. `openai/gpt-oss-120b:free`)."
+    "Coach is temporarily unavailable" +
+    suffix +
+    ". Check your OpenRouter coach key (`OPENROUTER_COACH_API_KEY` " +
+    "or `OPENROUTER_API_KEY`) and model (`COACH_LLM_MODEL`), or try another model in the picker."
   );
 }
 

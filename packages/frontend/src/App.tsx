@@ -34,6 +34,9 @@ const SessionPage = lazy(() =>
 const ReviewPage = lazy(() =>
   import("./pages/ReviewPage.js").then((m) => ({ default: m.ReviewPage })),
 );
+const ResolvePage = lazy(() =>
+  import("./pages/ResolvePage.js").then((m) => ({ default: m.ResolvePage })),
+);
 const SettingsPage = lazy(() =>
   import("./pages/SettingsPage.js").then((m) => ({ default: m.SettingsPage })),
 );
@@ -163,6 +166,7 @@ export function App() {
               {tab === "today" && <TodayPage onOpenCoach={openCoach} />}
               {tab === "overview" && <OverviewPage />}
               {tab === "review" && <ReviewPage />}
+              {tab === "resolve" && <ResolvePage />}
               {tab === "graph" && <GraphPage />}
               {tab === "activity" && <ActivityPage />}
               {tab === "session" && <SessionPage />}

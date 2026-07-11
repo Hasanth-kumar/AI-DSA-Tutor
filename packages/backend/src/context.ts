@@ -11,6 +11,7 @@ import { CardRepository } from "./repositories/CardRepository.js";
 import { ConflictRepository } from "./repositories/ConflictRepository.js";
 import { NoteRepository } from "./repositories/NoteRepository.js";
 import { ProblemRepository } from "./repositories/ProblemRepository.js";
+import { ProblemReviewRepository } from "./repositories/ProblemReviewRepository.js";
 import { SessionRepository } from "./repositories/SessionRepository.js";
 import { SyncMetaRepository } from "./repositories/SyncMetaRepository.js";
 import { AnalyticsService } from "./services/AnalyticsService.js";
@@ -28,6 +29,7 @@ import { NotionSyncService } from "./services/NotionSyncService.js";
 import { ObsidianNoteService } from "./services/ObsidianNoteService.js";
 import { CurriculumService } from "./services/CurriculumService.js";
 import { PlanService } from "./services/PlanService.js";
+import { ProblemReviewService } from "./services/ProblemReviewService.js";
 import { SessionService } from "./services/SessionService.js";
 import type { CardSyncDb } from "@dsa/integrations";
 import { findRepoRoot, type AppConfig } from "@dsa/shared";
@@ -46,6 +48,7 @@ export interface AppContext {
   sessionRepo: SessionRepository;
   syncMetaRepo: SyncMetaRepository;
   attemptRepo: AttemptRepository;
+  problemReviewRepo: ProblemReviewRepository;
   cardRepo: CardRepository;
   noteRepo: NoteRepository;
   conflictRepo: ConflictRepository;
@@ -54,6 +57,7 @@ export interface AppContext {
   events: EventBus;
   curriculumService: CurriculumService;
   planService: PlanService;
+  problemReviewService: ProblemReviewService;
   sessionService: SessionService;
   cardService: CardService;
   cardBankSync: CardBankSyncService;
@@ -113,12 +117,22 @@ export function createAppContext(
     events.publish("note"),
   );
   const curriculumService = new CurriculumService(syncMetaRepo, problemRepo);
+  const problemReviewRepo = new ProblemReviewRepository(db);
+  const problemReviewService = new ProblemReviewService(
+    config,
+    intelligence,
+    problemReviewRepo,
+    problemRepo,
+    attemptRepo,
+    events,
+  );
   const planService = new PlanService(
     intelligence,
     topicRepo,
     problemRepo,
     cache,
     curriculumService,
+    problemReviewService,
   );
   const coachUsage = new Map<string, number>();
   const sessionService = new SessionService(
@@ -132,7 +146,9 @@ export function createAppContext(
     syncMetaRepo,
     attemptRepo,
     coachUsage,
+    problemReviewService,
   );
+  void sessionService.repairProblemStatusesFromAttempts();
   const analyticsService = new AnalyticsService(
     intelligence,
     topicRepo,
@@ -193,6 +209,7 @@ export function createAppContext(
     sessionRepo,
     syncMetaRepo,
     attemptRepo,
+    problemReviewRepo,
     cardRepo,
     noteRepo,
     conflictRepo,
@@ -201,6 +218,7 @@ export function createAppContext(
     events,
     curriculumService,
     planService,
+    problemReviewService,
     sessionService,
     cardService,
     cardBankSync,

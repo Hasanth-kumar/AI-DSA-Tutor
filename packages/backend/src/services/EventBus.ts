@@ -6,7 +6,9 @@ export type DataChangeType =
   | "topic"
   | "sync"
   | "note"
-  | "attempt";
+  | "attempt"
+  /** Re-solve pool/queue changed (§9) — Today + Re-solve surfaces refetch. */
+  | "resolve";
 
 export interface DataChangeEvent {
   type: DataChangeType;

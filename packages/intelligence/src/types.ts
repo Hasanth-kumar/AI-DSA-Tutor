@@ -131,6 +131,25 @@ export interface StudyPlan {
   memoryExecutionDivergence?: boolean;
   /** Other topics with the same divergence signal (dashboard surfacing). */
   divergentTopics?: { id: string; name: string }[];
+  /** Capacity-fitted problem re-solve slots (re-solve design §6, §10). */
+  resolveSlots?: ResolvePlanSlot[];
+  /** Problems due for re-solve today (before capacity fitting). */
+  resolveTotalDue?: number;
+  /** Re-solves pushed forward by capacity compression on this plan. */
+  resolveDeferred?: number;
+}
+
+/** One committed re-solve on today's plan (re-solve design §6, §10). */
+export interface ResolvePlanSlot {
+  problemId: string;
+  name: string;
+  difficulty: TopicDifficulty | null;
+  leetcodeLink: string | null;
+  daysOverdue: number;
+  /** Escalation promotion (§6) — rendered uncollapsed with its reason. */
+  promoted: boolean;
+  /** Why it's in the pool ("2 mistakes, used coach") — the trust string. */
+  reason: string;
 }
 
 export interface PlanOptions {

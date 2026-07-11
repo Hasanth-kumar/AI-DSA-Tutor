@@ -224,7 +224,11 @@ export {
   type ObsidianNoteFile,
   type VaultWatchHandlers,
 } from "./obsidian/ObsidianVault.js";
-export type { ChatHistoryMessage } from "./llm/LLMService.js";
+export {
+  capHistory,
+  truncateUserMessage,
+  type ChatHistoryMessage,
+} from "./llm/LLMService.js";
 export {
   LeetCodeClient,
   createLeetCodeClient,

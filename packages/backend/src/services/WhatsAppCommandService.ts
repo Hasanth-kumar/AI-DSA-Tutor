@@ -186,6 +186,7 @@ export class WhatsAppCommandService {
       studyDuration,
       productivityScore,
       pushToNotion: true,
+      deferProblemStatus: false,
     });
 
     let reply = `✅ Session logged for ${problem.name}!\n${result.summary}\nConfidence: ${result.confidence}/100`;

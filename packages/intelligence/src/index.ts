@@ -1,5 +1,5 @@
 /**
- * Intelligence layer — five engines + orchestrator (pure TS, no I/O).
+ * Intelligence layer — six engines + orchestrator (pure TS, no I/O).
  */
 export type {
   DifficultyRecommendation,
@@ -10,6 +10,7 @@ export type {
   PriorityWeights,
   PrerequisiteViolation,
   ProblemSuggestion,
+  ResolvePlanSlot,
   RevisionProblem,
   SessionSnapshot,
   SM2State,
@@ -35,6 +36,19 @@ export { sm2Update, readSM2State, topicToSM2Quality } from "./revision-engine/sm
 export { RevisionEngine } from "./revision-engine/RevisionEngine.js";
 export { WeaknessEngine } from "./weakness-engine/WeaknessEngine.js";
 export { DifficultyEngine } from "./difficulty-engine/DifficultyEngine.js";
+export {
+  DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ProblemReviewEngine,
+  type AdmissionDecision,
+  type AdmissionReason,
+  type AttemptSignal,
+  type ProblemReviewConfig,
+  type ProblemReviewState,
+  type ResolveOutcome,
+  type ResolveRating,
+  type ResolveSlot,
+  type SlotSelection,
+} from "./problem-review-engine/ProblemReviewEngine.js";
 export {
   deriveTopicDifficultyFromConfidence,
   deriveTopicStatusAfterSession,

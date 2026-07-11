@@ -120,6 +120,24 @@ export class ProblemRepository {
     };
   }
 
+  /** Log time + attempt count without changing status — finalized after mistake capture. */
+  recordAttempt(id: string, timeTakenMinutes: number): ProblemRow | null {
+    const problem = this.findById(id);
+    if (!problem) return null;
+
+    const attempts = (problem.attempts ?? 0) + 1;
+    this.update(id, {
+      attempts,
+      timeTaken: timeTakenMinutes,
+    });
+    return {
+      ...problem,
+      attempts,
+      timeTaken: timeTakenMinutes,
+      updatedAt: Date.now(),
+    };
+  }
+
   findByNameFuzzy(name: string): ProblemRow | null {
     const normalized = name.toLowerCase().trim();
     if (!normalized) return null;

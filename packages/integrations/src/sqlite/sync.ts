@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, notInArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { NotionTopic } from "@dsa/database/notion-types";
-import { problems, sessions, syncConflicts, topics } from "@dsa/database/schema";
+import { problemReviews, problems, sessions, syncConflicts, topics } from "@dsa/database/schema";
 import type { NotionClient } from "../notion/NotionClient.js";
 import { isFullPage, mapProblemPage, mapSessionPage, mapTopicPage } from "../notion/mappers.js";
 import { normalizeProblemStatus } from "../notion/problem-fields.js";
@@ -53,29 +53,26 @@ export async function syncNotionToSqlite(
     const localTopics = db.select().from(topics).all();
     const localById = new Map(localTopics.map((t) => [t.id, t]));
 
-    db.delete(sessions).run();
-    db.delete(problems).run();
+    // Upsert inside a transaction so a mid-pull failure cannot leave sessions
+    // wiped (the old delete-all-then-insert path deleted sessions first, then
+    // failed on problem_reviews FK when wiping problems).
+    const syncTx = sqlite.transaction(() => {
+      const notionTopicIds = new Set<string>();
+      const notionProblemIds = new Set<string>();
+      const notionSessionIds = new Set<string>();
 
-    const notionTopicIds = new Set<string>();
-
-    for (const page of topicPages) {
-      if (!isFullPage(page)) continue;
-      const mapped = mapTopicPage(page);
-      notionTopicIds.add(mapped.id);
-      mergeTopicFromNotion(db, mapped, localById.get(mapped.id), now);
-    }
-
-    for (const local of localTopics) {
-      if (!notionTopicIds.has(local.id)) {
-        db.delete(topics).where(eq(topics.id, local.id)).run();
+      for (const page of topicPages) {
+        if (!isFullPage(page)) continue;
+        const mapped = mapTopicPage(page);
+        notionTopicIds.add(mapped.id);
+        mergeTopicFromNotion(db, mapped, localById.get(mapped.id), now);
       }
-    }
 
-    for (const page of problemPages) {
-      if (!isFullPage(page)) continue;
-      const p = mapProblemPage(page);
-      db.insert(problems)
-        .values({
+      for (const page of problemPages) {
+        if (!isFullPage(page)) continue;
+        const p = mapProblemPage(page);
+        notionProblemIds.add(p.id);
+        const row = {
           id: p.id,
           name: p.name,
           topicId: p.topicId ?? null,
@@ -86,15 +83,31 @@ export async function syncNotionToSqlite(
           timeTaken: p.timeTaken ?? null,
           notes: p.notes ?? null,
           updatedAt: now,
-        })
-        .run();
-    }
+        };
+        db.insert(problems)
+          .values(row)
+          .onConflictDoUpdate({
+            target: problems.id,
+            set: {
+              name: row.name,
+              topicId: row.topicId,
+              difficulty: row.difficulty,
+              leetcodeLink: row.leetcodeLink,
+              status: row.status,
+              attempts: row.attempts,
+              timeTaken: row.timeTaken,
+              notes: row.notes,
+              updatedAt: row.updatedAt,
+            },
+          })
+          .run();
+      }
 
-    for (const page of sessionPages) {
-      if (!isFullPage(page)) continue;
-      const s = mapSessionPage(page);
-      db.insert(sessions)
-        .values({
+      for (const page of sessionPages) {
+        if (!isFullPage(page)) continue;
+        const s = mapSessionPage(page);
+        notionSessionIds.add(s.id);
+        const row = {
           id: s.id,
           date: s.date.getTime(),
           topicId: s.topicId ?? null,
@@ -102,9 +115,56 @@ export async function syncNotionToSqlite(
           studyDuration: s.studyDuration ?? null,
           productivityScore: s.productivityScore ?? null,
           updatedAt: now,
-        })
-        .run();
-    }
+        };
+        db.insert(sessions)
+          .values(row)
+          .onConflictDoUpdate({
+            target: sessions.id,
+            set: {
+              date: row.date,
+              topicId: row.topicId,
+              problemsSolved: row.problemsSolved,
+              studyDuration: row.studyDuration,
+              productivityScore: row.productivityScore,
+              updatedAt: row.updatedAt,
+            },
+          })
+          .run();
+      }
+
+      // Drop sessions Notion no longer has. If Notion returned none, keep the
+      // local rows — an empty pull after a failed query must not erase history.
+      if (notionSessionIds.size > 0) {
+        db.delete(sessions).where(notInArray(sessions.id, [...notionSessionIds])).run();
+      }
+
+      // Drop problems Notion no longer has — but never wipe rows still
+      // referenced by local-only problem_reviews (FK would fail / lose FSRS state).
+      const reviewedIds = new Set(
+        db.select({ id: problemReviews.problemId }).from(problemReviews).all().map((r) => r.id),
+      );
+      const staleProblems = db
+        .select({ id: problems.id })
+        .from(problems)
+        .all()
+        .map((r) => r.id)
+        .filter((id) => !notionProblemIds.has(id) && !reviewedIds.has(id));
+      for (const id of staleProblems) {
+        db.delete(problems).where(eq(problems.id, id)).run();
+      }
+
+      // Drop topics Notion no longer has (skip if still referenced locally).
+      for (const local of localTopics) {
+        if (notionTopicIds.has(local.id)) continue;
+        try {
+          db.delete(topics).where(eq(topics.id, local.id)).run();
+        } catch {
+          // FK to cards/notes/attempts — keep the topic row locally.
+        }
+      }
+    });
+
+    syncTx();
 
     return {
       topics: topicPages.length,

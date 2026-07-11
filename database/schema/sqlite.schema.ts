@@ -65,7 +65,41 @@ export const problemAttempts = sqliteTable("problem_attempts", {
   usedCoach: integer("used_coach").default(0),
   /** Coach interactions (hints + chat messages) recorded for this problem. */
   hintCount: integer("hint_count").default(0),
+  /** 'solve' | 'resolve' — a re-solve is recorded as a normal attempt row. */
+  kind: text("kind").notNull().default("solve"),
   createdAt: integer("created_at").notNull(),
+});
+
+/**
+ * Per-problem re-solve pool (problem spaced-repetition design §7). One row per
+ * admitted problem; FSRS runtime state mirrors `cards`. LOCAL-ONLY — never
+ * synced, never wiped by Notion pulls (same class as problem_attempts /
+ * card_embeddings). Scheduling is per-problem FSRS, NOT the topic-level SM-2.
+ */
+export const problemReviews = sqliteTable("problem_reviews", {
+  problemId: text("problem_id")
+    .primaryKey()
+    .references(() => problems.id),
+  admittedAt: integer("admitted_at").notNull(),
+  /** 'mistake' | 'coach' | 'slow' | 'hard' | 'manual' */
+  admissionReason: text("admission_reason").notNull(),
+  retired: integer("retired").notNull().default(0),
+  /** Leech suspension — resurfaces after the topic's next revision session. */
+  suspended: integer("suspended").notNull().default(0),
+  // Per-problem FSRS state (ts-fsrs Card shape, same columns as `cards`).
+  stability: real("stability"),
+  difficulty: real("difficulty"),
+  due: integer("due"),
+  lastReview: integer("last_review"),
+  reps: integer("reps").notNull().default(0),
+  lapses: integer("lapses").notNull().default(0),
+  /** FSRS state enum: 0=New, 1=Learning, 2=Review, 3=Relearning. */
+  state: integer("state").notNull().default(0),
+  elapsedDays: integer("elapsed_days").notNull().default(0),
+  scheduledDays: integer("scheduled_days").notNull().default(0),
+  learningSteps: integer("learning_steps").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
 });
 
 /** Obsidian note metadata + cached content; the vault is the source of truth. */

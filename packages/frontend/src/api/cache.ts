@@ -78,6 +78,10 @@ export function invalidateForDataChange(type: string): void {
       invalidateCache("dashboard");
       invalidateCache("activity:");
       break;
+    case "resolve":
+      invalidateCache("resolve-queue");
+      invalidateCache("plan");
+      break;
     case "sync":
       invalidateCache("health:");
       invalidateCache("sync-status");

@@ -7,6 +7,7 @@ export type AppTab =
   | "today"
   | "overview"
   | "review"
+  | "resolve"
   | "graph"
   | "activity"
   | "session"
@@ -59,6 +60,21 @@ const STUDY_NAV: NavItem[] = [
     context: (m) =>
       m.reviewDue != null && m.reviewDue > 0 ? `${m.reviewDue} cards due now` : null,
     badge: (m) => (m.reviewDue && m.reviewDue > 0 ? m.reviewDue : null),
+  },
+  {
+    id: "resolve",
+    label: "Re-solve",
+    icon: (
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9M13.5 2v3h-3" strokeLinecap="round" />
+        <path d="M6 8l1.5 1.5L10.5 6.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    context: (m) =>
+      m.resolveDue != null && m.resolveDue > 0
+        ? `${m.resolveDue} problem${m.resolveDue === 1 ? "" : "s"} due`
+        : null,
+    badge: (m) => (m.resolveDue && m.resolveDue > 0 ? m.resolveDue : null),
   },
   {
     id: "session",

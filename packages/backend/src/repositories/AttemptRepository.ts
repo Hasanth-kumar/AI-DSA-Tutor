@@ -16,6 +16,8 @@ export interface CreateAttemptInput {
   /** Solved with coach help (D) — auto-captured from coach interactions. */
   usedCoach?: boolean;
   hintCount?: number;
+  /** 'solve' (default) | 'resolve' — re-solves share the one attempt history. */
+  kind?: "solve" | "resolve";
 }
 
 const MISTAKE_WINDOW_DAYS = 90;
@@ -56,6 +58,7 @@ export class AttemptRepository {
         mistakeTag: input.mistakeTag ?? null,
         usedCoach: input.usedCoach ? 1 : 0,
         hintCount: input.hintCount ?? 0,
+        kind: input.kind ?? "solve",
         createdAt: now,
       })
       .run();

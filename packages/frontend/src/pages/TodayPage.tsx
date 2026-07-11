@@ -11,6 +11,7 @@ import { MasteryRing } from "../components/MasteryRing.js";
 import { MistakeCapture } from "../components/MistakeCapture.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ProblemNotePanel } from "../components/ProblemNotePanel.js";
+import { ResolveTodaySection } from "../components/ResolveTodaySection.js";
 import { ScoreBar } from "../components/ScoreBar.js";
 import { Skeleton, SkeletonLines, SkeletonRows } from "../components/Skeleton.js";
 import { WarmupCard } from "../components/WarmupCard.js";
@@ -119,12 +120,31 @@ function RevisionGradeButtons({
   );
 }
 
+/** Midnight local time — abandoned problem starts from prior days don't count. */
+function startOfLocalDayMs(now = Date.now()): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 function loadStarts(): Record<string, number> {
   try {
-    return JSON.parse(localStorage.getItem(STARTS_STORAGE_KEY) ?? "{}") as Record<
+    const raw = JSON.parse(localStorage.getItem(STARTS_STORAGE_KEY) ?? "{}") as Record<
       string,
       number
     >;
+    const cutoff = startOfLocalDayMs();
+    const fresh: Record<string, number> = {};
+    for (const [id, startedAt] of Object.entries(raw)) {
+      if (typeof startedAt === "number" && startedAt >= cutoff) {
+        fresh[id] = startedAt;
+      }
+    }
+    // Drop yesterday's abandoned starts so a Mac-app relaunch doesn't show FOCUS forever.
+    if (Object.keys(fresh).length !== Object.keys(raw).length) {
+      saveStarts(fresh);
+    }
+    return fresh;
   } catch {
     return {};
   }
@@ -278,6 +298,22 @@ export function TodayPage({ onOpenCoach }: Props) {
     return () => {
       cancelled = true;
     };
+  }, [plan]);
+
+  // Drop start timers for problems that aren't on today's plan — leftover
+  // localStorage entries were pinning the WARM-UP→FOCUS strip open forever.
+  useEffect(() => {
+    if (!plan) return;
+    const allowed = new Set(plan.suggestedProblems.map((p) => p.problemId));
+    setStarts((prev) => {
+      const next: Record<string, number> = {};
+      for (const [id, startedAt] of Object.entries(prev)) {
+        if (allowed.has(id)) next[id] = startedAt;
+      }
+      if (Object.keys(next).length === Object.keys(prev).length) return prev;
+      saveStarts(next);
+      return next;
+    });
   }, [plan]);
 
   const startProblem = (problemId: string) => {
@@ -769,6 +805,7 @@ export function TodayPage({ onOpenCoach }: Props) {
           )}
 
           <div className="today-grid">
+            <div style={{ display: "flex", flexDirection: "column" }}>
             <section className="panel-v2">
               <div className="panel-v2-header">
                 <h3 className="panel-v2-title">Suggested problems</h3>
@@ -876,6 +913,13 @@ export function TodayPage({ onOpenCoach }: Props) {
                 );
               })}
             </section>
+
+            {/* Committed re-solve slots (§10) — collapsed, never the full pool. */}
+            <ResolveTodaySection
+              slots={plan.resolveSlots ?? []}
+              onChanged={() => void refresh()}
+            />
+            </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "1.4rem" }}>
               <section className="panel-v2">

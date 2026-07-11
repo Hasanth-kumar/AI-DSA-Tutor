@@ -9,6 +9,7 @@ export interface NavMeta {
   todayDuration: number | null;
   coachContext: string | null;
   reviewDue: number | null;
+  resolveDue: number | null;
   topicCount: number | null;
   streakDays: number | null;
   syncLabel: string | null;
@@ -27,6 +28,9 @@ export function useNavMeta(activeTab: string, coachAnchorId: string | null): Nav
     [],
   );
   const { data: reviewDue } = usePolling(fetchReview, NAV_POLL_MS, { initialLoading: false });
+
+  const fetchResolve = useCallback(() => api.getResolveQueue().then((q) => q.dueCount), []);
+  const { data: resolveDue } = usePolling(fetchResolve, NAV_POLL_MS, { initialLoading: false });
 
   const fetchTopics = useCallback(
     () => api.getTopics().then((r) => r.count),
@@ -51,6 +55,7 @@ export function useNavMeta(activeTab: string, coachAnchorId: string | null): Nav
     todayDuration: plan?.estimatedDuration ?? null,
     coachContext: activeTab === "coach" ? coachContext : null,
     reviewDue: reviewDue ?? null,
+    resolveDue: resolveDue ?? null,
     topicCount: topicCount ?? null,
     streakDays: streak?.currentStreakDays ?? null,
     syncLabel: sync?.lastSyncAt ?? null,

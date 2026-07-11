@@ -5,8 +5,9 @@ import {
   deriveTopicStatusAfterSession,
 } from "@dsa/intelligence";
 import type { AppConfig } from "@dsa/shared";
-import type { AttemptRepository } from "../repositories/AttemptRepository.js";
-import type { ProblemRepository } from "../repositories/ProblemRepository.js";
+import { parseMistakeTags, type AttemptRepository } from "../repositories/AttemptRepository.js";
+import type { ProblemReviewService } from "./ProblemReviewService.js";
+import type { ProblemRepository, ProblemRow } from "../repositories/ProblemRepository.js";
 import type {
   CreateSessionInput,
   SessionRepository,
@@ -33,6 +34,11 @@ export interface CompleteSessionInput extends CreateSessionInput {
    * must not reschedule (confidence / weakness still update).
    */
   warmupGraded?: boolean;
+  /**
+   * When false, mark the problem Solved immediately (WhatsApp / inline mistakeTag).
+   * Default: defer until POST /attempts/:id/mistake when attemptRepo is wired.
+   */
+  deferProblemStatus?: boolean;
 }
 
 export interface SessionResult {
@@ -69,6 +75,8 @@ export class SessionService {
     private readonly attemptRepo?: AttemptRepository,
     /** Coach interactions per problemId (D2) — read + cleared when the attempt is stamped. */
     private readonly coachUsage?: Map<string, number>,
+    /** Re-solve pool hooks (re-solve design §9): admission re-eval + leech unsuspend. */
+    private readonly problemReviews?: ProblemReviewService,
   ) {}
 
   list(limit = 50): SessionRow[] {
@@ -179,13 +187,21 @@ export class SessionService {
     let attemptId: string | undefined;
     let usedCoach: boolean | undefined;
     if (input.problemId && problem) {
-      solvedProblem = this.problemRepo.recordSolve(
+      solvedProblem = this.problemRepo.recordAttempt(
         input.problemId,
         input.studyDuration,
       );
-      if (solvedProblem) {
+      const deferStatus =
+        input.deferProblemStatus ??
+        Boolean(this.attemptRepo && input.mistakeTag == null);
+
+      if (solvedProblem && !deferStatus) {
+        const tags = parseMistakeTags(input.mistakeTag ?? null);
+        solvedProblem = this.applyProblemStatus(input.problemId, tags, solvedProblem);
+      } else if (solvedProblem) {
         this.notionSync.markProblemDirty(input.problemId, solvedProblem);
       }
+
       const hintCount = this.coachUsage?.get(input.problemId) ?? 0;
       usedCoach = hintCount > 0;
       this.coachUsage?.delete(input.problemId);
@@ -199,7 +215,11 @@ export class SessionService {
         usedCoach,
         hintCount,
       }).id;
+      // Admission re-eval after every attempt (re-solve design §4).
+      this.problemReviews?.evaluateAdmission(input.problemId);
     }
+    // A completed session on the topic lifts its leech suspensions (§5).
+    this.problemReviews?.onTopicRevised(input.topicId);
 
     // Notion push is best-effort: the records are already marked dirty above,
     // so a failed push (offline, schema drift) replays on the next sync rather
@@ -238,6 +258,57 @@ export class SessionService {
         topicSnapshot.nextRevisionAt?.toISOString().slice(0, 10) ?? "not scheduled"
       }.${notionWarning ? ` (Notion push failed — queued for next sync: ${notionWarning})` : ""}`,
     };
+  }
+
+  /**
+   * Finalize problem status after mistake capture (1.4): tags → Revision needed,
+   * smooth solve → Solved.
+   */
+  async finalizeProblemAfterMistake(problemId: string, tags: string[]): Promise<void> {
+    const problem = this.problemRepo.findById(problemId);
+    if (!problem) return;
+    this.applyProblemStatus(problemId, tags, problem);
+    // Tags recorded after the attempt can flip the admission decision (§4).
+    this.problemReviews?.evaluateAdmission(problemId);
+    await this.planService.invalidateTodaysPlan();
+  }
+
+  /**
+   * One-time repair: problems tagged with mistakes on their latest attempt
+   * should not stay Solved.
+   */
+  async repairProblemStatusesFromAttempts(): Promise<number> {
+    const REPAIR_KEY = "problem_status_mistake_repair_v1";
+    if (this.syncMetaRepo.get(REPAIR_KEY)) return 0;
+    if (!this.attemptRepo) return 0;
+
+    let repaired = 0;
+    for (const problem of this.problemRepo.findAll()) {
+      const [latest] = this.attemptRepo.findByProblemId(problem.id, 1);
+      if (!latest) continue;
+      const tags = parseMistakeTags(latest.mistakeTag);
+      if (tags.length > 0 && problem.status !== "Revision needed") {
+        this.applyProblemStatus(problem.id, tags, problem);
+        repaired++;
+      }
+    }
+    this.syncMetaRepo.set(REPAIR_KEY, "1");
+    if (repaired > 0) {
+      await this.planService.invalidateTodaysPlan();
+    }
+    return repaired;
+  }
+
+  private applyProblemStatus(
+    problemId: string,
+    tags: string[],
+    current: ProblemRow,
+  ): ProblemRow {
+    const status = tags.length > 0 ? "Revision needed" : "Solved";
+    const updated = this.problemRepo.update(problemId, { status });
+    const row = updated ?? { ...current, status, updatedAt: Date.now() };
+    this.notionSync.markProblemDirty(problemId, row);
+    return row;
   }
 
   /**

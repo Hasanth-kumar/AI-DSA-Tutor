@@ -13,6 +13,11 @@ import type {
   Problem,
   ProblemNote,
   RecallGradeResult,
+  ResolveCompleteResult,
+  ResolveOutcomeKind,
+  ResolveQueueItem,
+  ResolveQueueResponse,
+  ResolveRating,
   ReviewCard,
   ReviewGradeResult,
   ReviewQueue,
@@ -135,6 +140,7 @@ const CACHE_TTL = {
   streak: 30_000,
   syncStatus: 30_000,
   review: 30_000,
+  resolve: 30_000,
 } as const;
 
 export const api = {
@@ -287,6 +293,53 @@ export const api = {
     cachedFetch(`review-queue:${cap}`, CACHE_TTL.review, () =>
       request<ReviewQueue>(`/api/review/queue?cap=${cap}`),
     ),
+
+  getResolveQueue: () =>
+    cachedFetch("resolve-queue", CACHE_TTL.resolve, () =>
+      request<ResolveQueueResponse>("/api/resolve/queue"),
+    ),
+
+  completeResolve: (
+    problemId: string,
+    body: { outcome: ResolveOutcomeKind; timeTakenMin?: number | null; ratingOverride?: ResolveRating },
+  ) =>
+    request<ResolveCompleteResult>(`/api/resolve/${problemId}/complete`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then((result) => {
+      invalidateCache("resolve-queue");
+      invalidateCache("plan");
+      invalidateCache("dashboard");
+      return result;
+    }),
+
+  skipResolve: (problemId: string) =>
+    request<{ problemId: string; due: number }>(`/api/resolve/${problemId}/skip`, {
+      method: "POST",
+    }).then((result) => {
+      invalidateCache("resolve-queue");
+      invalidateCache("plan");
+      return result;
+    }),
+
+  admitResolve: (problemId: string) =>
+    request<ResolveQueueItem>(`/api/resolve/${problemId}/admit`, { method: "POST" }).then(
+      (result) => {
+        invalidateCache("resolve-queue");
+        invalidateCache("plan");
+        return result;
+      },
+    ),
+
+  setResolveFlags: (problemId: string, flags: { retired?: boolean; suspended?: boolean }) =>
+    request<ResolveQueueItem>(`/api/resolve/${problemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(flags),
+    }).then((result) => {
+      invalidateCache("resolve-queue");
+      invalidateCache("plan");
+      return result;
+    }),
 
   gradeReviewCard: (cardId: string, quality: number) =>
     request<ReviewGradeResult>("/api/review/grade", {

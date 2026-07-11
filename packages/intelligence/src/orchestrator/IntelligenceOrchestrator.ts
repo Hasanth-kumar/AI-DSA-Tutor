@@ -1,4 +1,5 @@
 import { DifficultyEngine } from "../difficulty-engine/DifficultyEngine.js";
+import { ProblemReviewEngine } from "../problem-review-engine/ProblemReviewEngine.js";
 import { RoadmapEngine } from "../roadmap-engine/RoadmapEngine.js";
 import { RevisionEngine } from "../revision-engine/RevisionEngine.js";
 import { TopicPriorityEngine } from "../topic-priority-engine/TopicPriorityEngine.js";
@@ -24,6 +25,8 @@ export class IntelligenceOrchestrator {
     private readonly weakness: WeaknessEngine,
     private readonly difficulty: DifficultyEngine,
     private readonly roadmap: RoadmapEngine,
+    /** Problem re-solve decisions (§8) — stateless, exposed directly. */
+    readonly problemReview: ProblemReviewEngine = new ProblemReviewEngine(),
   ) {}
 
   generatePlan(
@@ -177,5 +180,6 @@ export function createIntelligenceOrchestrator(
     weakness,
     difficulty,
     roadmap,
+    new ProblemReviewEngine(),
   );
 }

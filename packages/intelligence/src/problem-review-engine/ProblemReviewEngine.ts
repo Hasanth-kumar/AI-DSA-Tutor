@@ -1,0 +1,179 @@
+import type { TopicDifficulty } from "../types.js";
+
+/**
+ * Problem re-solve engine (problem-spaced-repetition design §8) — the sixth
+ * pure engine. Decides pool admission, infers FSRS ratings from re-solve
+ * outcomes, and fits the due queue to daily capacity with compression
+ * semantics. FSRS state *transitions* stay in the backend's ts-fsrs wrapper
+ * (same split as cards); this engine is snapshot in → decision out, no I/O.
+ */
+
+const MS_PER_DAY = 86_400_000;
+
+export interface ProblemReviewConfig {
+  /** Admission slow-solve cutoffs in minutes (§4). Match the 0016 backfill. */
+  slowThresholdMin: Record<TopicDifficulty, number>;
+  /** Consecutive clean re-solves before retirement (§4). */
+  retireCleanStreak: number;
+  /** Minimum FSRS stability (days) before retirement (§4). */
+  retireMinStabilityDays: number;
+  /** Lapses before a problem is a leech and gets suspended (§5). */
+  leechLapses: number;
+  /** Days overdue past which a problem force-promotes onto Today (§6). */
+  escalateDays: number;
+}
+
+export const DEFAULT_PROBLEM_REVIEW_CONFIG: ProblemReviewConfig = {
+  slowThresholdMin: { Easy: 25, Medium: 45, Hard: 75 },
+  retireCleanStreak: 3,
+  retireMinStabilityDays: 90,
+  leechLapses: 4,
+  escalateDays: 14,
+};
+
+export type AdmissionReason = "mistake" | "coach" | "slow" | "hard" | "manual";
+/** The admission reason, or null = stays out of the pool (§4). */
+export type AdmissionDecision = AdmissionReason | null;
+
+/** One attempt's struggle signals (mistake tags pre-parsed by the caller). */
+export interface AttemptSignal {
+  /** Minutes, null when not timed. */
+  timeTaken: number | null;
+  mistakeTags: string[];
+  usedCoach: boolean;
+  hintCount: number;
+}
+
+/** Maps 1:1 onto ts-fsrs Again/Hard/Good/Easy in the backend wrapper. */
+export type ResolveRating = "again" | "hard" | "good" | "easy";
+
+/** A completed re-solve, as reported by the completion flow (§5). */
+export interface ResolveOutcome {
+  solved: boolean;
+  usedCoach: boolean;
+  hintCount: number;
+  /** Minutes, null when not timed. */
+  timeTakenMin: number | null;
+  difficulty: TopicDifficulty | null;
+}
+
+/** Scheduling snapshot of one pooled problem (subset of `problem_reviews`). */
+export interface ProblemReviewState {
+  problemId: string;
+  /** Epoch ms; null = never scheduled. */
+  due: number | null;
+  /** FSRS stability in days. */
+  stability: number | null;
+  lapses: number;
+  retired?: boolean;
+  suspended?: boolean;
+}
+
+export interface ResolveSlot {
+  review: ProblemReviewState;
+  daysOverdue: number;
+  /** Escalation valve (§6): admitted past capacity because critically overdue. */
+  promoted: boolean;
+}
+
+export interface SlotSelection {
+  active: ResolveSlot[];
+  /** Overflow rescheduled forward, never stacked (§6). New due in epoch ms. */
+  deferred: { review: ProblemReviewState; due: number }[];
+}
+
+export class ProblemReviewEngine {
+  /**
+   * Pool admission (§4). Recomputed after every attempt; reason priority is
+   * mistake > coach > slow > hard. 'manual' only ever comes from the UI
+   * force-admit, never from here. A clean, fast, unaided Easy/Medium history
+   * returns null.
+   */
+  shouldAdmit(
+    problem: { difficulty: TopicDifficulty | null },
+    attempts: AttemptSignal[],
+    config: ProblemReviewConfig = DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ): AdmissionDecision {
+    if (attempts.length === 0) return null;
+    if (attempts.some((a) => a.mistakeTags.length > 0)) return "mistake";
+    if (attempts.some((a) => a.usedCoach || a.hintCount > 0)) return "coach";
+    const cutoff = config.slowThresholdMin[problem.difficulty ?? "Medium"];
+    if (attempts.some((a) => a.timeTaken != null && a.timeTaken > cutoff)) return "slow";
+    if (problem.difficulty === "Hard") return "hard";
+    return null;
+  }
+
+  /** Rating inference from measured signals (§5 table); UI may override. */
+  inferRating(
+    outcome: ResolveOutcome,
+    config: ProblemReviewConfig = DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ): ResolveRating {
+    if (!outcome.solved) return "again";
+    if (outcome.usedCoach || outcome.hintCount > 0) return "hard";
+    const cutoff = config.slowThresholdMin[outcome.difficulty ?? "Medium"];
+    // Untimed cold solve → "good": don't stretch the interval without evidence.
+    if (outcome.timeTakenMin == null || outcome.timeTakenMin > cutoff) return "good";
+    return "easy";
+  }
+
+  /**
+   * Fit the due pool to today's capacity (§6): the most overdue problems fill
+   * the slots; the remainder is rescheduled forward at capacity/day starting
+   * tomorrow (compressQueue semantics — never a guilt-list). The escalation
+   * valve promotes at most ONE extra problem past capacity (even capacity 0)
+   * when it is overdue beyond `escalateDays`.
+   */
+  selectDueSlots(
+    pool: ProblemReviewState[],
+    capacity: number,
+    now: number,
+    config: ProblemReviewConfig = DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ): SlotSelection {
+    const due = pool
+      .filter((p) => !p.retired && !p.suspended && p.due != null && p.due <= now)
+      .sort((a, b) => a.due! - b.due!);
+
+    const daysOverdue = (p: ProblemReviewState) => Math.floor((now - p.due!) / MS_PER_DAY);
+    const active: ResolveSlot[] = due
+      .slice(0, Math.max(0, capacity))
+      .map((review) => ({ review, daysOverdue: daysOverdue(review), promoted: false }));
+
+    const next = due[active.length];
+    if (next && daysOverdue(next) > config.escalateDays) {
+      active.push({ review: next, daysOverdue: daysOverdue(next), promoted: true });
+    }
+
+    const rate = Math.max(1, capacity);
+    const deferred = due.slice(active.length).map((review, i) => ({
+      review,
+      due: now + (Math.floor(i / rate) + 1) * MS_PER_DAY,
+    }));
+
+    return { active, deferred };
+  }
+
+  /**
+   * Retirement (§4): N consecutive clean re-solves with stability past the
+   * threshold. `recentRatings` is most-recent-first (re-infer from attempt
+   * rows via inferRating).
+   */
+  shouldRetire(
+    state: { stability: number | null },
+    recentRatings: ResolveRating[],
+    config: ProblemReviewConfig = DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ): boolean {
+    if ((state.stability ?? 0) < config.retireMinStabilityDays) return false;
+    if (recentRatings.length < config.retireCleanStreak) return false;
+    return recentRatings
+      .slice(0, config.retireCleanStreak)
+      .every((r) => r === "good" || r === "easy");
+  }
+
+  /** Problem leech (§5): suspend and flag the topic instead of drilling harder. */
+  isLeech(
+    state: { lapses: number },
+    config: ProblemReviewConfig = DEFAULT_PROBLEM_REVIEW_CONFIG,
+  ): boolean {
+    return state.lapses >= config.leechLapses;
+  }
+}
