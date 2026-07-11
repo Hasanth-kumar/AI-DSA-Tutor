@@ -1330,6 +1330,7 @@ button.settings-row {
   height: 100%;
   background: var(--accent);
   border-radius: 3px;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .review-card-v2 {
@@ -1340,6 +1341,20 @@ button.settings-row {
   min-height: 300px;
   display: flex;
   flex-direction: column;
+  /* Remounts on card change (key={current.id}) so each new card eases in
+     instead of the question text snapping. */
+  animation: ui-card-advance 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ui-card-advance {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .review-question-serif {
@@ -1378,6 +1393,10 @@ button.settings-row {
   background: var(--bg-surface);
 }
 
+.review-grade-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .review-grade-btn--primary {
   border-color: var(--accent);
   background: var(--accent);
@@ -1397,6 +1416,7 @@ button.settings-row {
   height: 8px;
   border-radius: 50%;
   background: var(--bg-surface);
+  transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
 }
 
 .review-dot--done {
@@ -1407,6 +1427,7 @@ button.settings-row {
   background: transparent;
   border: 1.5px solid var(--accent);
   box-sizing: border-box;
+  transform: scale(1.25);
 }
 
 /* ─── Session v2 ─────────────────────────── */

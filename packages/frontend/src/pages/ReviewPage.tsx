@@ -257,7 +257,7 @@ export function ReviewPage() {
         </div>
       ) : (
         <>
-          <div className="review-card-v2">
+          <div className="review-card-v2" key={current.id}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.6rem" }}>
               <span style={{ fontSize: "0.66rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--accent)" }}>
                 {formatCardType(current.type)}

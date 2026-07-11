@@ -1351,6 +1351,26 @@ button:focus-visible,
   color: var(--accent);
 }
 
+/* Check icon swaps in on copy — pop it so the confirmation registers. React
+   remounts the svg on the icon swap, so this runs fresh each copy. */
+.coach-copy-btn--copied .coach-copy-btn__icon svg {
+  animation: ui-icon-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes ui-icon-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 .coach-copy-btn--code {
   padding: 0.2rem 0.45rem;
 }
