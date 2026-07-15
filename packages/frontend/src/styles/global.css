@@ -1,32 +1,36 @@
 :root {
-  /* Claude-inspired dark — warm navy-charcoal surfaces, cream ink, coral accent */
+  /* Deep warm-black — Design Explorations 2a / Atelier fusion */
   color-scheme: dark;
 
-  --bg: #181715;
-  --bg-elevated: #1f1e1b;
-  --bg-card: #252320;
-  --bg-surface: #2c2a26;
-  --border: rgba(250, 249, 245, 0.09);
-  --border-soft: rgba(250, 249, 245, 0.05);
-  --border-strong: rgba(250, 249, 245, 0.14);
+  --bg: #0f0e0c;
+  --bg-elevated: #141210;
+  --bg-card: #1a1815;
+  --bg-surface: #221f1a;
+  --border: rgba(245, 242, 234, 0.1);
+  --border-soft: rgba(245, 242, 234, 0.06);
+  --border-strong: rgba(245, 242, 234, 0.16);
+  --ghost: rgba(245, 242, 234, 0.04);
 
-  --text: #faf9f5;
-  --text-muted: #a09d96;
-  --text-subtle: #6c6a64;
+  --text: #f5f2ea;
+  --text-muted: #9b968b;
+  --text-subtle: #67635a;
 
   --accent: #cc785c;
+  --accent-ink: #cc785c;
   --accent-hover: #d4845f;
   --accent-active: #a9583e;
   --accent-soft: rgba(204, 120, 92, 0.12);
-  --accent-ring: rgba(204, 120, 92, 0.28);
-  --on-accent: #faf9f5;
+  --accent-ring: rgba(204, 120, 92, 0.24);
+  --on-accent: #f5f2ea;
+  --btn: #f5f2ea;
+  --btn-text: #0f0e0c;
 
-  --success: #5db872;
-  --success-soft: rgba(93, 184, 114, 0.12);
-  --warning: #e8a55a;
-  --warning-soft: rgba(232, 165, 90, 0.12);
-  --danger: #c64545;
-  --danger-soft: rgba(198, 69, 69, 0.12);
+  --success: #7fbb8f;
+  --success-soft: rgba(127, 187, 143, 0.13);
+  --warning: #e0a75e;
+  --warning-soft: rgba(224, 167, 94, 0.13);
+  --danger: #d96c5a;
+  --danger-soft: rgba(217, 108, 90, 0.14);
   --info: #5db8a6;
 
   /* Heatmap intensity ramp (level 4 = accent) */
@@ -36,7 +40,7 @@
   --heat-4: var(--accent);
 
   --skeleton-sheen: rgba(250, 249, 245, 0.04);
-  --overlay: rgba(24, 23, 21, 0.72);
+  --overlay: rgba(15, 14, 12, 0.78);
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -50,8 +54,8 @@
   --space-5: 1.25rem;
   --space-6: 2rem;
 
-  --font-sans: "Inter", system-ui, sans-serif;
-  --font-display: "Lora", "Tiempos Headline", "Copernicus", Georgia, "Times New Roman", serif;
+  --font-sans: "Hanken Grotesk", system-ui, sans-serif;
+  --font-display: "Spectral", Georgia, "Times New Roman", serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22);
@@ -282,7 +286,7 @@ textarea {
 
 .nav button.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 
@@ -438,7 +442,7 @@ textarea {
 
 .stat-icon--accent {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .stat-icon--success {
@@ -510,6 +514,9 @@ textarea {
 .graph-container {
   min-height: 480px;
   position: relative;
+  background: var(--bg-elevated);
+  border-color: var(--border-soft);
+  border-radius: 20px;
 }
 
 /* Topic labels: theme-aware halo so text stays legible over edges/nodes */
@@ -697,7 +704,7 @@ textarea {
   font-weight: 600;
   text-align: center;
   margin: 1.25rem 0;
-  color: var(--accent);
+  color: var(--accent-ink);
   letter-spacing: 0.05em;
   text-shadow: 0 0 30px var(--accent-ring);
 }
@@ -790,6 +797,7 @@ button:focus-visible,
 .coach-layout {
   display: flex;
   flex-direction: column;
+  position: relative;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -841,7 +849,7 @@ button:focus-visible,
 }
 
 .coach-settings-anchor-topic {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .coach-settings-actions {
@@ -1038,39 +1046,76 @@ button:focus-visible,
   flex-shrink: 0;
 }
 
-/* ── Empty state (Claude-style centered hero + composer) ── */
+/* ── Empty state — ChatGPT/Claude: greeting + composer centered as one unit ── */
 .coach-empty-state {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  min-height: 0;
+  width: 100%;
+  padding: 0;
   overflow-y: auto;
 }
 
 .coach-empty-state-inner {
   width: 100%;
-  max-width: 46rem;
+  max-width: 48rem;
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  transform: translateY(-6vh);
+  align-items: center;
+  gap: 1.75rem;
+  flex-shrink: 0;
 }
 
-.coach-empty-state .coach-welcome {
-  padding-bottom: 2rem;
+.coach-empty-state .coach-welcome-heading {
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--text);
 }
 
 .coach-empty-state .coach-composer-wrap {
+  width: 100%;
   padding: 0;
   background: transparent;
 }
 
-.coach-empty-state .coach-composer-prompts {
-  margin-top: 0.5rem;
+.coach-empty-state .coach-composer-inner {
+  width: 100%;
 }
 
-/* ── Welcome / empty state ── */
+.coach-empty-state .coach-composer-prompts {
+  margin-top: 0.75rem;
+}
+
+.coach-layout--empty .coach-settings-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: auto;
+}
+
+.coach-layout--empty .coach-options-panel {
+  position: absolute;
+  top: 2.5rem;
+  right: 0;
+  z-index: 2;
+  margin: 0;
+  justify-content: flex-end;
+}
+
+/* ── Welcome / empty state (legacy styles for icon remnants) ── */
 .coach-welcome {
   display: flex;
   flex-direction: column;
@@ -1171,7 +1216,7 @@ button:focus-visible,
 }
 
 .coach-prompt-btn:hover .coach-prompt-btn__icon {
-  color: var(--accent);
+  color: var(--accent-ink);
   transform: translateX(2px);
 }
 
@@ -1206,12 +1251,12 @@ button:focus-visible,
   padding-top: 0;
 }
 
-/* Assistant avatar — Claude-style coral icon */
+/* Assistant avatar — gradient coral badge, editorial ink cutout */
 .coach-msg-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: var(--accent);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(145deg, var(--accent), var(--accent-ink));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1220,9 +1265,9 @@ button:focus-visible,
 }
 
 .coach-msg-avatar svg {
-  width: 14px;
-  height: 14px;
-  fill: #fff;
+  width: 15px;
+  height: 15px;
+  fill: var(--bg-elevated);
 }
 
 /* Message body */
@@ -1246,9 +1291,9 @@ button:focus-visible,
 
 /* User turn */
 .coach-user-bubble {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-soft);
-  border-radius: 14px 14px 4px 14px;
+  border-radius: 16px;
   padding: 0.8rem 1.05rem;
   font-size: 0.92rem;
   line-height: 1.6;
@@ -1348,7 +1393,7 @@ button:focus-visible,
 }
 
 .coach-copy-btn--copied {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* Check icon swaps in on copy — pop it so the confirmation registers. React
@@ -1658,9 +1703,9 @@ button:focus-visible,
   position: relative;
   max-width: 46rem;
   margin: 0 auto;
-  background: var(--bg-card);
+  background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 1.75rem;
+  border-radius: 1.125rem;
   min-height: 4.5rem;
   padding: 1.15rem 1.35rem 0.85rem;
   display: flex;
@@ -1835,7 +1880,7 @@ button:focus-visible,
 }
 
 .coach-composer-expand-btn--active {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .coach-composer-truncation-hint {
@@ -2117,7 +2162,7 @@ button:focus-visible,
 .plan-duration {
   font-family: var(--font-mono);
   font-size: 0.8rem;
-  color: var(--accent);
+  color: var(--accent-ink);
   background: var(--accent-soft);
   padding: 0.15rem 0.5rem;
   border-radius: 20px;
@@ -2221,7 +2266,7 @@ button:focus-visible,
 
 .curriculum-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .curriculum-btn:disabled {
@@ -2300,25 +2345,21 @@ button:focus-visible,
 .diff-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 0.72rem;
+  font-size: 0.656rem;
   font-weight: 600;
-  padding: 0.15rem 0.5rem;
-  border-radius: 20px;
+  letter-spacing: 0.12em;
   font-family: var(--font-mono);
 }
 
 .diff-badge.diff-easy {
-  background: var(--success-soft);
   color: var(--success);
 }
 
 .diff-badge.diff-medium {
-  background: var(--warning-soft);
   color: var(--warning);
 }
 
 .diff-badge.diff-hard {
-  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -2422,7 +2463,7 @@ button:focus-visible,
 }
 
 .link-muted:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: underline;
 }
 
@@ -2647,7 +2688,7 @@ button:focus-visible,
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-ink);
   min-width: 2.5rem;
   text-align: right;
 }
@@ -2996,10 +3037,6 @@ button:focus-visible,
   .coach-empty-state {
     padding: 1rem 0;
   }
-
-  .coach-empty-state-inner {
-    transform: translateY(-2vh);
-  }
 }
 
 /* Coach — narrow phones */
@@ -3144,31 +3181,35 @@ button:focus-visible,
 :root[data-theme="light"] {
   color-scheme: light;
 
-  /* Claude cream canvas — tinted surfaces, hairline borders */
-  --bg: #faf9f5;
-  --bg-elevated: #f5f0e8;
-  --bg-card: #efe9de;
-  --bg-surface: #e8e0d2;
-  --border: #e6dfd8;
-  --border-soft: #ebe6df;
-  --border-strong: #d8d0c4;
+  /* Atelier Editorial — warm parchment canvas, ink-brown text */
+  --bg: #f4f1e9;
+  --bg-elevated: #efeadd;
+  --bg-card: #e7e1d2;
+  --bg-surface: #ddd6c4;
+  --border: rgba(34, 30, 21, 0.16);
+  --border-soft: rgba(34, 30, 21, 0.09);
+  --border-strong: rgba(34, 30, 21, 0.24);
+  --ghost: rgba(34, 30, 21, 0.05);
 
-  --text: #141413;
-  --text-muted: #6c6a64;
-  --text-subtle: #8e8b82;
+  --text: #221e15;
+  --text-muted: #6d6759;
+  --text-subtle: #9a927d;
 
   --accent: #cc785c;
+  --accent-ink: #a8502e;
   --accent-hover: #d4845f;
   --accent-active: #a9583e;
-  --accent-soft: rgba(204, 120, 92, 0.12);
+  --accent-soft: rgba(204, 120, 92, 0.16);
   --accent-ring: rgba(204, 120, 92, 0.22);
+  --btn: #221e15;
+  --btn-text: #f4f1e9;
 
-  --success: #2e9e64;
-  --success-soft: rgba(46, 158, 100, 0.1);
-  --warning: #b07c20;
-  --warning-soft: rgba(176, 124, 32, 0.1);
-  --danger: #c05252;
-  --danger-soft: rgba(192, 82, 82, 0.1);
+  --success: #3e7d54;
+  --success-soft: rgba(62, 125, 84, 0.1);
+  --warning: #a06d2a;
+  --warning-soft: rgba(160, 109, 42, 0.1);
+  --danger: #a83e2e;
+  --danger-soft: rgba(168, 62, 46, 0.1);
   --info: #5e83a8;
 
   --heat-1: #f5ebe4;
@@ -3200,22 +3241,22 @@ button:focus-visible,
 
 :root[data-theme="dark"] .btn-primary,
 :root:not([data-theme]) .btn-primary {
-  background: #cc785c;
-  border-color: #b86d52;
-  color: #faf9f5;
+  background: var(--accent);
+  border-color: var(--accent-ink);
+  color: var(--on-accent);
 }
 
 :root[data-theme="dark"] .btn-primary:hover,
 :root:not([data-theme]) .btn-primary:hover {
-  background: #d4845f;
-  border-color: #c9785c;
-  color: #faf9f5;
+  background: var(--accent-hover);
+  border-color: var(--accent-ink);
+  color: var(--on-accent);
 }
 
 :root[data-theme="dark"] .btn-primary:active:not(:disabled),
 :root:not([data-theme]) .btn-primary:active:not(:disabled) {
-  background: #a9583e;
-  border-color: #9a5038;
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
 }
 
 /* Nested rows inside cards — elevated surface on card background */
@@ -3225,7 +3266,7 @@ button:focus-visible,
 :root:not([data-theme]) .today-problem,
 :root:not([data-theme]) .today-revision,
 :root:not([data-theme]) .today-revision-list li {
-  background: #1f1e1b;
+  background: var(--bg-elevated);
   border-color: var(--border-soft);
 }
 
@@ -3236,7 +3277,7 @@ button:focus-visible,
 
 :root[data-theme="dark"] .coach-user-bubble,
 :root:not([data-theme]) .coach-user-bubble {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-soft);
 }
 
@@ -3248,26 +3289,26 @@ button:focus-visible,
 }
 
 :root[data-theme="light"] .coach-user-bubble {
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-color: var(--border-soft);
   box-shadow: none;
 }
 
 :root[data-theme="light"] .btn-primary {
-  background: #cc785c;
-  border-color: #b86d52;
-  color: #faf9f5;
+  background: var(--accent);
+  border-color: var(--accent-ink);
+  color: var(--on-accent);
 }
 
 :root[data-theme="light"] .btn-primary:hover {
-  background: #d4845f;
-  border-color: #c9785c;
-  color: #faf9f5;
+  background: var(--accent-hover);
+  border-color: var(--accent-ink);
+  color: var(--on-accent);
 }
 
 :root[data-theme="light"] .btn-primary:active:not(:disabled) {
-  background: #a9583e;
-  border-color: #9a5038;
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
 }
 
 /* Light mode — cream canvas hierarchy */
@@ -3282,13 +3323,13 @@ button:focus-visible,
 }
 
 :root[data-theme="light"] .coach-composer-inner {
-  background: #f5f0e8;
+  background: var(--bg-elevated);
   border-color: var(--border-soft);
   box-shadow: none;
 }
 
 :root[data-theme="light"] .coach-composer-inner:focus-within {
-  background: #faf9f5;
+  background: var(--bg);
   border-color: color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
   box-shadow: 0 0 0 3px var(--accent-ring);
 }
@@ -3307,7 +3348,7 @@ button:focus-visible,
 :root[data-theme="light"] .today-problem,
 :root[data-theme="light"] .today-revision,
 :root[data-theme="light"] .today-revision-list li {
-  background: #faf9f5;
+  background: var(--bg);
   border-color: var(--border-soft);
 }
 
@@ -3341,7 +3382,7 @@ button:focus-visible,
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 0.75rem;
   font-weight: 600;
   white-space: nowrap;
@@ -3420,13 +3461,13 @@ button:focus-visible,
   text-decoration: none;
 }
 .today-problem-name a:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   text-decoration: underline;
 }
 .today-problem-timer {
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: var(--accent);
+  color: var(--accent-ink);
   white-space: nowrap;
 }
 .today-problem-actions {
@@ -3446,7 +3487,7 @@ button:focus-visible,
   transition: var(--transition);
 }
 .note-chip:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--accent-ring);
 }
 .today-revision {
@@ -3502,7 +3543,7 @@ button:focus-visible,
 .mistake-tag-btn--active {
   border-color: var(--accent);
   background: var(--accent-ring);
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .mistake-capture-actions {
   display: flex;
@@ -3694,7 +3735,7 @@ button:focus-visible,
 }
 
 .warmup-answer-markdown li::marker {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .warmup-answer-markdown strong {
@@ -3724,15 +3765,23 @@ button:focus-visible,
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.35rem;
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-soft);
+  gap: 1.375rem;
+  margin-top: 1.25rem;
 }
 
 .review-triage .btn-ghost {
-  font-size: 0.78rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
   color: var(--text-subtle);
+}
+
+.review-triage .btn-ghost:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
 }
 
 .review-edit-field {
@@ -3758,15 +3807,17 @@ button:focus-visible,
   }
 }
 
-/* Grade button tints (subtle border + text, not loud fills) */
-.grade-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
-.grade-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
-.grade-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
-.grade-accent { color: var(--accent); border-color: var(--accent-ring); }
-.grade-danger:hover, .grade-warning:hover, .grade-success:hover, .grade-accent:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+/* Grade button tints — label stays tone-colored; border/bg only reveal on hover (Atelier). */
+.grade-danger { color: var(--danger); }
+.grade-warning { color: var(--warning); }
+.grade-success { color: var(--success); }
+.grade-accent { color: var(--accent-ink); }
+.grade-danger:hover { border-color: var(--danger); }
+.grade-warning:hover { border-color: var(--warning); }
+.grade-success:hover { border-color: var(--success); }
+.grade-accent:hover { border-color: var(--accent); }
 
-/* Keyboard hint on grade buttons */
-.grade-key { margin-left: 0.35rem; padding: 0 0.3rem; font-size: 0.68rem; font-family: var(--font-mono, monospace); border: 1px solid var(--border-soft); border-radius: 3px; opacity: 0.7; }
+.grade-key { font-family: var(--font-mono, monospace); }
 
 /* Gentle answer reveal */
 .review-answer { animation: reviewReveal 150ms ease-out; }
@@ -3880,7 +3931,7 @@ button:focus-visible,
   border-radius: 999px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-ring);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-size: 0.76rem;
   font-weight: 500;
 }
@@ -4398,7 +4449,7 @@ button:focus-visible,
 }
 
 .session-progress-step--current {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .session-progress-step--current .session-progress-dot {
@@ -4551,8 +4602,9 @@ button:focus-visible,
 }
 
 .rsv-name {
-  font-size: 0.95rem;
-  font-weight: 550;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 500;
   color: var(--text);
   text-decoration: none;
 }
@@ -4570,7 +4622,7 @@ a.rsv-name:hover {
 }
 
 .rsv-distance--overdue {
-  color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 
@@ -4656,7 +4708,7 @@ a.rsv-name:hover {
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .rsv-today-meta {
@@ -4687,11 +4739,11 @@ a.rsv-name:hover {
   font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--warning);
-  border: 1px solid var(--warning-soft);
-  background: var(--warning-soft);
-  border-radius: var(--radius-xs);
-  padding: 0.08rem 0.4rem;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  opacity: 0.85;
+  border-radius: var(--radius-pill);
+  padding: 0.06rem 0.5rem;
 }
 
 .rsv-admit {
