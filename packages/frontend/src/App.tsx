@@ -45,6 +45,7 @@ const SHORTCUTS: { key: string; action: string }[] = [
   { key: "s", action: "Start session (Today)" },
   { key: "l", action: "Log / mark done (Today)" },
   { key: "c", action: "Focus coach chat" },
+  { key: "t", action: "Toggle light / dark mode" },
   { key: "?", action: "Toggle this help" },
 ];
 
@@ -53,7 +54,7 @@ export function App() {
   const [coachAnchorId, setCoachAnchorId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { theme, toggleTheme } = useAppPreferences();
+  const { theme, toggleTheme, accentGlow } = useAppPreferences();
   const navMeta = useNavMeta(tab, coachAnchorId);
   const shortcutsModalRef = useRef<HTMLDivElement>(null);
   const shortcutsReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -133,12 +134,15 @@ export function App() {
       } else if (e.key === "c") {
         e.preventDefault();
         selectTab("coach");
+      } else if (e.key === "t") {
+        e.preventDefault();
+        toggleTheme();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectTab]);
+  }, [selectTab, toggleTheme]);
 
   return (
     <div
@@ -158,6 +162,7 @@ export function App() {
       />
 
       <main className="main">
+        {accentGlow && <div className="main-accent-glow" aria-hidden />}
         <Suspense fallback={<SkeletonPage />}>
           {tab === "coach" ? (
             <CoachingPage anchorProblemId={coachAnchorId} />

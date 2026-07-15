@@ -162,12 +162,14 @@ function NavGroup({
   items,
   tab,
   meta,
+  collapsed,
   onSelect,
 }: {
   label: string;
   items: NavItem[];
   tab: AppTab;
   meta: NavMeta;
+  collapsed: boolean;
   onSelect: (tab: AppTab) => void;
 }) {
   return (
@@ -184,6 +186,7 @@ function NavGroup({
               className={`nav-v2-btn${tab === item.id ? " active" : ""}`}
               aria-current={tab === item.id ? "page" : undefined}
               onClick={() => onSelect(item.id)}
+              title={collapsed ? item.label : undefined}
             >
               <span className="nav-v2-rail" aria-hidden />
               <span className="nav-v2-tile">{item.icon}</span>
@@ -246,8 +249,22 @@ export function Sidebar({
         <kbd>⌘K</kbd>
       </button>
 
-      <NavGroup label="Study" items={STUDY_NAV} tab={tab} meta={meta} onSelect={onSelect} />
-      <NavGroup label="Insights" items={INSIGHTS_NAV} tab={tab} meta={meta} onSelect={onSelect} />
+      <NavGroup
+        label="Study"
+        items={STUDY_NAV}
+        tab={tab}
+        meta={meta}
+        collapsed={collapsed}
+        onSelect={onSelect}
+      />
+      <NavGroup
+        label="Insights"
+        items={INSIGHTS_NAV}
+        tab={tab}
+        meta={meta}
+        collapsed={collapsed}
+        onSelect={onSelect}
+      />
 
       <div className="sidebar-v2-footer">
         {meta.streakDays != null && (
@@ -278,38 +295,51 @@ export function Sidebar({
           </div>
         )}
 
-        <button
-          type="button"
-          className={`nav-v2-btn${tab === "settings" ? " active" : ""}`}
-          onClick={() => onSelect("settings")}
-        >
-          <span className="nav-v2-rail" aria-hidden />
-          <span className="nav-v2-tile">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <div className="sidebar-v2-actions" role="group" aria-label="Sidebar controls">
+          <button
+            type="button"
+            className={`sidebar-v2-icon-btn${tab === "settings" ? " active" : ""}`}
+            onClick={() => onSelect("settings")}
+            aria-label="Settings"
+            title={
+              collapsed
+                ? tab === "settings" && meta.syncLabel
+                  ? `Settings · Synced ${formatRelativeTime(meta.syncLabel)}`
+                  : "Settings"
+                : undefined
+            }
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
               <circle cx="8" cy="8" r="2.2" />
               <path d="M8 1.4v1.6M8 13v1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M1.4 8h1.6M13 8h1.6M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
             </svg>
-          </span>
-          <span className="nav-v2-body">
-            <span className="nav-v2-label">Settings</span>
-            {tab === "settings" && (
-              <span className="nav-v2-context">
-                {meta.syncLabel
-                  ? `Synced ${formatRelativeTime(meta.syncLabel)}`
-                  : "Appearance & sync"}
-              </span>
+            <span className="sidebar-v2-icon-label">Settings</span>
+          </button>
+          <button
+            type="button"
+            className="sidebar-v2-icon-btn"
+            onClick={onToggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={collapsed ? (theme === "dark" ? "Light mode (T)" : "Dark mode (T)") : undefined}
+          >
+            {theme === "dark" ? (
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+                <circle cx="8" cy="8" r="3.2" />
+                <path
+                  d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.85.85M11.75 11.75l.85.85M3.4 12.6l.85-.85M11.75 4.25l.85-.85"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+                <path d="M11.2 10.6A5.4 5.4 0 016.1 2.8a5.6 5.6 0 107.1 7.8z" />
+              </svg>
             )}
-          </span>
-        </button>
-
-        <button type="button" className="nav-v2-btn" onClick={onToggleTheme}>
-          <span className="nav-v2-tile">
-            <span style={{ fontSize: "0.95rem" }}>{theme === "dark" ? "☀" : "☾"}</span>
-          </span>
-          <span className="nav-v2-label">
-            {theme === "dark" ? "Light mode" : "Dark mode"}
-          </span>
-        </button>
+            <span className="sidebar-v2-icon-label">
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </span>
+          </button>
+        </div>
       </div>
     </aside>
   );
