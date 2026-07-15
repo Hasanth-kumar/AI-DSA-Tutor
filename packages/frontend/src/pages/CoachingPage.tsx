@@ -703,20 +703,23 @@ export function CoachingPage({ anchorProblemId }: Props) {
   );
 
   return (
-    <div className="coach-layout">
+    <div className={`coach-layout${isEmpty ? " coach-layout--empty" : ""}`}>
       <div className="coach-settings-bar">
-        <div className="coach-settings-heading">
-          <h1 className="coach-settings-title">Coach</h1>
-          {anchoredProblem && (
-            <div className="coach-settings-anchor">
-              <span className="coach-settings-anchor-dot" aria-hidden />
-              <span>
-                Anchored to{" "}
-                <span className="coach-settings-anchor-topic">{anchoredProblem.name}</span>
-              </span>
-            </div>
-          )}
-        </div>
+        {!isEmpty && (
+          <div className="coach-settings-heading">
+            <div className="coach-page-eyebrow">Socratic guide</div>
+            <h1 className="coach-settings-title">Coach</h1>
+            {anchoredProblem && (
+              <div className="coach-settings-anchor">
+                <span className="coach-settings-anchor-dot" aria-hidden />
+                <span>
+                  Anchored to{" "}
+                  <span className="coach-settings-anchor-topic">{anchoredProblem.name}</span>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="coach-settings-actions">
           <button
@@ -781,15 +784,7 @@ export function CoachingPage({ anchorProblemId }: Props) {
       {isEmpty ? (
         <div className="coach-empty-state">
           <div className="coach-empty-state-inner">
-            <div className="coach-welcome">
-              <div className="coach-welcome-icon">
-                <CoachIcon />
-              </div>
-              <h2 className="coach-welcome-heading">How can I help you learn today?</h2>
-              <p className="coach-welcome-sub">
-                Ask about algorithms, get hints on problems, or explore your weak areas.
-              </p>
-            </div>
+            <h2 className="coach-welcome-heading">How can I help you learn today?</h2>
             {composer}
           </div>
         </div>

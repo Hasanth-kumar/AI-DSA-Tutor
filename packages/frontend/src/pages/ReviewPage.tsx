@@ -6,9 +6,9 @@ import type { ReviewCard, ReviewQueue } from "../types/api.js";
 
 const GRADES: { key: string; label: string; quality: number; hint: string; tone: string }[] = [
   { key: "1", label: "Again", quality: 1, hint: "Forgot", tone: "danger" },
-  { key: "2", label: "Hard", quality: 3, hint: "Recalled with effort", tone: "warning" },
-  { key: "3", label: "Good", quality: 4, hint: "Recalled with minor gaps", tone: "success" },
-  { key: "4", label: "Easy", quality: 5, hint: "Instant recall", tone: "accent" },
+  { key: "2", label: "Hard", quality: 3, hint: "With effort", tone: "warning" },
+  { key: "3", label: "Good", quality: 4, hint: "Minor gaps", tone: "success" },
+  { key: "4", label: "Easy", quality: 5, hint: "Instant", tone: "accent" },
 ];
 
 function formatCardType(type: string): string {
@@ -173,7 +173,7 @@ export function ReviewPage() {
     return (
       <ReviewShell>
         <div className="error-banner">{error}</div>
-        <button type="button" className="btn mt-3" onClick={load}>
+        <button type="button" className="btn-secondary-v2" onClick={load}>
           Retry
         </button>
       </ReviewShell>
@@ -202,7 +202,7 @@ export function ReviewPage() {
                 queue.hasMore ? " — more are due, but the rest can wait." : "."
               }`}
         </p>
-        <button type="button" className="btn btn-ghost mt-3" onClick={load}>
+        <button type="button" className="btn-secondary-v2 review-more-btn" onClick={load}>
           {queue.hasMore ? "Review more" : "Check again"}
         </button>
       </ReviewShell>
@@ -219,11 +219,11 @@ export function ReviewPage() {
 
   return (
     <ReviewShell>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "1.4rem" }}>
+      <div className="review-progress-row">
         <div className="review-progress-bar">
           <div className="review-progress-fill" style={{ width: `${progressPct}%` }} />
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.76rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+        <span className="review-progress-count">
           {index + 1} / {cards.length} due
         </span>
       </div>
@@ -245,11 +245,11 @@ export function ReviewPage() {
               value={editBack}
               onChange={(e) => setEditBack(e.target.value)}
             />
-            <div className="warmup-grades mt-3">
-              <button type="button" className="btn" disabled={busy} onClick={() => void saveEdit()}>
+            <div className="review-edit-actions">
+              <button type="button" className="btn-primary-v2" disabled={busy} onClick={() => void saveEdit()}>
                 Save
               </button>
-              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setEditing(false)}>
+              <button type="button" className="btn-secondary-v2" disabled={busy} onClick={() => setEditing(false)}>
                 Cancel
               </button>
             </div>
@@ -258,15 +258,6 @@ export function ReviewPage() {
       ) : (
         <>
           <div className="review-card-v2" key={current.id}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.6rem" }}>
-              <span style={{ fontSize: "0.66rem", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--accent)" }}>
-                {formatCardType(current.type)}
-              </span>
-              <span style={{ fontSize: "0.66rem", fontFamily: "var(--font-mono)", color: "var(--text-subtle)" }}>
-                card {index + 1} of {cards.length}
-              </span>
-            </div>
-
             {leechAdvisories.length > 0 && (
               <p className="muted text-xs mt-0 mb-3">
                 Leech cards skipped — prerequisites surfaced instead.
@@ -274,7 +265,7 @@ export function ReviewPage() {
             )}
 
             {metaParts.length > 0 && (
-              <p className="muted text-xs mt-0 mb-3" style={{ textTransform: "capitalize" }}>
+              <p className="review-card-meta">
                 {metaParts.join(" · ")}
               </p>
             )}
@@ -289,10 +280,10 @@ export function ReviewPage() {
                   disabled={busy}
                   onClick={() => setRevealed(true)}
                 >
-                  Show answer
+                  Show answer <span className="review-space-hint">space</span>
                 </button>
               ) : (
-                <div style={{ width: "100%", maxWidth: "34ch", borderTop: "1px solid var(--border-soft)", paddingTop: "1.4rem" }}>
+                <div className="review-answer-v2">
                   <CardAnswer content={current.back} className="coach-assistant-text" />
                 </div>
               )}
@@ -305,43 +296,34 @@ export function ReviewPage() {
                 <button
                   key={g.label}
                   type="button"
-                  className={`review-grade-btn${g.tone === "accent" ? " review-grade-btn--primary" : ""} grade-${g.tone}`}
+                  className={`review-grade-btn grade-${g.tone}`}
                   title={g.hint}
                   disabled={busy}
                   onClick={() => void grade(g.quality)}
                 >
-                  <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{g.label}</span>
-                  <span style={{ fontSize: "0.66rem", color: "var(--text-subtle)", fontFamily: "var(--font-mono)" }}>
-                    <kbd className="grade-key">{g.key}</kbd>
+                  <span className="review-grade-btn__label">{g.label}</span>
+                  <span className="review-grade-btn__hint">
+                    {g.key} · {g.hint}
                   </span>
                 </button>
               ))}
             </div>
           )}
 
-          <div className="review-dots" aria-hidden>
-            {cards.map((_, i) => (
-              <span
-                key={i}
-                className={`review-dot${i < index ? " review-dot--done" : ""}${i === index ? " review-dot--current" : ""}`}
-              />
-            ))}
-          </div>
-
           <div className="review-triage">
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void suspend()}>
-              Suspend
+            <button type="button" className="review-triage-btn" disabled={busy} onClick={() => void suspend()}>
+              s suspend
             </button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={startEdit}>
-              Edit
+            <button type="button" className="review-triage-btn" disabled={busy} onClick={startEdit}>
+              e edit
             </button>
             <button
               type="button"
-              className={`btn btn-ghost${confirmDel ? " grade-danger" : ""}`}
+              className={`review-triage-btn${confirmDel ? " review-triage-btn--danger" : ""}`}
               disabled={busy}
               onClick={() => (confirmDel ? void remove() : setConfirmDel(true))}
             >
-              {confirmDel ? "Confirm delete" : "Delete"}
+              {confirmDel ? "confirm delete" : "delete"}
             </button>
           </div>
         </>

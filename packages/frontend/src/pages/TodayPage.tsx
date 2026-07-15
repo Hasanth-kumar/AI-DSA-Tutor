@@ -18,7 +18,7 @@ import { WarmupCard } from "../components/WarmupCard.js";
 import { useAppPreferences } from "../hooks/useAppPreferences.js";
 import { usePolling } from "../hooks/usePolling.js";
 import { formatRelativeTime } from "../lib/formatRelative.js";
-import { formatTodayDate, timeGreeting } from "../lib/greeting.js";
+import { formatTodayDate } from "../lib/greeting.js";
 import type {
   CurriculumItem,
   ProblemNote,
@@ -103,13 +103,21 @@ function RevisionGradeButtons({
     { label: "Shaky", quality: 3 },
     { label: "Forgot", quality: 1 },
   ];
+  const toneClass =
+    (label: string) =>
+      label === "Got it"
+        ? " revision-grade-btn--got"
+        : label === "Shaky"
+          ? " revision-grade-btn--shaky"
+          : " revision-grade-btn--forgot";
+
   return (
-    <div className="btn-row">
+    <div className="revision-grade-row">
       {options.map(({ label, quality }) => (
         <button
           key={label}
           type="button"
-          className="btn warmup-grade-btn"
+          className={`btn-secondary-v2 revision-grade-btn${toneClass(label)}`}
           disabled={busy}
           onClick={() => onGrade(quality)}
         >
@@ -173,7 +181,13 @@ function studyHoursThisMonth(sessions: Session[]): number {
   return Math.round((mins / 60) * 10) / 10;
 }
 
-function UpNextTimeline({ items }: { items: CurriculumItem[] }) {
+function UpNextTimeline({
+  items,
+  startIndex,
+}: {
+  items: CurriculumItem[];
+  startIndex: number;
+}) {
   const visible = items.slice(0, 3);
   return (
     <div className="up-next-list">
@@ -181,29 +195,25 @@ function UpNextTimeline({ items }: { items: CurriculumItem[] }) {
         const isNow = item.status === "current";
         const isLocked = item.status === "missing";
         return (
-          <Fragment key={`${item.name}-${i}`}>
-            {i > 0 && <div className="up-next-connector" aria-hidden />}
-            <div className="up-next-item">
-              <span
-                className={`up-next-dot${isNow ? " up-next-dot--now" : " up-next-dot--future"}`}
-                aria-hidden
-              />
-              <span className={`up-next-name${isNow ? "" : " up-next-name--muted"}`}>
-                {item.name}
-              </span>
-              <span className={`up-next-tag${isNow ? " up-next-tag--now" : ""}`}>
-                {isNow
-                  ? "NOW"
-                  : isLocked
-                    ? "locked"
-                    : item.topicId && item.totalCount === 0
-                      ? "no problems"
-                      : item.unsolvedCount > 0
-                        ? `${item.unsolvedCount} left`
-                        : "up next"}
-              </span>
-            </div>
-          </Fragment>
+          <div key={`${item.name}-${i}`} className="up-next-item">
+            <span className="up-next-index" aria-hidden>
+              {String(startIndex + i + 1).padStart(2, "0")}
+            </span>
+            <span className={`up-next-name${isNow ? "" : " up-next-name--muted"}`}>
+              {item.name}
+            </span>
+            <span className={`up-next-tag${isNow ? " up-next-tag--now" : ""}`}>
+              {isNow
+                ? "NOW"
+                : isLocked
+                  ? "locked"
+                  : item.topicId && item.totalCount === 0
+                    ? "no problems"
+                    : item.unsolvedCount > 0
+                      ? `${item.unsolvedCount} left`
+                      : "up next"}
+            </span>
+          </div>
         );
       })}
     </div>
@@ -211,7 +221,7 @@ function UpNextTimeline({ items }: { items: CurriculumItem[] }) {
 }
 
 export function TodayPage({ onOpenCoach }: Props) {
-  const { focusMode, accentGlow } = useAppPreferences();
+  const { focusMode } = useAppPreferences();
   const fetchPlan = useCallback(() => api.getPlan(), []);
   const { data: plan, error, loading, refresh } = usePolling(fetchPlan, PLAN_POLL_MS);
 
@@ -511,24 +521,28 @@ export function TodayPage({ onOpenCoach }: Props) {
 
   return (
     <div className="page-content">
-      <PageHeader
-        eyebrow={formatTodayDate()}
-        title={`${timeGreeting()}. Let's close one gap.`}
-        actions={
-          <button
-            type="button"
-            className="btn-ghost-v2"
-            disabled={syncing}
-            onClick={() => void runSync()}
-            title="Sync with Notion now"
-          >
-            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9M13.5 2v3h-3" />
-            </svg>
-            {syncLabel}
-          </button>
-        }
-      />
+      <div className="today-focus-meta">
+        <div className="today-focus-meta-copy">
+          <span className="today-focus-meta-kicker">Today&apos;s focus</span>
+          <span className="today-focus-meta-rule" aria-hidden />
+          <span className="today-focus-meta-date">
+            {formatTodayDate()}
+            {curriculumStep ? ` · step ${curriculumStep}` : ""}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="today-sync-link"
+          disabled={syncing}
+          onClick={() => void runSync()}
+          title="Sync with Notion now"
+        >
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M13.5 8a5.5 5.5 0 11-1.6-3.9M13.5 2v3h-3" />
+          </svg>
+          {syncLabel}
+        </button>
+      </div>
 
       {error && <div className="error-banner">{error}</div>}
       {message && (
@@ -545,18 +559,8 @@ export function TodayPage({ onOpenCoach }: Props) {
           )}
 
           <div className="focus-hero-wrap">
-            {accentGlow && <div className="focus-hero-glow" aria-hidden />}
             <section className="focus-hero">
               <div>
-                <div className="focus-hero-eyebrow">
-                  <span className="focus-hero-kicker">Today&apos;s focus</span>
-                  {curriculumStep && (
-                    <>
-                      <span className="focus-hero-dot" aria-hidden />
-                      <span className="focus-hero-step">curriculum · step {curriculumStep}</span>
-                    </>
-                  )}
-                </div>
                 <div className="focus-hero-title-row">
                   <h2 className="focus-hero-title">{plan.primaryTopic.name}</h2>
                   {plan.memoryExecutionDivergence && (
@@ -584,7 +588,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                       Start session
                     </button>
                   )}
-                  <button type="button" className="btn-ghost-v2" onClick={() => void toggleExplain()}>
+                  <button type="button" className="btn-secondary-v2" onClick={() => void toggleExplain()}>
                     {showExplain ? "Hide" : "Why this?"}
                   </button>
                   <div className="warmup-queue-hint">
@@ -602,11 +606,7 @@ export function TodayPage({ onOpenCoach }: Props) {
               </div>
               <MasteryRing
                 percent={masteryPct}
-                sublabel={
-                  <>
-                    <strong>{masteredCount}</strong> of {totalTopics} topics
-                  </>
-                }
+                sublabel={`${masteredCount}/${totalTopics}`}
               />
             </section>
           </div>
@@ -736,7 +736,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                 <div className="btn-row">
                   <button
                     type="button"
-                    className="btn-primary-v2"
+                    className="btn-done-v2"
                     disabled={logging === flow.problem.problemId}
                     onClick={() =>
                       void markDone(
@@ -768,45 +768,39 @@ export function TodayPage({ onOpenCoach }: Props) {
                 <div className="stats-strip-label">Streak</div>
                 <div className="stats-strip-value">
                   {streak?.currentStreakDays ?? 0}
-                  <span>days</span>
-                </div>
-                <div className="stats-strip-hint">
-                  best {streak?.longestStreakDays ?? 0}
+                  <span>days · best {streak?.longestStreakDays ?? 0}</span>
                 </div>
               </div>
               <div className="stats-strip-cell">
                 <div className="stats-strip-label">This month</div>
                 <div className="stats-strip-value">
                   {monthCount}
-                  <span>sessions</span>
+                  <span>sessions · {monthHours} hrs</span>
                 </div>
-                <div className="stats-strip-hint">{monthHours} hrs logged</div>
               </div>
               <div className="stats-strip-cell">
                 <div className="stats-strip-label">Pace</div>
                 <div className="stats-strip-value">
                   {pace.toFixed(1)}
-                  <span>/hr</span>
-                  {paceTrend === "up" && (
-                    <span className="stats-strip-trend"> ▲</span>
-                  )}
+                  <span>
+                    /hr · problems solved
+                    {paceTrend === "up" ? " ▲" : ""}
+                  </span>
                 </div>
-                <div className="stats-strip-hint">problems solved</div>
               </div>
               <div className="stats-strip-cell">
                 <div className="stats-strip-label">Mastered</div>
                 <div className="stats-strip-value">
                   {masteredCount}
-                  <span>/ {totalTopics}</span>
+                  <span>/ {totalTopics} · {inProgressCount} in progress</span>
                 </div>
-                <div className="stats-strip-hint">{inProgressCount} in progress</div>
               </div>
             </section>
           )}
 
           <div className="today-grid">
-            <div style={{ display: "flex", flexDirection: "column" }}>
-            <section className="panel-v2">
+            <div className="today-grid-col today-grid-col--left">
+            <section>
               <div className="panel-v2-header">
                 <h3 className="panel-v2-title">Suggested problems</h3>
                 <span className="panel-v2-meta">
@@ -828,10 +822,10 @@ export function TodayPage({ onOpenCoach }: Props) {
                     key={p.problemId}
                     className={`problem-row-v2${started ? " problem-row-v2--active" : ""}`}
                   >
+                    <span className="problem-row-index" aria-hidden>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
                     <div className="problem-row-top">
-                      <span className="problem-row-index">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
                       {p.leetcodeLink ? (
                         <a
                           href={p.leetcodeLink}
@@ -844,6 +838,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                       ) : (
                         <span className="problem-row-name">{p.name}</span>
                       )}
+                      <span className="problem-row-fill" aria-hidden />
                       <span className={`diff-badge ${diffClass}`}>
                         {(p.difficulty ?? "?").slice(0, 3).toUpperCase()}
                       </span>
@@ -885,8 +880,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                       )}
                       <button
                         type="button"
-                        className={`btn-primary-v2${pulseId === p.problemId ? " btn--confirm-pulse" : ""}`}
-                        style={{ padding: "0.4rem 0.95rem", fontSize: "0.8rem" }}
+                        className={`btn-done-v2${pulseId === p.problemId ? " btn--confirm-pulse" : ""}`}
                         data-done-button="true"
                         disabled={logging === p.problemId}
                         onClick={() => {
@@ -901,8 +895,7 @@ export function TodayPage({ onOpenCoach }: Props) {
                       </button>
                       <button
                         type="button"
-                        className="btn-ghost-v2"
-                        style={{ marginLeft: "auto", padding: "0.4rem 0.7rem", fontSize: "0.8rem" }}
+                        className="btn-ghost-v2 today-coach-btn"
                         onClick={() => onOpenCoach(p.problemId)}
                       >
                         Coach <span className="today-coach-arrow" aria-hidden>↗</span>
@@ -921,8 +914,8 @@ export function TodayPage({ onOpenCoach }: Props) {
             />
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.4rem" }}>
-              <section className="panel-v2">
+            <div className="today-grid-col today-grid-col--right">
+              <section className="revision-panel">
                 <div className="panel-v2-header">
                   <h3 className="panel-v2-title">Revision</h3>
                   <span className="panel-v2-meta">{dueTotal} due</span>
@@ -1006,11 +999,10 @@ export function TodayPage({ onOpenCoach }: Props) {
                 {dueTotal > 1 && (
                   <button
                     type="button"
-                    className="btn-ghost-v2"
-                    style={{ width: "100%", marginTop: "0.9rem", justifyContent: "center" }}
+                    className="today-show-more-link"
                     onClick={() => void toggleAllRevisions()}
                   >
-                    {showAllRevisions ? "Show less" : `Show all ${dueTotal}`}
+                    {showAllRevisions ? "Show less" : `Show all ${dueTotal} →`}
                   </button>
                 )}
                 {showAllRevisions && revisionQueue && (
@@ -1030,11 +1022,14 @@ export function TodayPage({ onOpenCoach }: Props) {
               </section>
 
               {!focusMode && curriculumItems.length > 0 && (
-                <section className="panel-v2">
+                <section className="today-up-next">
                   <h3 className="panel-v2-title" style={{ marginBottom: "1.1rem" }}>
                     Up next
                   </h3>
-                  <UpNextTimeline items={curriculumItems} />
+                  <UpNextTimeline
+                    items={curriculumItems}
+                    startIndex={plan.curriculum?.currentIndex ?? 0}
+                  />
                 </section>
               )}
             </div>

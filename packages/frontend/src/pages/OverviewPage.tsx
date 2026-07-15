@@ -45,11 +45,7 @@ function OverviewStatCard({
       <div className="overview-stat-label">{label}</div>
       <div className="overview-stat-value">
         <StatNumber value={value} decimals={suffix === "h" ? 1 : 0} />
-        {suffix && (
-          <span style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginLeft: "0.2rem" }}>
-            {suffix}
-          </span>
-        )}
+        {suffix && <span className="overview-stat-suffix">{suffix}</span>}
       </div>
       <div className={`overview-stat-hint${hintClass ? ` ${hintClass}` : ""}`}>{hint}</div>
     </div>
@@ -146,7 +142,7 @@ export function OverviewPage() {
       )}
 
       <div className="overview-grid-2">
-        <section className="panel-v2">
+        <section>
           <div className="panel-v2-header">
             <h3 className="panel-v2-title">Mastery velocity</h3>
             <span className="panel-v2-meta">problems / week</span>
@@ -154,19 +150,19 @@ export function OverviewPage() {
           <VelocityChart data={velocity} />
         </section>
 
-        <section className="panel-v2">
-          <h3 className="panel-v2-title" style={{ marginBottom: "1.3rem" }}>
-            By difficulty
-          </h3>
+        <section>
+          <div className="panel-v2-header">
+            <h3 className="panel-v2-title">By difficulty</h3>
+          </div>
           <OverviewDifficultyBars data={difficulty} />
         </section>
       </div>
 
       <div className="overview-grid-2 overview-grid-2--flip">
-        <section className="panel-v2">
-          <h3 className="panel-v2-title" style={{ marginBottom: "1.2rem" }}>
-            Weak areas
-          </h3>
+        <section>
+          <div className="panel-v2-header">
+            <h3 className="panel-v2-title">Weak areas</h3>
+          </div>
           <WeakAreasBars topics={summary?.weakTopics ?? []} />
         </section>
 

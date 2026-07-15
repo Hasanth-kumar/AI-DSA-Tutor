@@ -136,7 +136,7 @@ export function ActivityPage() {
       )}
 
       {loading ? (
-        <section className="panel-v2" aria-busy="true" style={{ marginBottom: "1.4rem" }}>
+        <section aria-busy="true" style={{ marginBottom: "1.4rem" }}>
           <Skeleton variant="title" width={160} />
           <Skeleton variant="block" height={130} />
         </section>
@@ -151,8 +151,8 @@ export function ActivityPage() {
       )}
 
       {!loading && recentSessions.length > 0 && (
-        <section className="panel-v2" style={{ marginTop: "1.4rem" }}>
-          <h3 className="panel-v2-title" style={{ marginBottom: "1.1rem" }}>
+        <section style={{ marginTop: "2.125rem" }}>
+          <h3 className="panel-v2-title" style={{ marginBottom: "0.25rem" }}>
             Recent sessions
           </h3>
           <div className="activity-recent">

@@ -105,7 +105,8 @@ export function GraphPage() {
               <h3 className="card-title m-0">{selected.name}</h3>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="graph-panel-close"
+                aria-label="Close panel"
                 onClick={() => setSelectedId(null)}
               >
                 ✕
@@ -158,8 +159,7 @@ export function GraphPage() {
 
             <button
               type="button"
-              className="btn-primary-v2"
-              style={{ width: "100%", marginTop: "1.3rem", justifyContent: "center" }}
+              className="btn-primary-v2 graph-study-btn"
               disabled={settingFocus}
               onClick={() => void studyNow()}
             >
