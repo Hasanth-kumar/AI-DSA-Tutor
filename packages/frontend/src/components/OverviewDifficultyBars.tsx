@@ -39,9 +39,19 @@ export const OverviewDifficultyBars = memo(function OverviewDifficultyBars({ dat
           return (
             <div key={b.difficulty} className="diff-bar-row">
               <div className="diff-bar-header">
-                <span style={{ color: COLORS[b.difficulty], fontWeight: 500 }}>{b.difficulty}</span>
+                <span
+                  style={{
+                    color: COLORS[b.difficulty],
+                    fontWeight: 600,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "13px",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  {b.difficulty === "Medium" ? "MED" : b.difficulty.toUpperCase()}
+                </span>
                 <span className="diff-bar-count">
-                  {b.problemsSolved} / {b.problemsTotal}
+                  {b.problemsSolved} solved · avg {Math.round(b.averageTimeMinutes)}m
                 </span>
               </div>
               <div className="diff-bar-track">

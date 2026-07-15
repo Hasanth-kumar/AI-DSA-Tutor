@@ -376,7 +376,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
     <div className="graph-container card">
       <button
         type="button"
-        className="btn btn-ghost graph-fit-btn"
+        className="graph-fit-btn"
         onClick={() => fitRef.current?.()}
         title="Fit all topics in view"
       >

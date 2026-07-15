@@ -138,10 +138,10 @@ export function ResolveCompleteForm({
         ))}
       </div>
       <div className="mistake-capture-actions">
-        <button type="button" className="btn btn-ghost mistake-tag-btn" onClick={onCancel}>
+        <button type="button" className="btn-secondary-v2" onClick={onCancel}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary" disabled={saving} onClick={() => void submit()}>
+        <button type="button" className="btn-primary-v2" disabled={saving} onClick={() => void submit()}>
           {saving ? "Saving…" : "Record re-solve"}
         </button>
       </div>

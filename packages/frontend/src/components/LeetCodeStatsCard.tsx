@@ -17,7 +17,7 @@ const COLORS: Record<string, string> = {
 export function LeetCodeStatsCard({ stats, configured }: Props) {
   if (!configured) {
     return (
-      <section className="panel-v2">
+      <section>
         <h3 className="panel-v2-title">LeetCode</h3>
         <EmptyState
           icon={<PlugIcon />}
@@ -30,7 +30,7 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
 
   if (!stats) {
     return (
-      <section className="panel-v2" aria-busy="true">
+      <section aria-busy="true">
         <h3 className="panel-v2-title">LeetCode</h3>
         <Skeleton variant="stat" />
         <SkeletonLines lines={3} />
@@ -45,25 +45,23 @@ export function LeetCodeStatsCard({ stats, configured }: Props) {
   const maxSolved = Math.max(...byDiff.map((b) => b!.solved), 1);
 
   return (
-    <section className="panel-v2">
+    <section>
       <div className="panel-v2-header">
         <h3 className="panel-v2-title">LeetCode</h3>
-        {stats.ranking != null && (
-          <span className="panel-v2-meta">rank #{stats.ranking.toLocaleString()}</span>
-        )}
+        <span className="panel-v2-meta">@{stats.username}</span>
       </div>
 
       <div className="leetcode-v2">
         <div className="leetcode-v2-hero">
           <div className="leetcode-v2-total">{stats.totalSolved}</div>
-          <div className="leetcode-v2-label">total solved</div>
+          <div className="leetcode-v2-label">problems solved</div>
         </div>
 
         <div className="leetcode-v2-bars">
           {byDiff.map((b) => (
             <div key={b!.difficulty} className="leetcode-v2-row">
               <span className="leetcode-v2-diff" style={{ color: COLORS[b!.difficulty] }}>
-                {b!.difficulty}
+                {b!.difficulty === "Medium" ? "MED" : b!.difficulty.toUpperCase()}
               </span>
               <div className="leetcode-v2-track">
                 <div

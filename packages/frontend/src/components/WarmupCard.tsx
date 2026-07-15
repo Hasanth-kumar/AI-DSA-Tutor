@@ -170,7 +170,7 @@ export function WarmupCard({
     return (
       <div className="warmup-card card">
         <div className="error-banner">{error}</div>
-        <button type="button" className="btn" onClick={() => onComplete(false)}>
+        <button type="button" className="btn-secondary-v2" onClick={() => onComplete(false)}>
           Continue without warm-up
         </button>
       </div>
@@ -193,7 +193,7 @@ export function WarmupCard({
         </p>
         <button
           type="button"
-          className="btn btn-ghost mt-3"
+          className="btn-secondary-v2"
           onClick={() => onComplete(false)}
         >
           Skip warm-up
@@ -230,11 +230,11 @@ export function WarmupCard({
       {!answerVisible ? (
         <button
           type="button"
-          className="btn btn-ghost warmup-show-answer-btn"
+          className="btn-primary-v2 warmup-show-answer-btn"
           disabled={submitting || answerLoading}
           onClick={() => void showAnswer(questionIndex, currentQuestion.question, currentQuestion.answer)}
         >
-          {answerLoading ? "Loading answer…" : "Show Answer"}
+          {answerLoading ? "Loading answer…" : "Show answer"}
         </button>
       ) : (
         <div className="warmup-answer">
@@ -251,12 +251,12 @@ export function WarmupCard({
         <p className="error-banner warmup-answer-error">{answerError}</p>
       ) : null}
 
-      <div className="warmup-grades">
+      <div className="revision-grade-row warmup-grades">
         {GRADES.map((g) => (
           <button
             key={g.label}
             type="button"
-            className="btn warmup-grade-btn"
+            className="btn-secondary-v2 revision-grade-btn"
             title={g.hint}
             disabled={submitting}
             onClick={() => grade(g.quality)}
@@ -268,7 +268,7 @@ export function WarmupCard({
 
       <button
         type="button"
-        className="btn btn-ghost mt-3"
+        className="btn-ghost-v2 warmup-skip-btn"
         disabled={submitting}
         onClick={() => {
           openFirstProblem();

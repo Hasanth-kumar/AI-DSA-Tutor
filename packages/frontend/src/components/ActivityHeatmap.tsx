@@ -89,7 +89,7 @@ export function ActivityHeatmap({
 }: Props) {
   const [hovered, setHovered] = useState<{ key: string; count: number } | null>(null);
   const isDesign = variant === "design";
-  const cellSize = isDesign ? 11 : 14;
+  const cellSize = isDesign ? 12 : 14;
 
   const {
     gridWeeks,
@@ -150,7 +150,7 @@ export function ActivityHeatmap({
 
   if (totalProblems === 0 && activeDays === 0) {
     return (
-      <section className={isDesign ? "panel-v2" : "card"}>
+      <section className={isDesign ? undefined : "card"}>
         <h3 className={isDesign ? "panel-v2-title" : "card-section-title"}>Study heatmap</h3>
         <EmptyState
           illustration={<HeatmapIllustration />}
@@ -165,21 +165,20 @@ export function ActivityHeatmap({
     );
   }
 
-  const wrapperClass = isDesign ? "panel-v2" : "card";
+  const wrapperClass = isDesign ? undefined : "card";
 
   return (
     <section className={wrapperClass}>
       <div className={isDesign ? "panel-v2-header" : undefined}>
-        <h3 className={isDesign ? "panel-v2-title" : "card-section-title"}>Study heatmap</h3>
+        <h3 className={isDesign ? "panel-v2-title" : "card-section-title"}>
+          {isDesign ? "Past 12 months" : "Study heatmap"}
+        </h3>
         {isDesign ? (
-          <div className="heatmap-legend-v2" aria-hidden>
-            less
-            <span className="heatmap-legend-swatch heatmap-legend-swatch--0" />
-            <span className="heatmap-legend-swatch heatmap-legend-swatch--1" />
-            <span className="heatmap-legend-swatch heatmap-legend-swatch--2" />
-            <span className="heatmap-legend-swatch heatmap-legend-swatch--3" />
-            more
-          </div>
+          <span className="panel-v2-meta">
+            {source === "leetcode" && leetcodeUsername
+              ? `LeetCode · @${leetcodeUsername}`
+              : "Logged sessions"}
+          </span>
         ) : null}
       </div>
 
@@ -237,60 +236,92 @@ export function ActivityHeatmap({
           </div>
         )}
 
-        <div
-          className={isDesign ? "heatmap-grid-v2" : "heatmap"}
-          style={
-            isDesign
-              ? undefined
-              : {
-                  gridTemplateRows: `repeat(7, ${cellSize}px)`,
-                  gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
-                  gridAutoFlow: "column",
-                }
-          }
-        >
-          {gridWeeks.flatMap((week, weekIdx) =>
-            week.map((cell, dayIdx) => {
-              const isActive = cell.count > 0;
-              const lvl = level(cell.count);
-              const tipProps = {
-                "data-level": lvl,
-                "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
-                "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
-                "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
-              };
+        {isDesign ? (
+          <div className="heatmap-grid-v2">
+            {gridWeeks.map((week, weekIdx) => (
+              <div key={week[0]?.key ?? weekIdx} className="heatmap-week-v2">
+                {week.map((cell, dayIdx) => {
+                  const isActive = cell.count > 0;
+                  const lvl = level(cell.count);
+                  const tipProps = {
+                    "data-level": lvl,
+                    "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
+                    "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
+                    "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
+                  };
 
-              const cellClass = isDesign
-                ? `heatmap-cell-v2 heatmap-cell-v2--${lvl} heatmap-cell--interactive`
-                : "heatmap-cell heatmap-cell--interactive";
+                  return isActive ? (
+                    <button
+                      key={cell.key}
+                      type="button"
+                      className={`heatmap-cell-v2 heatmap-cell-v2--${lvl} heatmap-cell--interactive`}
+                      aria-label={formatCellDetail(cell.key, cell.count, source)}
+                      onMouseEnter={() => selectCell(cell)}
+                      onMouseLeave={() => setHovered(null)}
+                      onFocus={() => selectCell(cell)}
+                      onBlur={() => setHovered(null)}
+                      onClick={() => clickCell(cell)}
+                      {...tipProps}
+                    >
+                      <span className="heatmap-cell-tooltip" aria-hidden="true">
+                        {formatCellDetail(cell.key, cell.count, source)}
+                      </span>
+                    </button>
+                  ) : (
+                    <div
+                      key={cell.key}
+                      className="heatmap-cell-v2 heatmap-cell-v2--0"
+                      {...tipProps}
+                    />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div
+            className="heatmap"
+            style={{
+              gridTemplateRows: `repeat(7, ${cellSize}px)`,
+              gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
+              gridAutoFlow: "column",
+            }}
+          >
+            {gridWeeks.flatMap((week, weekIdx) =>
+              week.map((cell, dayIdx) => {
+                const isActive = cell.count > 0;
+                const lvl = level(cell.count);
+                const tipProps = {
+                  "data-level": lvl,
+                  "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
+                  "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
+                  "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
+                };
 
-              return isActive ? (
-                <button
-                  key={cell.key}
-                  type="button"
-                  className={cellClass}
-                  aria-label={formatCellDetail(cell.key, cell.count, source)}
-                  onMouseEnter={() => selectCell(cell)}
-                  onMouseLeave={() => setHovered(null)}
-                  onFocus={() => selectCell(cell)}
-                  onBlur={() => setHovered(null)}
-                  onClick={() => clickCell(cell)}
-                  {...tipProps}
-                >
-                  <span className="heatmap-cell-tooltip" aria-hidden="true">
-                    {formatCellDetail(cell.key, cell.count, source)}
-                  </span>
-                </button>
-              ) : (
-                <div
-                  key={cell.key}
-                  className={isDesign ? "heatmap-cell-v2 heatmap-cell-v2--0" : "heatmap-cell"}
-                  {...tipProps}
-                />
-              );
-            }),
-          )}
-        </div>
+                return isActive ? (
+                  <button
+                    key={cell.key}
+                    type="button"
+                    className="heatmap-cell heatmap-cell--interactive"
+                    aria-label={formatCellDetail(cell.key, cell.count, source)}
+                    onMouseEnter={() => selectCell(cell)}
+                    onMouseLeave={() => setHovered(null)}
+                    onFocus={() => selectCell(cell)}
+                    onBlur={() => setHovered(null)}
+                    onClick={() => clickCell(cell)}
+                    {...tipProps}
+                  >
+                    <span className="heatmap-cell-tooltip" aria-hidden="true">
+                      {formatCellDetail(cell.key, cell.count, source)}
+                    </span>
+                  </button>
+                ) : (
+                  <div key={cell.key} className="heatmap-cell" {...tipProps} />
+                );
+              }),
+            )}
+          </div>
+        )}
       </div>
 
       {!isDesign && (

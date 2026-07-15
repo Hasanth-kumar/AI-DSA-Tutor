@@ -92,13 +92,12 @@ function SlotRow({
         <div className="problem-row-actions">
           <button
             type="button"
-            className="btn-primary-v2"
-            style={{ padding: "0.4rem 0.95rem", fontSize: "0.8rem" }}
+            className="btn-done-v2"
             onClick={() => setCompleting(true)}
           >
             ✓ Done
           </button>
-          <button type="button" className="btn-ghost-v2" disabled={busy} onClick={() => void skip()}>
+          <button type="button" className="btn-secondary-v2 btn-compact-v2" disabled={busy} onClick={() => void skip()}>
             Skip
           </button>
         </div>
@@ -126,7 +125,7 @@ export function ResolveTodaySection({ slots, onChanged }: Props) {
   const onMessage = (text: string, ok: boolean) => setMessage({ text, ok });
 
   return (
-    <section className="panel-v2" style={{ marginTop: "1.4rem" }}>
+    <section className="today-resolve-teaser">
       <div className="panel-v2-header">
         <h3 className="panel-v2-title">Re-solve</h3>
         <span className="panel-v2-meta">{slots.length} due</span>
@@ -146,8 +145,7 @@ export function ResolveTodaySection({ slots, onChanged }: Props) {
       {collapsible.length > 0 && !expanded && (
         <button
           type="button"
-          className="btn-ghost-v2"
-          style={{ width: "100%", justifyContent: "flex-start" }}
+          className="btn-secondary-v2 today-resolve-expand"
           onClick={() => setExpanded(true)}
         >
           ▶ Re-solve ({collapsible.length} due)

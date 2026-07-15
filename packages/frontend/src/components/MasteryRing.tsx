@@ -7,13 +7,13 @@ interface Props {
   size?: number;
 }
 
-const CIRCUMFERENCE = 351.86;
+const CIRCUMFERENCE = 402.12;
 
 export function MasteryRing({
   percent,
   label = "mastered",
   sublabel,
-  size = 148,
+  size = 176,
 }: Props) {
   const clamped = Math.min(100, Math.max(0, percent));
   const offset = CIRCUMFERENCE - (clamped / 100) * CIRCUMFERENCE;
@@ -25,18 +25,18 @@ export function MasteryRing({
           <circle
             cx="74"
             cy="74"
-            r="56"
+            r="64"
             fill="none"
-            stroke="var(--border)"
-            strokeWidth="9"
+            stroke="var(--border-soft)"
+            strokeWidth="1.5"
           />
           <circle
             cx="74"
             cy="74"
-            r="56"
+            r="64"
             fill="none"
             stroke="var(--accent)"
-            strokeWidth="9"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={offset}
@@ -45,11 +45,14 @@ export function MasteryRing({
           />
         </svg>
         <div className="mastery-ring-center">
-          <span className="mastery-ring-value">{Math.round(clamped)}%</span>
-          <span className="mastery-ring-label">{label}</span>
+          <span className="mastery-ring-value">
+            {Math.round(clamped)}<span>%</span>
+          </span>
+          <span className="mastery-ring-label">
+            {label}{sublabel ? <> · {sublabel}</> : null}
+          </span>
         </div>
       </div>
-      {sublabel && <div className="mastery-ring-sublabel">{sublabel}</div>}
     </div>
   );
 }

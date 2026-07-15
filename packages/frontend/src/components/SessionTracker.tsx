@@ -206,8 +206,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
           <div className="session-hero-actions">
             <button
               type="button"
-              className="btn-secondary-v2"
-              style={{ padding: "0.7rem 1.4rem", fontSize: "0.9rem" }}
+              className={`btn-primary-v2 session-timer-btn${running ? " session-timer-btn--running" : ""}`}
               onClick={() => setRunning((r) => !r)}
               disabled={!topicId}
             >
@@ -215,8 +214,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
             </button>
             <button
               type="button"
-              className="btn-primary-v2"
-              style={{ padding: "0.7rem 1.6rem", fontSize: "0.9rem" }}
+              className="btn-primary-v2 session-log-btn"
               disabled={submitting || !topicId || elapsed < 60}
               onClick={() => void handleSubmit()}
             >
@@ -226,8 +224,7 @@ export function SessionTracker({ topics, problems, sessions, onLogged }: Props) 
           {!showSetup && (
             <button
               type="button"
-              className="btn-ghost-v2"
-              style={{ marginTop: "0.9rem", fontSize: "0.75rem" }}
+              className="btn-ghost-v2 session-change-btn"
               onClick={() => setShowSetup(true)}
             >
               Change topic / problem
