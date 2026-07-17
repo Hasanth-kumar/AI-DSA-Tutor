@@ -1,3 +1,4 @@
+import { formatDateKey } from "../lib/json.js";
 import type { SyncMetaRepository } from "../repositories/SyncMetaRepository.js";
 
 function warmupSrsKey(topicId: string): string {
@@ -5,7 +6,7 @@ function warmupSrsKey(topicId: string): string {
 }
 
 function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateKey(new Date());
 }
 
 /** Record that warm-up grading already drove SRS for this topic today. */

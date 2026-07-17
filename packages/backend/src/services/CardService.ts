@@ -8,6 +8,7 @@
  * the rework: warm-up/show-answer/review must complete with zero live
  * generation so they are instant and work offline.
  */
+import { formatDateKey } from "../lib/json.js";
 import type { CardRow, CardStore } from "./cardTypes.js";
 import { LEECH_LAPSE_THRESHOLD, reviewRow } from "./fsrs.js";
 import type { ConceptGraph } from "./leechRemediation.js";
@@ -107,7 +108,7 @@ export class CardService {
   ) {}
 
   private day(nowMs: number): string {
-    return new Date(nowMs).toISOString().slice(0, 10);
+    return formatDateKey(new Date(nowMs));
   }
 
   private servedKey(topicId: string, day: string): string {

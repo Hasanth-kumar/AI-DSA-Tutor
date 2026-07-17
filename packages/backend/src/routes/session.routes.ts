@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
+import { replyServiceError } from "../lib/http.js";
 import { parseMistakeTags } from "../repositories/AttemptRepository.js";
 
 export async function sessionRoutes(
@@ -119,9 +120,7 @@ export async function sessionRoutes(
       ctx.events.publish("session");
       return reply.status(201).send(serializeForJson(result));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to log session";
-      const status = message.includes("not found") ? 404 : 500;
-      return reply.status(status).send({ error: message });
+      return replyServiceError(reply, err, "Failed to log session");
     }
   });
 

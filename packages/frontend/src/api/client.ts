@@ -3,12 +3,9 @@ import type {
   ChatThread,
   CoachModelList,
   CurriculumState,
-  DayDetail,
-  DifficultyAnalysis,
   HealthInfo,
   LeetCodeUserStats,
   LeetCodeActivity,
-  MasteryVelocityPoint,
   PriorityScore,
   Problem,
   ProblemNote,
@@ -22,7 +19,6 @@ import type {
   ReviewGradeResult,
   ReviewQueue,
   ScoreExplanation,
-  SendChatResult,
   Session,
   SessionResult,
   StreakInfo,
@@ -33,8 +29,6 @@ import type {
   WarmupAnswer,
   WarmupQuestions,
   WeaknessEvidence,
-  WeaknessTrendPoint,
-  WeeklySummary,
 } from "../types/api.js";
 import { cachedFetch, invalidateCache } from "./cache.js";
 
@@ -103,17 +97,24 @@ async function parseJsonBody<T>(res: Response, path: string): Promise<T> {
   throw new Error(`Expected JSON from ${path}, got ${contentType || "unknown content type"}`);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestOptions extends RequestInit {
+  /** Statuses that resolve to null instead of throwing (e.g. 404 = no note). */
+  nullOn?: number[];
+}
+
+async function request<T>(path: string, init?: RequestOptions): Promise<T> {
+  const { nullOn, ...fetchInit } = init ?? {};
   const res = await fetch(`${BASE}${path}`, {
     headers: {
       Accept: "application/json",
       // Fastify rejects an empty body when Content-Type: application/json is
       // set, so only declare JSON when something is actually sent.
-      ...(init?.body != null ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
+      ...(fetchInit.body != null ? { "Content-Type": "application/json" } : {}),
+      ...fetchInit.headers,
     },
-    ...init,
+    ...fetchInit,
   });
+  if (nullOn?.includes(res.status)) return null as T;
   if (!res.ok) {
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
@@ -124,6 +125,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return parseJsonBody<T>(res, path);
+}
+
+/** Resolve `promise`, then drop the given cache prefixes (all caches when none given). */
+function invalidating<T>(promise: Promise<T>, ...keys: string[]): Promise<T> {
+  return promise.then((result) => {
+    if (keys.length === 0) invalidateCache();
+    else for (const key of keys) invalidateCache(key);
+    return result;
+  });
 }
 
 const CACHE_TTL = {
@@ -166,44 +176,39 @@ export const api = {
     ),
 
   updateCurriculum: (topicNames: string[]) =>
-    request<CurriculumState>("/api/curriculum", {
-      method: "PUT",
-      body: JSON.stringify({ topicNames }),
-    }).then((result) => {
-      invalidateCache("curriculum");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      return result;
-    }),
+    invalidating(
+      request<CurriculumState>("/api/curriculum", {
+        method: "PUT",
+        body: JSON.stringify({ topicNames }),
+      }),
+      "curriculum",
+      "plan",
+      "dashboard",
+    ),
 
   setCurriculumActiveTopic: (topicId: string | null) =>
-    request<CurriculumState>("/api/curriculum/active", {
-      method: "PUT",
-      body: JSON.stringify({ topicId }),
-    }).then((result) => {
-      invalidateCache("curriculum");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      return result;
-    }),
+    invalidating(
+      request<CurriculumState>("/api/curriculum/active", {
+        method: "PUT",
+        body: JSON.stringify({ topicId }),
+      }),
+      "curriculum",
+      "plan",
+      "dashboard",
+    ),
 
   resetCurriculum: () =>
-    request<CurriculumState>("/api/curriculum/reset", { method: "POST" }).then(
-      (result) => {
-        invalidateCache("curriculum");
-        invalidateCache("plan");
-        invalidateCache("dashboard");
-        return result;
-      },
+    invalidating(
+      request<CurriculumState>("/api/curriculum/reset", { method: "POST" }),
+      "curriculum",
+      "plan",
+      "dashboard",
     ),
 
   getSessions: (limit = 50) =>
     cachedFetch(`sessions:${limit}`, CACHE_TTL.sessions, () =>
       request<{ sessions: Session[]; count: number }>(`/api/session?limit=${limit}`),
     ),
-
-  getDayDetail: (date: string) =>
-    request<DayDetail>(`/api/session/day/${date}`),
 
   getSessionActivity: (days = 182) =>
     cachedFetch(`activity:${days}`, CACHE_TTL.activity, () =>
@@ -222,45 +227,39 @@ export const api = {
     mistakeTag?: string | null;
     warmupGraded?: boolean;
   }) =>
-    request<SessionResult>("/api/session", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }).then((result) => {
-      invalidateCache("sessions:");
-      invalidateCache("activity:");
-      invalidateCache("topics");
-      invalidateCache("problems");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      invalidateCache("streak");
-      return result;
-    }),
+    invalidating(
+      request<SessionResult>("/api/session", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+      "sessions:",
+      "activity:",
+      "topics",
+      "problems",
+      "plan",
+      "dashboard",
+      "streak",
+    ),
 
   setMistake: (attemptId: string, input: { tags: string[]; usedCoach?: boolean }) =>
-    request<{ attempt: { id: string; mistakeTag: string | null } }>(
-      `/api/attempts/${attemptId}/mistake`,
-      { method: "PATCH", body: JSON.stringify(input) },
-    ).then((result) => {
-      invalidateCache("topics");
-      invalidateCache("dashboard");
-      invalidateCache("activity:");
-      return result;
-    }),
+    invalidating(
+      request<{ attempt: { id: string; mistakeTag: string | null } }>(
+        `/api/attempts/${attemptId}/mistake`,
+        { method: "PATCH", body: JSON.stringify(input) },
+      ),
+      "topics",
+      "dashboard",
+      "activity:",
+    ),
 
   /** Returns null when no note matched this problem (404). */
   getProblemNote: (problemId: string): Promise<ProblemNote | null> =>
     cachedFetch(`problem-note:${problemId}`, CACHE_TTL.note, async () => {
-      const path = `/api/problems/${problemId}/note`;
-      const res = await fetch(`${BASE}${path}`, {
-        headers: { Accept: "application/json" },
-      });
-      if (res.status === 404) return null;
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Request failed: ${res.status}`);
-      }
-      const data = await parseJsonBody<{ note: ProblemNote }>(res, path);
-      return data.note;
+      const data = await request<{ note: ProblemNote } | null>(
+        `/api/problems/${problemId}/note`,
+        { nullOn: [404] },
+      );
+      return data?.note ?? null;
     }),
 
   createNoteTemplate: (problemId: string) =>
@@ -279,15 +278,15 @@ export const api = {
     }),
 
   gradeWarmup: (topicId: string, quality: number) =>
-    request<RecallGradeResult>("/api/warmup/grade", {
-      method: "POST",
-      body: JSON.stringify({ topicId, quality }),
-    }).then((result) => {
-      invalidateCache("topics");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      return result;
-    }),
+    invalidating(
+      request<RecallGradeResult>("/api/warmup/grade", {
+        method: "POST",
+        body: JSON.stringify({ topicId, quality }),
+      }),
+      "topics",
+      "plan",
+      "dashboard",
+    ),
 
   getReviewQueue: (cap = 20) =>
     cachedFetch(`review-queue:${cap}`, CACHE_TTL.review, () =>
@@ -303,80 +302,78 @@ export const api = {
     problemId: string,
     body: { outcome: ResolveOutcomeKind; timeTakenMin?: number | null; ratingOverride?: ResolveRating },
   ) =>
-    request<ResolveCompleteResult>(`/api/resolve/${problemId}/complete`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }).then((result) => {
-      invalidateCache("resolve-queue");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      return result;
-    }),
+    invalidating(
+      request<ResolveCompleteResult>(`/api/resolve/${problemId}/complete`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+      "resolve-queue",
+      "plan",
+      "dashboard",
+    ),
 
   skipResolve: (problemId: string) =>
-    request<{ problemId: string; due: number }>(`/api/resolve/${problemId}/skip`, {
-      method: "POST",
-    }).then((result) => {
-      invalidateCache("resolve-queue");
-      invalidateCache("plan");
-      return result;
-    }),
+    invalidating(
+      request<{ problemId: string; due: number }>(`/api/resolve/${problemId}/skip`, {
+        method: "POST",
+      }),
+      "resolve-queue",
+      "plan",
+    ),
 
   admitResolve: (problemId: string) =>
-    request<ResolveQueueItem>(`/api/resolve/${problemId}/admit`, { method: "POST" }).then(
-      (result) => {
-        invalidateCache("resolve-queue");
-        invalidateCache("plan");
-        return result;
-      },
+    invalidating(
+      request<ResolveQueueItem>(`/api/resolve/${problemId}/admit`, { method: "POST" }),
+      "resolve-queue",
+      "plan",
     ),
 
   setResolveFlags: (problemId: string, flags: { retired?: boolean; suspended?: boolean }) =>
-    request<ResolveQueueItem>(`/api/resolve/${problemId}`, {
-      method: "PATCH",
-      body: JSON.stringify(flags),
-    }).then((result) => {
-      invalidateCache("resolve-queue");
-      invalidateCache("plan");
-      return result;
-    }),
+    invalidating(
+      request<ResolveQueueItem>(`/api/resolve/${problemId}`, {
+        method: "PATCH",
+        body: JSON.stringify(flags),
+      }),
+      "resolve-queue",
+      "plan",
+    ),
 
   gradeReviewCard: (cardId: string, quality: number) =>
-    request<ReviewGradeResult>("/api/review/grade", {
-      method: "POST",
-      body: JSON.stringify({ cardId, quality }),
-    }).then((result) => {
-      invalidateCache("topics");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      invalidateCache("review-queue:");
-      return result;
-    }),
+    invalidating(
+      request<ReviewGradeResult>("/api/review/grade", {
+        method: "POST",
+        body: JSON.stringify({ cardId, quality }),
+      }),
+      "topics",
+      "plan",
+      "dashboard",
+      "review-queue:",
+    ),
 
   suspendReviewCard: (cardId: string) =>
-    request<{ suspended: boolean }>(`/api/review/${cardId}/suspend`, {
-      method: "POST",
-    }).then((result) => {
-      invalidateCache("review-queue:");
-      return result;
-    }),
+    invalidating(
+      request<{ suspended: boolean }>(`/api/review/${cardId}/suspend`, {
+        method: "POST",
+      }),
+      "review-queue:",
+    ),
 
   deleteReviewCard: (cardId: string) =>
-    request<{ deleted: boolean }>(`/api/review/${cardId}`, {
-      method: "DELETE",
-    }).then((result) => {
-      invalidateCache("review-queue:");
-      return result;
-    }),
+    invalidating(
+      request<{ deleted: boolean }>(`/api/review/${cardId}`, {
+        method: "DELETE",
+      }),
+      "review-queue:",
+    ),
 
   editReviewCard: (cardId: string, front: string, back: string) =>
-    request<ReviewCard>(`/api/review/${cardId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ front, back }),
-    }).then((result) => {
-      invalidateCache("review-queue:");
-      return result;
-    }),
+    invalidating(
+      request<ReviewCard>(`/api/review/${cardId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ front, back }),
+      }),
+      "review-queue:",
+    ),
 
   getOrphanTopics: () =>
     request<{ orphans: Topic[]; count: number }>("/api/topics/orphans"),
@@ -391,24 +388,23 @@ export const api = {
     request<{ queue: Topic[]; count: number }>("/api/revision"),
 
   gradeRevision: (topicId: string, quality: number) =>
-    request<RecallGradeResult>(`/api/revision/${topicId}/grade`, {
-      method: "POST",
-      body: JSON.stringify({ quality }),
-    }).then((result) => {
-      invalidateCache("topics");
-      invalidateCache("plan");
-      invalidateCache("dashboard");
-      return result;
-    }),
+    invalidating(
+      request<RecallGradeResult>(`/api/revision/${topicId}/grade`, {
+        method: "POST",
+        body: JSON.stringify({ quality }),
+      }),
+      "topics",
+      "plan",
+      "dashboard",
+    ),
 
   triggerSync: () =>
-    request<{ topics: number; problems: number; sessions: number; syncedAt: string }>(
-      "/api/sync",
-      { method: "POST" },
-    ).then((result) => {
-      invalidateCache();
-      return result;
-    }),
+    invalidating(
+      request<{ topics: number; problems: number; sessions: number; syncedAt: string }>(
+        "/api/sync",
+        { method: "POST" },
+      ),
+    ),
 
   getSyncStatus: () =>
     cachedFetch("sync-status", CACHE_TTL.syncStatus, () =>
@@ -419,13 +415,12 @@ export const api = {
     request<{ conflicts: SyncConflict[]; count: number }>("/api/sync/conflicts"),
 
   resolveSyncConflict: (id: string, winner: "local" | "remote") =>
-    request<{ resolved: boolean; winner: string }>(
-      `/api/sync/conflicts/${id}/resolve`,
-      { method: "POST", body: JSON.stringify({ winner }) },
-    ).then((result) => {
-      invalidateCache();
-      return result;
-    }),
+    invalidating(
+      request<{ resolved: boolean; winner: string }>(
+        `/api/sync/conflicts/${id}/resolve`,
+        { method: "POST", body: JSON.stringify({ winner }) },
+      ),
+    ),
 
   getFullHealth: () =>
     cachedFetch("health:full", 20_000, () => request<HealthInfo>("/health")),
@@ -435,77 +430,26 @@ export const api = {
       request<AnalyticsDashboard>(`/api/analytics/dashboard?weeks=${weeks}`),
     ),
 
-  getSummary: () => request<WeeklySummary>("/api/analytics/summary"),
-
   getStreak: () =>
     cachedFetch("streak", CACHE_TTL.streak, () =>
       request<StreakInfo>("/api/analytics/streak"),
     ),
 
-  getVelocity: (weeks = 8) =>
-    request<{ weekly: MasteryVelocityPoint[] }>(
-      `/api/analytics/mastery-velocity?weeks=${weeks}`,
+  /** Returns null when LEETCODE_USERNAME is not set (503). */
+  getLeetCodeStats: (): Promise<LeetCodeUserStats | null> =>
+    cachedFetch("leetcode:stats", CACHE_TTL.leetcode, () =>
+      request<LeetCodeUserStats | null>("/api/integrations/leetcode/stats", {
+        nullOn: [503],
+      }),
     ),
 
-  getWeaknessTrend: (weeks = 8) =>
-    request<{ trend: WeaknessTrendPoint[] }>(
-      `/api/analytics/weakness-trend?weeks=${weeks}`,
+  /** Returns null when LEETCODE_USERNAME is not set (503). */
+  getLeetCodeActivity: (): Promise<LeetCodeActivity | null> =>
+    cachedFetch("leetcode:activity", CACHE_TTL.leetcode, () =>
+      request<LeetCodeActivity | null>("/api/integrations/leetcode/activity", {
+        nullOn: [503],
+      }),
     ),
-
-  getDifficulty: () => request<DifficultyAnalysis>("/api/analytics/difficulty"),
-
-  /** Returns null when LEETCODE_USERNAME is not set (503). */
-  async getLeetCodeStats(): Promise<LeetCodeUserStats | null> {
-    return cachedFetch("leetcode:stats", CACHE_TTL.leetcode, async () => {
-    const path = "/api/integrations/leetcode/stats";
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-    });
-    if (res.status === 503) return null;
-    if (!res.ok) {
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        await parseJsonBody<never>(res, path);
-      }
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `Request failed: ${res.status}`);
-    }
-    return parseJsonBody<LeetCodeUserStats>(res, path);
-    });
-  },
-
-  /** Returns null when LEETCODE_USERNAME is not set (503). */
-  async getLeetCodeActivity(): Promise<LeetCodeActivity | null> {
-    return cachedFetch("leetcode:activity", CACHE_TTL.leetcode, async () => {
-    const path = "/api/integrations/leetcode/activity";
-    const res = await fetch(`${BASE}${path}`, {
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-    });
-    if (res.status === 503) return null;
-    if (!res.ok) {
-      const contentType = res.headers.get("content-type") ?? "";
-      if (!contentType.includes("application/json")) {
-        await parseJsonBody<never>(res, path);
-      }
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(body.error ?? `Request failed: ${res.status}`);
-    }
-    return parseJsonBody<LeetCodeActivity>(res, path);
-    });
-  },
-
-  sendChatMessage: (body: {
-    threadId?: string;
-    message: string;
-    problemId?: string;
-    includeContext?: boolean;
-    directMode?: boolean;
-    model?: string;
-  }) =>
-    request<SendChatResult>("/api/coaching/chat", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
 
   getCoachModels: () => request<CoachModelList>("/api/coaching/models"),
 

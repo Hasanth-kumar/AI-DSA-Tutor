@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
+import { replyServiceError } from "../lib/http.js";
 import type { ChatStreamEvent } from "../services/ChatService.js";
 
 function parseHintLevel(raw: string | undefined): 1 | 2 | 3 | 4 | undefined {
@@ -58,9 +59,7 @@ export async function coachingRoutes(
       const result = await ctx.debriefService.generateLatest();
       return reply.send(serializeForJson(result));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Debrief failed";
-      const status = message.includes("not found") ? 404 : 500;
-      return reply.status(status).send({ error: message });
+      return replyServiceError(reply, err, "Debrief failed");
     }
   });
 
@@ -73,9 +72,7 @@ export async function coachingRoutes(
         );
         return reply.send(serializeForJson(result));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Debrief failed";
-        const status = message.includes("not found") ? 404 : 500;
-        return reply.status(status).send({ error: message });
+        return replyServiceError(reply, err, "Debrief failed");
       }
     },
   );

@@ -18,6 +18,21 @@ export interface TopicUpdate {
   priorityScore?: number;
 }
 
+/** Raw column shape of {@link TopicUpdate}: epoch-ms timestamps, 0/1 flags. */
+export interface TopicFieldPatch {
+  confidence?: number;
+  revisionCount?: number;
+  lastRevised?: number | null;
+  nextRevisionAt?: number | null;
+  sm2Interval?: number;
+  sm2Repetition?: number;
+  sm2Efactor?: number;
+  isWeakArea?: number;
+  status?: string;
+  difficulty?: string;
+  priorityScore?: number | null;
+}
+
 export class TopicRepository {
   constructor(
     private readonly db: SqliteDb,
@@ -46,36 +61,17 @@ export class TopicRepository {
   }
 
   update(id: string, patch: TopicUpdate): void {
-    const now = Date.now();
-    this.db
-      .update(topics)
-      .set({
-        ...(patch.confidence != null ? { confidence: patch.confidence } : {}),
-        ...(patch.revisionCount != null
-          ? { revisionCount: patch.revisionCount }
-          : {}),
-        ...(patch.lastRevised !== undefined
-          ? { lastRevised: patch.lastRevised ? patch.lastRevised.getTime() : null }
-          : {}),
-        ...(patch.nextRevisionAt !== undefined
-          ? {
-              nextRevisionAt: patch.nextRevisionAt
-                ? patch.nextRevisionAt.getTime()
-                : null,
-            }
-          : {}),
-        ...(patch.sm2Interval != null ? { sm2Interval: patch.sm2Interval } : {}),
-        ...(patch.sm2Repetition != null ? { sm2Repetition: patch.sm2Repetition } : {}),
-        ...(patch.sm2Efactor != null ? { sm2Efactor: patch.sm2Efactor } : {}),
-        ...(patch.isWeakArea != null ? { isWeakArea: patch.isWeakArea ? 1 : 0 } : {}),
-        ...(patch.status != null ? { status: patch.status } : {}),
-        ...(patch.difficulty != null ? { difficulty: patch.difficulty } : {}),
-        ...(patch.priorityScore != null ? { priorityScore: patch.priorityScore } : {}),
-        updatedAt: now,
-      })
-      .where(eq(topics.id, id))
-      .run();
-    this.mirrorCache.invalidate();
+    const { lastRevised, nextRevisionAt, isWeakArea, priorityScore, ...rest } = patch;
+    this.applyPendingFields(id, {
+      ...rest,
+      ...(lastRevised !== undefined ? { lastRevised: lastRevised?.getTime() ?? null } : {}),
+      ...(nextRevisionAt !== undefined
+        ? { nextRevisionAt: nextRevisionAt?.getTime() ?? null }
+        : {}),
+      ...(isWeakArea != null ? { isWeakArea: isWeakArea ? 1 : 0 } : {}),
+      // `update` never writes null scores; only pending-edit replay may.
+      ...(priorityScore != null ? { priorityScore } : {}),
+    });
   }
 
   /** Apply many updates with a single mirror invalidation at the end. */
@@ -85,23 +81,8 @@ export class TopicRepository {
     });
   }
 
-  applyPendingFields(
-    id: string,
-    fields: {
-      confidence?: number;
-      revisionCount?: number;
-      lastRevised?: number | null;
-      nextRevisionAt?: number | null;
-      sm2Interval?: number;
-      sm2Repetition?: number;
-      sm2Efactor?: number;
-      isWeakArea?: number;
-      status?: string;
-      difficulty?: string;
-      priorityScore?: number | null;
-    },
-  ): void {
-    const now = Date.now();
+  /** Raw-field variant of {@link update} (epoch-ms timestamps, 0/1 flags) used by sync replay. */
+  applyPendingFields(id: string, fields: TopicFieldPatch): void {
     this.db
       .update(topics)
       .set({
@@ -120,7 +101,7 @@ export class TopicRepository {
         ...(fields.priorityScore !== undefined
           ? { priorityScore: fields.priorityScore }
           : {}),
-        updatedAt: now,
+        updatedAt: Date.now(),
       })
       .where(eq(topics.id, id))
       .run();

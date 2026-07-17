@@ -1,5 +1,11 @@
 node_modules/
 dist/
+
+# Build artifacts of @dsa/database belong in dist/, never next to sources
+database/schema/*.js
+database/schema/*.js.map
+database/schema/*.d.ts
+database/schema/*.d.ts.map
 .claude/
 .env
 .env.local
@@ -15,3 +21,4 @@ IMPLEMENTATION_CHECKLIST.md
 
 # Generated local card export (regenerable from SQLite via flush; §10 portable export)
 data/cards-export/
+*.tsbuildinfo

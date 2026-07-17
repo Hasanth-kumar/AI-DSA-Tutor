@@ -314,24 +314,6 @@ export interface ServiceHealth {
   latencyMs?: number;
 }
 
-export interface DayDetail {
-  date: string;
-  sessions: {
-    id: string;
-    topicId: string | null;
-    topicName: string | null;
-    problemsSolved: number;
-    studyDuration: number | null;
-    productivityScore: number | null;
-  }[];
-  problems: {
-    problemId: string;
-    problemName: string;
-    timeTaken: number | null;
-    mistakeTags: string[];
-  }[];
-}
-
 export interface HealthInfo {
   status: "ok" | "degraded" | "down";
   timestamp: string;
@@ -468,12 +450,6 @@ export interface ChatThread {
   updatedAt: string;
 }
 
-export interface ChatThreadSummary {
-  threadId: string;
-  preview: string;
-  updatedAt: string;
-}
-
 export interface CoachModel {
   id: string;
   label: string;
@@ -483,16 +459,6 @@ export interface CoachModel {
 export interface CoachModelList {
   models: CoachModel[];
   defaultModelId: string;
-}
-
-export interface SendChatResult {
-  threadId: string;
-  userMessage: ChatMessage;
-  assistantMessage: ChatMessage;
-}
-
-export interface ChatThreadList {
-  threads: ChatThreadSummary[];
 }
 
 export interface ChatStreamEvent {

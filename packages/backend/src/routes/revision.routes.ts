@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
+import { replyServiceError } from "../lib/http.js";
 
 export async function revisionRoutes(
   app: FastifyInstance,
@@ -42,9 +43,7 @@ export async function revisionRoutes(
         ctx.events.publish("topic");
         return reply.send(serializeForJson(result));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Grade failed";
-        const status = message.includes("not found") ? 404 : 500;
-        return reply.status(status).send({ error: message });
+        return replyServiceError(reply, err, "Grade failed");
       }
     },
   );

@@ -10,6 +10,7 @@ import {
   createNotionSyncTarget,
   type CardSyncDb,
   type CardSyncReport,
+  type PullApplyResult,
 } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
 
@@ -70,7 +71,7 @@ export class CardBankSyncService {
     return report;
   }
 
-  async pull(now: number = Date.now()) {
+  async pull(now: number = Date.now()): Promise<PullApplyResult | null> {
     return this.sync.pull(now);
   }
 

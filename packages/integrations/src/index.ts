@@ -1,240 +1,65 @@
+/**
+ * Public API of @dsa/integrations — only what the backend/frontend actually
+ * consume. In-package scripts (src/scripts/*) and tests use deep relative
+ * imports, so sub-module exports don't need re-exporting here.
+ */
 export {
   WhatsAppClient,
   createWhatsAppClient,
-  type WhatsAppClientConfig,
-  type SendTextResult,
 } from "./whatsapp/WhatsAppClient.js";
-export type {
-  WhatsAppWebhookPayload,
-  WhatsAppWebhookMessage,
-} from "./whatsapp/types.js";
+export type { WhatsAppWebhookPayload } from "./whatsapp/types.js";
 export {
   parseWhatsAppCommand,
   WHATSAPP_HELP_TEXT,
-  type WhatsAppCommand,
 } from "./whatsapp/commands/parse-command.js";
 export { formatStudyPlanForWhatsApp } from "./whatsapp/formatters/plan.formatter.js";
 export { formatProgressForWhatsApp } from "./whatsapp/formatters/progress.formatter.js";
 export { formatRevisionReminder } from "./whatsapp/formatters/revision.formatter.js";
-export { NotionClient, createNotionClient, type NotionConfig } from "./notion/NotionClient.js";
-export {
-  normalizeProblemStatus,
-  toNotionProblemStatus,
-  isProblemSolved,
-  isProblemNotStarted,
-  formatLocalDate,
-  PROBLEM_PROPERTIES,
-  TOPIC_SCHEDULE_PROPERTIES,
-  TOPIC_SCHEDULE_SCHEMA,
-  PROBLEM_STATUSES,
-} from "./notion/problem-fields.js";
-export type {
-  ProblemNotionUpdate,
-  SessionNotionCreate,
-  TopicNotionUpdate,
-} from "./notion/NotionWriter.js";
-export { syncNotionToSqlite, getMirrorCounts, type SyncResult } from "./sqlite/sync.js";
+export { NotionClient, createNotionClient } from "./notion/NotionClient.js";
+export { normalizeProblemStatus } from "./notion/problem-fields.js";
+export { syncNotionToSqlite, type SyncResult } from "./sqlite/sync.js";
 export {
   CardSyncService,
-  JsonFileSyncTarget,
   createJsonFileSyncTarget,
-  NotionSyncTarget,
   createNotionSyncTarget,
-  NOTION_RATE_LIMIT,
-  NOTION_CARD_SCHEMA,
-  NOTION_CONTENT_PROPERTIES,
-  cardToNotionProperties,
-  notionPageToContent,
-  dirtyCardDeltas,
-  allCardRecords,
-  countDirtyCards,
-  markCardsSynced,
-  applyPulledContent,
-  newSyncId,
-  type SyncTarget,
-  type CardSyncRecord,
-  type SyncPushResult,
   type CardSyncReport,
-  type SyncDb as CardSyncDb,
-  type SyncStatement as CardSyncStatement,
   type PullApplyResult,
-  type PulledCardContent,
-  type NotionCardPropertyName,
-  type JsonFileSyncConfig,
-  type NotionSyncConfig,
-  type NotionClientLike,
+  type SyncDb as CardSyncDb,
 } from "./sync/index.js";
-export { createSqliteDb, runMigrations } from "./sqlite/client.js";
-export type { SqliteDb } from "./sqlite/client.js";
+export { createSqliteDb, runMigrations, type SqliteDb } from "./sqlite/client.js";
+export type { ConceptDefinition } from "./seeds/index.js";
 export {
-  isFlatConceptId,
-  buildVocabulary,
-  assertClosedVocabulary,
-  filterToVocabulary,
-  ConceptVocabularyError,
-  loadSeedTopic,
-  loadAllSeeds,
-  topicCoverage,
-  SeedValidationError,
-  MAX_CARDS_PER_CONCEPT,
-  buildSeedRows,
-  seedTopics,
-  cardSourceHash,
-  type ConceptDefinition,
-  type SeedCard,
-  type SeedTopic,
-  type SeedDb,
-  type SeedStatement,
-  type SeedCardRow,
-  type SeedConceptRow,
-  type SeedResult,
-} from "./seeds/index.js";
-export {
-  serializeVector,
-  deserializeVector,
-  cosineSimilarity,
-  dotProduct,
-  magnitude,
-  normalizeVector,
-  EMBEDDING_MODELS,
-  DEFAULT_EMBEDDING_PROVIDER,
-  DEFAULT_OLLAMA_MODEL,
-  DEFAULT_TRANSFORMERS_MODEL,
-  DEFAULT_DEDUP_THRESHOLD,
-  DEFAULT_DEDUP_CONFIG,
-  conceptsOverlap,
-  cardEmbeddingText,
-  isDuplicatePair,
-  findDuplicates,
-  dedupeBatch,
-  GOLDEN_PAIRS,
-  scoreGoldenPairs,
-  evaluateScoredPairs,
-  sweepThreshold,
-  createOllamaEmbedder,
-  createTransformersEmbedder,
-  createEmbedder,
-  resolveEmbeddingProvider,
-  upsertEmbedding,
-  getEmbedding,
-  cardsNeedingEmbedding,
-  loadDedupCandidates,
-  type Embedder,
-  type EmbeddingProvider,
-  type DedupConfig,
-  type DedupCandidate,
-  type DedupVerdict,
-  type DedupMatch,
-  type DedupBatchResult,
-  type GoldenCard,
-  type GoldenPair,
-  type ScoredPair,
-  type DedupMetrics,
-  type OllamaEmbedderConfig,
-  type TransformersEmbedderConfig,
-  type EmbedderFactoryConfig,
-  type EmbeddingDb,
-  type EmbeddingStatement,
-  type StoredEmbedding,
-  type CardNeedingEmbedding,
-} from "./embeddings/index.js";
-export {
-  parseGeneratedCards,
-  sanitizeGeneratedCards,
-  buildGeneratedCardRows,
-  buildGenerationPrompt,
-  extractMistakeSection,
-  GENERATION_PROMPT_VERSION,
-  computeCoverage,
-  existingFronts,
-  storeGeneratedCards,
   markTopicDirty,
-  clearTopicDirty,
-  listDirtyTopics,
-  getTopicGeneration,
   createOllamaGenerationClient,
   createGenerationClient,
   DEFAULT_OLLAMA_GEN_MODEL,
-  CardGenerationService,
   createSeedVocabularyResolver,
-  createDbNoteProvider,
-  type RawGeneratedCard,
-  type GeneratedCardDraft,
-  type DroppedDraft,
-  type SanitizeResult,
-  type SanitizeOptions,
-  type GenerationProvenance,
-  type GeneratedCardRow,
-  type GenerationConcept,
-  type GenerationPromptContext,
-  type GenDb,
-  type GenStatement,
-  type CoverageReport,
-  type StoreResult,
-  type DirtyTopic,
   type GenerationClient,
-  type OllamaGenerationConfig,
-  type FallbackGenerationConfig,
-  type CardGenerationConfig,
-  type GenerationDb,
-  type GenerationRunReport,
-  type SkipReason,
-  type TopicVocabulary,
-  type TopicNotes,
-  type VocabularyResolver,
-  type NoteProvider,
 } from "./generation/index.js";
-export type { LLMChatMessage, LLMClient } from "./llm/LLMClient.js";
-export {
-  OpenRouterClient,
-  createOpenRouterClient,
-  type OpenRouterConfig,
-} from "./llm/OpenRouterClient.js";
+export type { LLMClient } from "./llm/LLMClient.js";
+export { createOpenRouterClient } from "./llm/OpenRouterClient.js";
 export {
   LLMService,
   createLLMService,
   type LLMServiceConfig,
+  type ChatHistoryMessage,
 } from "./llm/LLMService.js";
 export type {
-  ChatCoachOptions,
   ChatLearningContext,
   DebriefContext,
   HintContext,
-  WarmupQuestionContext,
 } from "./prompts/types.js";
-export { buildHintPrompt } from "./prompts/hint.prompt.js";
-export { buildDebriefPrompt } from "./prompts/debrief.prompt.js";
-export { buildChatSystemPrompt } from "./prompts/chat.prompt.js";
-export {
-  buildWarmupPrompt,
-  buildWarmupAnswerPrompt,
-  buildWarmupAnswerRetryPrompt,
-  fallbackWarmupQuestions,
-  isWeakWarmupAnswer,
-  type WarmupItem,
-} from "./prompts/warmup.prompt.js";
+export { type WarmupItem } from "./prompts/warmup.prompt.js";
 export {
   ObsidianVault,
   createObsidianVault,
-  isConflictFile,
-  parseFrontmatter,
-  resolveTopicFolderName,
-  sanitizeFolderName,
   stripWikiLinks,
   type ObsidianNoteFile,
-  type VaultWatchHandlers,
 } from "./obsidian/ObsidianVault.js";
-export {
-  capHistory,
-  truncateUserMessage,
-  type ChatHistoryMessage,
-} from "./llm/LLMService.js";
 export {
   LeetCodeClient,
   createLeetCodeClient,
-  parseSubmissionCalendar,
   type LeetCodeActivity,
-  type LeetCodeConfig,
   type LeetCodeUserStats,
 } from "./leetcode/LeetCodeClient.js";
 export {
@@ -242,7 +67,4 @@ export {
   createGitHubClient,
   matchProblemToFile,
   slugifyProblemName,
-  type GitHubConfig,
-  type GitHubFileEntry,
-  type GitHubListResult,
 } from "./github/GitHubClient.js";

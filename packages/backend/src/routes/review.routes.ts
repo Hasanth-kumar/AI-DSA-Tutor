@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
+import { replyServiceError } from "../lib/http.js";
 
 /**
  * Flashcard review surface (§11) — the real SR engine, separate from warm-up.
@@ -27,8 +28,7 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
       ctx.events.publish("topic");
       return reply.send(serializeForJson(result));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Grade failed";
-      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Grade failed");
     }
   });
 
@@ -39,8 +39,7 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
       ctx.events.publish("topic");
       return reply.send({ suspended: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Suspend failed";
-      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Suspend failed");
     }
   });
 
@@ -51,8 +50,7 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
       ctx.events.publish("topic");
       return reply.send({ deleted: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Delete failed";
-      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Delete failed");
     }
   });
 
@@ -69,8 +67,7 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
         ctx.events.publish("topic");
         return reply.send(serializeForJson(card));
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Edit failed";
-        return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+        return replyServiceError(reply, err, "Edit failed");
       }
     },
   );
@@ -92,8 +89,7 @@ export async function reviewRoutes(app: FastifyInstance, ctx: AppContext): Promi
         ctx.events.publish("topic");
         return reply.send({ merged: true, kept: request.params.cardId, deleted: loserId });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Merge failed";
-        return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+        return replyServiceError(reply, err, "Merge failed");
       }
     },
   );

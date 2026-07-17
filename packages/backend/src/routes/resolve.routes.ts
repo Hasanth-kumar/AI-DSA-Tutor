@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { replyServiceError } from "../lib/http.js";
 import type { ResolveRating } from "@dsa/intelligence";
 import type { AppContext } from "../context.js";
 import type { ResolveOutcomeKind } from "../services/ProblemReviewService.js";
@@ -45,8 +46,7 @@ export async function resolveRoutes(app: FastifyInstance, ctx: AppContext): Prom
       });
       return reply.send(result);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Complete failed";
-      return reply.status(message.includes("not in the re-solve pool") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Complete failed", "not in the re-solve pool");
     }
   });
 
@@ -56,8 +56,7 @@ export async function resolveRoutes(app: FastifyInstance, ctx: AppContext): Prom
       const row = ctx.problemReviewService.skip(request.params.problemId);
       return reply.send({ problemId: row.problemId, due: row.due });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Skip failed";
-      return reply.status(message.includes("not in the re-solve pool") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Skip failed", "not in the re-solve pool");
     }
   });
 
@@ -66,8 +65,7 @@ export async function resolveRoutes(app: FastifyInstance, ctx: AppContext): Prom
     try {
       return reply.send(ctx.problemReviewService.admit(request.params.problemId));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Admit failed";
-      return reply.status(message.includes("not found") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Admit failed");
     }
   });
 
@@ -85,8 +83,7 @@ export async function resolveRoutes(app: FastifyInstance, ctx: AppContext): Prom
         ctx.problemReviewService.setFlags(request.params.problemId, { retired, suspended }),
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Update failed";
-      return reply.status(message.includes("not in the re-solve pool") ? 404 : 500).send({ error: message });
+      return replyServiceError(reply, err, "Update failed", "not in the re-solve pool");
     }
   });
 }
