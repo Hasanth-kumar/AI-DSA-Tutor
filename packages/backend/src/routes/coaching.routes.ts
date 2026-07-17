@@ -1,5 +1,5 @@
 import type { ServerResponse } from "node:http";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../context.js";
 import { serializeForJson } from "../lib/json.js";
 import { replyServiceError } from "../lib/http.js";
@@ -54,6 +54,46 @@ export async function coachingRoutes(
     ctx.coachUsage.set(problemId, (ctx.coachUsage.get(problemId) ?? 0) + 1);
   };
 
+  /** Shared tail of both hint endpoints: topic lookup → hint → coach-use capture. */
+  const sendHint = async (
+    reply: FastifyReply,
+    problem: ReturnType<AppContext["problemRepo"]["findById"]>,
+    level: string | undefined,
+    notFoundMessage: string,
+  ) => {
+    if (!problem?.topicId) {
+      return reply.status(404).send({ error: notFoundMessage });
+    }
+
+    const topic = ctx.topicRepo.findById(problem.topicId);
+    if (!topic) {
+      return reply.status(404).send({ error: "Topic not found" });
+    }
+
+    const hintCtx = ctx.hintService.buildContextFromTopic(
+      problem.name,
+      topic,
+      problem.difficulty ?? "Medium",
+      problem.attempts ?? 0,
+      parseHintLevel(level),
+    );
+    const hint = await ctx.hintService.generateHint(hintCtx);
+    recordCoachUse(problem.id);
+    return reply.send(serializeForJson({ problemId: problem.id, hint }));
+  };
+
+  /** Shared SSE plumbing for the chat stream endpoints (abort wiring + hijack). */
+  const startStream = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    run: (signal: AbortSignal) => AsyncGenerator<ChatStreamEvent>,
+  ): Promise<void> => {
+    const abortController = new AbortController();
+    request.raw.on("aborted", () => abortController.abort());
+    reply.hijack();
+    return streamChatEvents(reply, run(abortController.signal));
+  };
+
   app.get("/coaching/debrief", async (_request, reply) => {
     try {
       const result = await ctx.debriefService.generateLatest();
@@ -79,28 +119,13 @@ export async function coachingRoutes(
 
   app.get<{ Params: { problemId: string }; Querystring: { level?: string } }>(
     "/coaching/hint/:problemId",
-    async (request, reply) => {
-      const problem = ctx.problemRepo.findById(request.params.problemId);
-      if (!problem?.topicId) {
-        return reply.status(404).send({ error: "Problem not found" });
-      }
-
-      const topic = ctx.topicRepo.findById(problem.topicId);
-      if (!topic) {
-        return reply.status(404).send({ error: "Topic not found" });
-      }
-
-      const hintCtx = ctx.hintService.buildContextFromTopic(
-        problem.name,
-        topic,
-        problem.difficulty ?? "Medium",
-        problem.attempts ?? 0,
-        parseHintLevel(request.query.level),
-      );
-      const hint = await ctx.hintService.generateHint(hintCtx);
-      recordCoachUse(problem.id);
-      return reply.send(serializeForJson({ problemId: problem.id, hint }));
-    },
+    async (request, reply) =>
+      sendHint(
+        reply,
+        ctx.problemRepo.findById(request.params.problemId),
+        request.query.level,
+        "Problem not found",
+      ),
   );
 
   app.get<{ Querystring: { name?: string; level?: string } }>(
@@ -111,26 +136,12 @@ export async function coachingRoutes(
         return reply.status(400).send({ error: "name query parameter is required" });
       }
 
-      const problem = ctx.problemRepo.findByNameFuzzy(name);
-      if (!problem?.topicId) {
-        return reply.status(404).send({ error: `Problem not found: ${name}` });
-      }
-
-      const topic = ctx.topicRepo.findById(problem.topicId);
-      if (!topic) {
-        return reply.status(404).send({ error: "Topic not found" });
-      }
-
-      const hintCtx = ctx.hintService.buildContextFromTopic(
-        problem.name,
-        topic,
-        problem.difficulty ?? "Medium",
-        problem.attempts ?? 0,
-        parseHintLevel(request.query.level),
+      return sendHint(
+        reply,
+        ctx.problemRepo.findByNameFuzzy(name),
+        request.query.level,
+        `Problem not found: ${name}`,
       );
-      const hint = await ctx.hintService.generateHint(hintCtx);
-      recordCoachUse(problem.id);
-      return reply.send(serializeForJson({ problemId: problem.id, hint }));
     },
   );
 
@@ -192,12 +203,7 @@ export async function coachingRoutes(
     }
 
     recordCoachUse(request.body.problemId);
-    const abortController = new AbortController();
-    request.raw.on("aborted", () => abortController.abort());
-
-    reply.hijack();
-    await streamChatEvents(
-      reply,
+    await startStream(request, reply, (signal) =>
       ctx.chatService.sendMessageStream(
         {
           threadId: request.body.threadId,
@@ -207,7 +213,7 @@ export async function coachingRoutes(
           directMode: request.body.directMode ?? false,
           model: request.body.model,
         },
-        abortController.signal,
+        signal,
       ),
     );
   });
@@ -226,12 +232,7 @@ export async function coachingRoutes(
       return reply.status(400).send({ error: "threadId is required" });
     }
 
-    const abortController = new AbortController();
-    request.raw.on("aborted", () => abortController.abort());
-
-    reply.hijack();
-    await streamChatEvents(
-      reply,
+    await startStream(request, reply, (signal) =>
       ctx.chatService.regenerateMessageStream(
         {
           threadId,
@@ -240,7 +241,7 @@ export async function coachingRoutes(
           directMode: request.body.directMode ?? false,
           model: request.body.model,
         },
-        abortController.signal,
+        signal,
       ),
     );
   });
@@ -265,12 +266,7 @@ export async function coachingRoutes(
         .send({ error: "threadId, messageId, and content are required" });
     }
 
-    const abortController = new AbortController();
-    request.raw.on("aborted", () => abortController.abort());
-
-    reply.hijack();
-    await streamChatEvents(
-      reply,
+    await startStream(request, reply, (signal) =>
       ctx.chatService.editMessageStream(
         {
           threadId,
@@ -281,7 +277,7 @@ export async function coachingRoutes(
           directMode: request.body.directMode ?? false,
           model: request.body.model,
         },
-        abortController.signal,
+        signal,
       ),
     );
   });

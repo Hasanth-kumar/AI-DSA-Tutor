@@ -38,7 +38,7 @@ export async function checkHealthFromContext(
     }
   }
 
-  const response = deep ? await buildDeepHealth(ctx) : await buildShallowHealth(ctx);
+  const response = await buildHealth(ctx, deep);
   if (deep) {
     cachedDeepHealth = {
       response,
@@ -48,11 +48,15 @@ export async function checkHealthFromContext(
   return response;
 }
 
-async function buildShallowHealth(ctx: AppContext): Promise<HealthResponse> {
+/**
+ * One builder for both probe depths: shallow reports Notion/LLM from config
+ * presence only; deep actually pings them (in parallel).
+ */
+async function buildHealth(ctx: AppContext, deep: boolean): Promise<HealthResponse> {
   const api: ServiceHealth = { status: "ok" };
   let counts: HealthResponse["counts"];
 
-  let sqlite: ServiceHealth = { status: "down", message: "Not initialized" };
+  let sqlite: ServiceHealth;
   try {
     const mirror = ctx.mirrorCache.getCounts();
     counts = mirror;
@@ -67,16 +71,18 @@ async function buildShallowHealth(ctx: AppContext): Promise<HealthResponse> {
     };
   }
 
-  const notion: ServiceHealth = ctx.notionSync.isConfigured()
-    ? { status: "ok", message: "not probed (use /health/ready)" }
-    : { status: "down", message: "Not configured" };
-
-  const llm: ServiceHealth = ctx.config.llm.openrouter.apiKey
-    ? { status: "ok", message: "not probed (use /health/ready)" }
-    : { status: "down", message: "OPENROUTER_API_KEY not set" };
+  const [notion, llm] = deep
+    ? await Promise.all([checkNotion(ctx), checkLlmHealth(ctx.config)])
+    : [
+        ctx.notionSync.isConfigured()
+          ? { status: "ok" as const, message: "not probed (use /health/ready)" }
+          : { status: "down" as const, message: "Not configured" },
+        ctx.config.llm.openrouter.apiKey
+          ? { status: "ok" as const, message: "not probed (use /health/ready)" }
+          : { status: "down" as const, message: "OPENROUTER_API_KEY not set" },
+      ];
 
   const services = { api, sqlite, notion, llm };
-  const status = aggregateStatus(Object.values(services));
 
   let sync: HealthResponse["sync"];
   try {
@@ -89,54 +95,7 @@ async function buildShallowHealth(ctx: AppContext): Promise<HealthResponse> {
   }
 
   return {
-    status,
-    timestamp: new Date().toISOString(),
-    version: "0.1.0",
-    services,
-    counts,
-    sync,
-  };
-}
-
-async function buildDeepHealth(ctx: AppContext): Promise<HealthResponse> {
-  const api: ServiceHealth = { status: "ok" };
-  let counts: HealthResponse["counts"];
-
-  let sqlite: ServiceHealth = { status: "down", message: "Not initialized" };
-  try {
-    const mirror = ctx.mirrorCache.getCounts();
-    counts = mirror;
-    sqlite = {
-      status: "ok",
-      message: `${mirror.topics} topics, ${mirror.problems} problems, ${mirror.sessions} sessions`,
-    };
-  } catch (err) {
-    sqlite = {
-      status: "down",
-      message: err instanceof Error ? err.message : "SQLite check failed",
-    };
-  }
-
-  const [notionResult, llmHealth] = await Promise.all([
-    checkNotion(ctx),
-    checkLlmHealth(ctx.config),
-  ]);
-
-  const services = { api, sqlite, notion: notionResult, llm: llmHealth };
-  const status = aggregateStatus(Object.values(services));
-
-  let sync: HealthResponse["sync"];
-  try {
-    sync = {
-      ...ctx.notionSync.getSyncHealth(),
-      cards: ctx.cardBankSync.getHealth(),
-    };
-  } catch {
-    sync = undefined;
-  }
-
-  return {
-    status,
+    status: aggregateStatus(Object.values(services)),
     timestamp: new Date().toISOString(),
     version: "0.1.0",
     services,

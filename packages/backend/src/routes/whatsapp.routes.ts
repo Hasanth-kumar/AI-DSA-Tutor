@@ -125,9 +125,11 @@ export async function whatsappNotificationRoutes(
   const notifications = new WhatsAppNotificationService(ctx.config, ctx);
   const secret = ctx.config.whatsapp.notifySecret;
 
-  app.post<{ Body: { recipient?: string } }>(
-    "/notifications/daily-plan",
-    async (request, reply) => {
+  const registerNotification = (
+    path: string,
+    send: (recipient?: string) => Promise<unknown>,
+  ) => {
+    app.post<{ Body: { recipient?: string } }>(path, async (request, reply) => {
       if (!checkNotifySecret(request, secret)) {
         return reply.status(401).send({ error: "Unauthorized" });
       }
@@ -136,52 +138,15 @@ export async function whatsappNotificationRoutes(
       }
 
       try {
-        const result = await notifications.sendDailyPlan(request.body?.recipient);
-        return reply.send(result);
+        return reply.send(await send(request.body?.recipient));
       } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to send";
         return reply.status(500).send({ error: message });
       }
-    },
-  );
+    });
+  };
 
-  app.post<{ Body: { recipient?: string } }>(
-    "/notifications/revision-check",
-    async (request, reply) => {
-      if (!checkNotifySecret(request, secret)) {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
-      if (!notifications.isConfigured()) {
-        return reply.status(503).send({ error: "WhatsApp notifications not configured" });
-      }
-
-      try {
-        const result = await notifications.sendRevisionCheck(request.body?.recipient);
-        return reply.send(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to send";
-        return reply.status(500).send({ error: message });
-      }
-    },
-  );
-
-  app.post<{ Body: { recipient?: string } }>(
-    "/notifications/weekly-digest",
-    async (request, reply) => {
-      if (!checkNotifySecret(request, secret)) {
-        return reply.status(401).send({ error: "Unauthorized" });
-      }
-      if (!notifications.isConfigured()) {
-        return reply.status(503).send({ error: "WhatsApp notifications not configured" });
-      }
-
-      try {
-        const result = await notifications.sendWeeklyDigest(request.body?.recipient);
-        return reply.send(result);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to send";
-        return reply.status(500).send({ error: message });
-      }
-    },
-  );
+  registerNotification("/notifications/daily-plan", (r) => notifications.sendDailyPlan(r));
+  registerNotification("/notifications/revision-check", (r) => notifications.sendRevisionCheck(r));
+  registerNotification("/notifications/weekly-digest", (r) => notifications.sendWeeklyDigest(r));
 }
