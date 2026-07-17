@@ -1,8 +1,7 @@
 import { desc, gte, isNotNull, sql } from "drizzle-orm";
 import { notes, problemAttempts, problems, sessions, topics } from "@dsa/database/schema";
-import type { TopicState } from "@dsa/intelligence";
+import { buildTopicState, groupBy, type TopicState } from "@dsa/intelligence";
 import type { SqliteDb } from "@dsa/integrations";
-import { buildTopicState } from "../lib/topic-mapper.js";
 import type { ProblemRow } from "../repositories/ProblemRepository.js";
 import type { SessionRow } from "../repositories/SessionRepository.js";
 
@@ -192,19 +191,4 @@ export class MirrorCache {
       sessions: s.sessionRows.length,
     };
   }
-}
-
-function groupBy<T>(
-  items: T[],
-  keyFn: (item: T) => string | null | undefined,
-): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  for (const item of items) {
-    const key = keyFn(item);
-    if (!key) continue;
-    const list = map.get(key) ?? [];
-    list.push(item);
-    map.set(key, list);
-  }
-  return map;
 }

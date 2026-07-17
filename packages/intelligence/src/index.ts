@@ -72,6 +72,11 @@ export {
   AnalyticsEngine,
   createAnalyticsEngine,
 } from "./analytics/AnalyticsEngine.js";
+export {
+  buildTopicState,
+  groupBy,
+  type TopicSignalExtras,
+} from "./analytics/build-topic-snapshot.js";
 
 export type {
   CardAnalyticsOptions,

@@ -1,5 +1,42 @@
-export type TopicStatus = "Not started" | "In progress" | "Mastered";
-export type TopicDifficulty = "Easy" | "Medium" | "Hard";
+/**
+ * API response shapes. Date-free domain types come straight from
+ * `@dsa/intelligence` (single source of truth); types whose Date fields
+ * arrive JSON-serialized as strings are re-declared here in wire form
+ * (e.g. `Topic` vs intelligence's `TopicState`).
+ */
+import type {
+  AdmissionReason,
+  CurriculumItem,
+  CurriculumProgress,
+  DifficultyAnalysis,
+  MasteryVelocityPoint,
+  MistakeTag,
+  ResolvePlanSlot,
+  ResolveRating,
+  RevisionProblem,
+  TopicDifficulty,
+  TopicStatus,
+  WeaknessTrendPoint,
+} from "@dsa/intelligence";
+
+export type {
+  AdmissionReason,
+  CurriculumItem,
+  CurriculumProgress,
+  DifficultyAnalysis,
+  DifficultyBucket,
+  MasteryVelocityPoint,
+  MistakeTag,
+  PriorityScore,
+  ResolvePlanSlot,
+  ResolveRating,
+  RevisionProblem,
+  StreakInfo,
+  TopicDifficulty,
+  TopicDifficultyAlignment,
+  TopicStatus,
+  WeaknessTrendPoint,
+} from "@dsa/intelligence";
 
 export interface Topic {
   id: string;
@@ -15,13 +52,6 @@ export interface Topic {
   totalAttempts: number;
   averageTimeTaken: number;
   prerequisites: string[];
-}
-
-export interface PriorityScore {
-  topicId: string;
-  total: number;
-  recommendation: string;
-  memoryExecutionDivergence?: boolean;
 }
 
 export interface Problem {
@@ -44,21 +74,6 @@ export interface Session {
   productivityScore: number;
 }
 
-export interface CurriculumItem {
-  name: string;
-  topicId: string | null;
-  status: "complete" | "current" | "upcoming" | "missing";
-  unsolvedCount: number;
-  totalCount: number;
-}
-
-export interface CurriculumProgress {
-  topicNames: string[];
-  currentIndex: number;
-  activeTopicId: string | null;
-  items: CurriculumItem[];
-}
-
 export interface CurriculumState {
   topicNames: string[];
   activeTopicId: string | null;
@@ -68,18 +83,6 @@ export interface CurriculumState {
     items: CurriculumItem[];
     reasoning: string;
   } | null;
-}
-
-/** A concrete solved problem surfaced for revision (C). */
-export interface RevisionProblem {
-  problemId: string;
-  name: string;
-  difficulty: TopicDifficulty | null;
-  leetcodeLink?: string;
-  topicId: string;
-  topicName: string;
-  /** recall ≈ 5 min check; resolve = full re-solve (weak topic). */
-  mode: "recall" | "resolve";
 }
 
 export interface StudyPlan {
@@ -106,18 +109,6 @@ export interface StudyPlan {
   resolveDeferred?: number;
 }
 
-/** One committed re-solve on today's plan (re-solve design §6, §10). */
-export interface ResolvePlanSlot {
-  problemId: string;
-  name: string;
-  difficulty: TopicDifficulty | null;
-  leetcodeLink: string | null;
-  daysOverdue: number;
-  promoted: boolean;
-  reason: string;
-}
-
-export type ResolveRating = "again" | "hard" | "good" | "easy";
 export type ResolveOutcomeKind = "solved" | "assisted" | "failed";
 export type ResolveStatus = "overdue" | "due" | "scheduled" | "retired" | "suspended";
 
@@ -128,7 +119,7 @@ export interface ResolveQueueItem {
   difficulty: TopicDifficulty | null;
   leetcodeLink: string | null;
   topicId: string | null;
-  admissionReason: "mistake" | "coach" | "slow" | "hard" | "manual";
+  admissionReason: AdmissionReason;
   admittedAt: number;
   reason: string;
   status: ResolveStatus;
@@ -157,12 +148,6 @@ export interface ResolveCompleteResult {
   leech: boolean;
   retired: boolean;
 }
-
-export type MistakeTag =
-  | "wrong-approach"
-  | "edge-case"
-  | "off-by-one"
-  | "pattern-recall";
 
 export const MISTAKE_TAG_OPTIONS: { tag: MistakeTag; label: string }[] = [
   { tag: "wrong-approach", label: "Wrong approach" },
@@ -345,28 +330,6 @@ export interface WeeklySummary {
   weaknessTrendDirection: "improving" | "worsening" | "stable";
 }
 
-export interface StreakInfo {
-  currentStreakDays: number;
-  longestStreakDays: number;
-  activeDays: string[];
-  lastSessionDate: string | null;
-}
-
-export interface MasteryVelocityPoint {
-  weekStart: string;
-  weekEnd: string;
-  problemsSolved: number;
-  studyMinutes: number;
-  problemsPerHour: number;
-  sessionsCount: number;
-}
-
-export interface WeaknessTrendPoint {
-  weekStart: string;
-  weakTopicCount: number;
-  averageWeaknessScore: number;
-}
-
 export interface SessionResult {
   session: Session;
   topicId: string;
@@ -376,30 +339,6 @@ export interface SessionResult {
   usedCoach?: boolean;
   confidence: number;
   isWeakArea: boolean;
-  summary: string;
-}
-
-export interface DifficultyBucket {
-  difficulty: TopicDifficulty;
-  problemsTotal: number;
-  problemsSolved: number;
-  solveRate: number;
-  averageAttempts: number;
-  averageTimeMinutes: number;
-}
-
-export interface TopicDifficultyAlignment {
-  topicId: string;
-  topicName: string;
-  topicDifficulty: TopicDifficulty;
-  recommendedDifficulty: TopicDifficulty;
-  alignment: "aligned" | "stretching" | "too_easy";
-  solveRate: number;
-}
-
-export interface DifficultyAnalysis {
-  byDifficulty: DifficultyBucket[];
-  byTopic: TopicDifficultyAlignment[];
   summary: string;
 }
 
