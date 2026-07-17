@@ -236,92 +236,79 @@ export function ActivityHeatmap({
           </div>
         )}
 
-        {isDesign ? (
-          <div className="heatmap-grid-v2">
-            {gridWeeks.map((week, weekIdx) => (
-              <div key={week[0]?.key ?? weekIdx} className="heatmap-week-v2">
-                {week.map((cell, dayIdx) => {
-                  const isActive = cell.count > 0;
-                  const lvl = level(cell.count);
-                  const tipProps = {
-                    "data-level": lvl,
-                    "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
-                    "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
-                    "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
-                  };
+        {(() => {
+          /** One cell, styled per variant — shared by both grid layouts. */
+          const renderCell = (
+            cell: { key: string; count: number },
+            weekIdx: number,
+            dayIdx: number,
+          ) => {
+            const isActive = cell.count > 0;
+            const lvl = level(cell.count);
+            const tipProps = {
+              "data-level": lvl,
+              "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
+              "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
+              "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
+            };
 
-                  return isActive ? (
-                    <button
-                      key={cell.key}
-                      type="button"
-                      className={`heatmap-cell-v2 heatmap-cell-v2--${lvl} heatmap-cell--interactive`}
-                      aria-label={formatCellDetail(cell.key, cell.count, source)}
-                      onMouseEnter={() => selectCell(cell)}
-                      onMouseLeave={() => setHovered(null)}
-                      onFocus={() => selectCell(cell)}
-                      onBlur={() => setHovered(null)}
-                      onClick={() => clickCell(cell)}
-                      {...tipProps}
-                    >
-                      <span className="heatmap-cell-tooltip" aria-hidden="true">
-                        {formatCellDetail(cell.key, cell.count, source)}
-                      </span>
-                    </button>
-                  ) : (
-                    <div
-                      key={cell.key}
-                      className="heatmap-cell-v2 heatmap-cell-v2--0"
-                      {...tipProps}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div
-            className="heatmap"
-            style={{
-              gridTemplateRows: `repeat(7, ${cellSize}px)`,
-              gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
-              gridAutoFlow: "column",
-            }}
-          >
-            {gridWeeks.flatMap((week, weekIdx) =>
-              week.map((cell, dayIdx) => {
-                const isActive = cell.count > 0;
-                const lvl = level(cell.count);
-                const tipProps = {
-                  "data-level": lvl,
-                  "data-active": hovered?.key === cell.key ? ("true" as const) : undefined,
-                  "data-tip-row": dayIdx <= 1 ? ("top" as const) : undefined,
-                  "data-tip-col": weekIdx >= gridWeeks.length - 2 ? ("end" as const) : undefined,
-                };
+            if (!isActive) {
+              return (
+                <div
+                  key={cell.key}
+                  className={isDesign ? "heatmap-cell-v2 heatmap-cell-v2--0" : "heatmap-cell"}
+                  {...tipProps}
+                />
+              );
+            }
 
-                return isActive ? (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    className="heatmap-cell heatmap-cell--interactive"
-                    aria-label={formatCellDetail(cell.key, cell.count, source)}
-                    onMouseEnter={() => selectCell(cell)}
-                    onMouseLeave={() => setHovered(null)}
-                    onFocus={() => selectCell(cell)}
-                    onBlur={() => setHovered(null)}
-                    onClick={() => clickCell(cell)}
-                    {...tipProps}
-                  >
-                    <span className="heatmap-cell-tooltip" aria-hidden="true">
-                      {formatCellDetail(cell.key, cell.count, source)}
-                    </span>
-                  </button>
-                ) : (
-                  <div key={cell.key} className="heatmap-cell" {...tipProps} />
-                );
-              }),
-            )}
-          </div>
-        )}
+            return (
+              <button
+                key={cell.key}
+                type="button"
+                className={
+                  isDesign
+                    ? `heatmap-cell-v2 heatmap-cell-v2--${lvl} heatmap-cell--interactive`
+                    : "heatmap-cell heatmap-cell--interactive"
+                }
+                aria-label={formatCellDetail(cell.key, cell.count, source)}
+                onMouseEnter={() => selectCell(cell)}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={() => selectCell(cell)}
+                onBlur={() => setHovered(null)}
+                onClick={() => clickCell(cell)}
+                {...tipProps}
+              >
+                <span className="heatmap-cell-tooltip" aria-hidden="true">
+                  {formatCellDetail(cell.key, cell.count, source)}
+                </span>
+              </button>
+            );
+          };
+
+          return isDesign ? (
+            <div className="heatmap-grid-v2">
+              {gridWeeks.map((week, weekIdx) => (
+                <div key={week[0]?.key ?? weekIdx} className="heatmap-week-v2">
+                  {week.map((cell, dayIdx) => renderCell(cell, weekIdx, dayIdx))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              className="heatmap"
+              style={{
+                gridTemplateRows: `repeat(7, ${cellSize}px)`,
+                gridTemplateColumns: `repeat(${gridWeeks.length}, ${cellSize}px)`,
+                gridAutoFlow: "column",
+              }}
+            >
+              {gridWeeks.flatMap((week, weekIdx) =>
+                week.map((cell, dayIdx) => renderCell(cell, weekIdx, dayIdx)),
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {!isDesign && (

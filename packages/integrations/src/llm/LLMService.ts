@@ -338,59 +338,58 @@ function toChatError(err: unknown): Error {
   return new Error(`Coach is temporarily unavailable (${detail}). Please try again.`);
 }
 
-/** Extract a JSON string-array of answers from LLM output. */
-function parseAnswerArray(text: string | null, expected: number): string[] | null {
+/** Pull the first JSON array out of possibly fenced/chatty LLM output. */
+function extractJsonArray(text: string | null): unknown[] | null {
   if (!text) return null;
   const match = text.match(/\[[\s\S]*\]/);
   if (!match) return null;
   try {
     const parsed = JSON.parse(match[0]) as unknown;
-    if (!Array.isArray(parsed)) return null;
-    const answers = parsed
-      .slice(0, expected)
-      .map((a) => (typeof a === "string" ? a.trim() : ""))
-      .map((a) => (isWeakWarmupAnswer(a) ? "" : a));
-    return answers.some((a) => a.length > 0) ? answers : null;
+    return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
 
+/** Extract a JSON string-array of answers from LLM output. */
+function parseAnswerArray(text: string | null, expected: number): string[] | null {
+  const parsed = extractJsonArray(text);
+  if (!parsed) return null;
+  const answers = parsed
+    .slice(0, expected)
+    .map((a) => (typeof a === "string" ? a.trim() : ""))
+    .map((a) => (isWeakWarmupAnswer(a) ? "" : a));
+  return answers.some((a) => a.length > 0) ? answers : null;
+}
+
 /** Extract warmup Q&A items from possibly fenced/chatty LLM output. */
 function parseWarmupItems(text: string | null, expected: number): WarmupItem[] | null {
-  if (!text) return null;
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[0]) as unknown;
-    if (!Array.isArray(parsed)) return null;
-    const items = parsed
-      .map((entry): WarmupItem | null => {
-        if (typeof entry === "string" && entry.trim().length > 0) {
-          return { question: entry.trim(), answer: "" };
+  const parsed = extractJsonArray(text);
+  if (!parsed) return null;
+  const items = parsed
+    .map((entry): WarmupItem | null => {
+      if (typeof entry === "string" && entry.trim().length > 0) {
+        return { question: entry.trim(), answer: "" };
+      }
+      if (entry && typeof entry === "object" && "question" in entry) {
+        const question =
+          typeof entry.question === "string" ? entry.question.trim() : "";
+        const answer =
+          "answer" in entry && typeof entry.answer === "string"
+            ? entry.answer.trim()
+            : "";
+        if (question.length > 0) {
+          return {
+            question,
+            answer: isWeakWarmupAnswer(answer) ? "" : answer,
+          };
         }
-        if (entry && typeof entry === "object" && "question" in entry) {
-          const question =
-            typeof entry.question === "string" ? entry.question.trim() : "";
-          const answer =
-            "answer" in entry && typeof entry.answer === "string"
-              ? entry.answer.trim()
-              : "";
-          if (question.length > 0) {
-            return {
-              question,
-              answer: isWeakWarmupAnswer(answer) ? "" : answer,
-            };
-          }
-        }
-        return null;
-      })
-      .filter((item): item is WarmupItem => item !== null)
-      .slice(0, expected);
-    return items.length > 0 ? items : null;
-  } catch {
-    return null;
-  }
+      }
+      return null;
+    })
+    .filter((item): item is WarmupItem => item !== null)
+    .slice(0, expected);
+  return items.length > 0 ? items : null;
 }
 
 function fallbackHint(ctx: HintContext): string {

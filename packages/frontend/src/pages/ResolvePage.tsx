@@ -241,6 +241,19 @@ export function ResolvePage() {
   }
 
   let spineIndex = 0;
+  /** One rail's rows — shared spine numbering across all three rails. */
+  const renderRows = (list: typeof items, offRail = false) =>
+    list.map((item) => (
+      <Row
+        key={item.problemId}
+        item={item}
+        index={spineIndex++}
+        offRail={offRail}
+        slowThresholdMin={queue?.slowThresholdMin}
+        onMessage={onMessage}
+        onChanged={() => void refresh()}
+      />
+    ));
 
   return (
     <div className="page-content">
@@ -296,16 +309,7 @@ export function ResolvePage() {
         {debt.length > 0 && (
           <div className="rsv-rail rsv-rail--debt">
             <div className="rsv-rail-label">Overdue</div>
-            {debt.map((item) => (
-              <Row
-                key={item.problemId}
-                item={item}
-                index={spineIndex++}
-                slowThresholdMin={queue?.slowThresholdMin}
-                onMessage={onMessage}
-                onChanged={() => void refresh()}
-              />
-            ))}
+            {renderRows(debt)}
           </div>
         )}
 
@@ -321,33 +325,14 @@ export function ResolvePage() {
         {later.length > 0 && (
           <div className="rsv-rail">
             <div className="rsv-rail-label">Upcoming</div>
-            {later.map((item) => (
-              <Row
-                key={item.problemId}
-                item={item}
-                index={spineIndex++}
-                slowThresholdMin={queue?.slowThresholdMin}
-                onMessage={onMessage}
-                onChanged={() => void refresh()}
-              />
-            ))}
+            {renderRows(later)}
           </div>
         )}
 
         {paused.length > 0 && (
           <div className="rsv-paused">
             <div className="rsv-rail-label">Paused &amp; retired</div>
-            {paused.map((item) => (
-              <Row
-                key={item.problemId}
-                item={item}
-                index={spineIndex++}
-                offRail
-                slowThresholdMin={queue?.slowThresholdMin}
-                onMessage={onMessage}
-                onChanged={() => void refresh()}
-              />
-            ))}
+            {renderRows(paused, true)}
           </div>
         )}
       </div>

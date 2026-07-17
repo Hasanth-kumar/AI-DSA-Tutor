@@ -175,6 +175,14 @@ export class NotionClient {
       }
     }
 
+    await this.pushPageUpdate(pageId, properties);
+  }
+
+  /** Queue a page-properties update, skipping no-op empty patches. */
+  private async pushPageUpdate(
+    pageId: string,
+    properties: Record<string, unknown>,
+  ): Promise<void> {
     if (Object.keys(properties).length === 0) return;
 
     await this.requestQueue.add(() =>
@@ -213,14 +221,7 @@ export class NotionClient {
       properties[timeTakenProp] = { number: update.timeTaken };
     }
 
-    if (Object.keys(properties).length === 0) return;
-
-    await this.requestQueue.add(() =>
-      this.client.pages.update({
-        page_id: pageId,
-        properties: properties as Parameters<Client["pages"]["update"]>[0]["properties"],
-      }),
-    );
+    await this.pushPageUpdate(pageId, properties);
   }
 
   async createSession(

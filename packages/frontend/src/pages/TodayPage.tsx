@@ -1,10 +1,4 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client.js";
 import { CheckCircleIcon, EmptyState } from "../components/EmptyState.js";
 import { MasteryRing } from "../components/MasteryRing.js";
@@ -12,68 +6,42 @@ import { MistakeCapture } from "../components/MistakeCapture.js";
 import { PageHeader } from "../components/PageHeader.js";
 import { ProblemNotePanel } from "../components/ProblemNotePanel.js";
 import { ResolveTodaySection } from "../components/ResolveTodaySection.js";
+import { RevisionGradeButtons } from "../components/RevisionGradeButtons.js";
 import { ScoreBar } from "../components/ScoreBar.js";
+import {
+  SESSION_STEPS,
+  SESSION_STEPS_REVISE,
+  SessionProgress,
+} from "../components/SessionProgress.js";
 import { Skeleton, SkeletonLines, SkeletonRows } from "../components/Skeleton.js";
+import { UpNextTimeline } from "../components/UpNextTimeline.js";
 import { WarmupCard } from "../components/WarmupCard.js";
 import { useAppPreferences } from "../hooks/useAppPreferences.js";
 import { usePolling } from "../hooks/usePolling.js";
 import { formatRelativeTime } from "../lib/formatRelative.js";
 import { formatTodayDate } from "../lib/greeting.js";
+import {
+  loadStarts,
+  saveStarts,
+  sessionsThisMonth,
+  studyHoursThisMonth,
+} from "../lib/todayStats.js";
 import type {
-  CurriculumItem,
   ProblemNote,
   RecallGradeResult,
   RevisionProblem,
   ScoreExplanation,
-  Session,
   Topic,
 } from "../types/api.js";
 
 const PLAN_POLL_MS = 60_000;
 const SESSIONS_POLL_MS = 60_000;
-const STARTS_STORAGE_KEY = "dsa-problem-starts";
 /** Date marker — once graded or skipped, the revision offer never nags again that day (C). */
 const REVISION_OFFER_KEY = "dsa-revision-offer-day";
 const DEFAULT_MINUTES = 25;
 
 interface Props {
   onOpenCoach: (problemId: string) => void;
-}
-
-const SESSION_STEPS = ["Warm-up", "Focus", "Capture", "Done"] as const;
-/** Optional "Revise" segment shown only while the revision offer is active (C). */
-const SESSION_STEPS_REVISE = ["Warm-up", "Focus", "Capture", "Revise", "Done"] as const;
-
-function SessionProgress({
-  step,
-  steps = SESSION_STEPS,
-}: {
-  step: number;
-  steps?: readonly string[];
-}) {
-  return (
-    <div className="session-progress" role="group" aria-label="Session progress">
-      {steps.map((label, i) => (
-        <Fragment key={label}>
-          {i > 0 && (
-            <span
-              className={`session-progress-line${i <= step ? " session-progress-line--done" : ""}`}
-              aria-hidden="true"
-            />
-          )}
-          <span
-            className={`session-progress-step${i < step ? " session-progress-step--done" : ""}${
-              i === step ? " session-progress-step--current" : ""
-            }`}
-            aria-current={i === step ? "step" : undefined}
-          >
-            <span className="session-progress-dot" aria-hidden="true" />
-            <span>{label}</span>
-          </span>
-        </Fragment>
-      ))}
-    </div>
-  );
 }
 
 type Flow =
@@ -89,136 +57,6 @@ type Flow =
   | { kind: "note-offer"; problemId: string; problemName: string }
   | { kind: "revision-offer"; problem: RevisionProblem }
   | { kind: "revision-active"; problem: RevisionProblem };
-
-/** Got it (5) / Shaky (3) / Forgot (1) — same SM-2 grades the warm-up uses. */
-function RevisionGradeButtons({
-  busy,
-  onGrade,
-}: {
-  busy: boolean;
-  onGrade: (quality: number) => void;
-}) {
-  const options = [
-    { label: "Got it", quality: 5 },
-    { label: "Shaky", quality: 3 },
-    { label: "Forgot", quality: 1 },
-  ];
-  const toneClass =
-    (label: string) =>
-      label === "Got it"
-        ? " revision-grade-btn--got"
-        : label === "Shaky"
-          ? " revision-grade-btn--shaky"
-          : " revision-grade-btn--forgot";
-
-  return (
-    <div className="revision-grade-row">
-      {options.map(({ label, quality }) => (
-        <button
-          key={label}
-          type="button"
-          className={`btn-secondary-v2 revision-grade-btn${toneClass(label)}`}
-          disabled={busy}
-          onClick={() => onGrade(quality)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Midnight local time — abandoned problem starts from prior days don't count. */
-function startOfLocalDayMs(now = Date.now()): number {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-function loadStarts(): Record<string, number> {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STARTS_STORAGE_KEY) ?? "{}") as Record<
-      string,
-      number
-    >;
-    const cutoff = startOfLocalDayMs();
-    const fresh: Record<string, number> = {};
-    for (const [id, startedAt] of Object.entries(raw)) {
-      if (typeof startedAt === "number" && startedAt >= cutoff) {
-        fresh[id] = startedAt;
-      }
-    }
-    // Drop yesterday's abandoned starts so a Mac-app relaunch doesn't show FOCUS forever.
-    if (Object.keys(fresh).length !== Object.keys(raw).length) {
-      saveStarts(fresh);
-    }
-    return fresh;
-  } catch {
-    return {};
-  }
-}
-
-function saveStarts(starts: Record<string, number>): void {
-  localStorage.setItem(STARTS_STORAGE_KEY, JSON.stringify(starts));
-}
-
-function sessionsThisMonth(sessions: Session[]): number {
-  const now = new Date();
-  return sessions.filter((s) => {
-    const d = new Date(s.date);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  }).length;
-}
-
-function studyHoursThisMonth(sessions: Session[]): number {
-  const now = new Date();
-  const mins = sessions
-    .filter((s) => {
-      const d = new Date(s.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, s) => sum + (s.studyDuration ?? 0), 0);
-  return Math.round((mins / 60) * 10) / 10;
-}
-
-function UpNextTimeline({
-  items,
-  startIndex,
-}: {
-  items: CurriculumItem[];
-  startIndex: number;
-}) {
-  const visible = items.slice(0, 3);
-  return (
-    <div className="up-next-list">
-      {visible.map((item, i) => {
-        const isNow = item.status === "current";
-        const isLocked = item.status === "missing";
-        return (
-          <div key={`${item.name}-${i}`} className="up-next-item">
-            <span className="up-next-index" aria-hidden>
-              {String(startIndex + i + 1).padStart(2, "0")}
-            </span>
-            <span className={`up-next-name${isNow ? "" : " up-next-name--muted"}`}>
-              {item.name}
-            </span>
-            <span className={`up-next-tag${isNow ? " up-next-tag--now" : ""}`}>
-              {isNow
-                ? "NOW"
-                : isLocked
-                  ? "locked"
-                  : item.topicId && item.totalCount === 0
-                    ? "no problems"
-                    : item.unsolvedCount > 0
-                      ? `${item.unsolvedCount} left`
-                      : "up next"}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export function TodayPage({ onOpenCoach }: Props) {
   const { focusMode } = useAppPreferences();

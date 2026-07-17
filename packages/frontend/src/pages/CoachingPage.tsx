@@ -266,11 +266,8 @@ export function CoachingPage({ anchorProblemId }: Props) {
   const streamPendingRef = useRef("");
   const streamRafRef = useRef<number | null>(null);
 
-  const flushPendingStreamChunks = useCallback(() => {
-    if (streamRafRef.current != null) {
-      cancelAnimationFrame(streamRafRef.current);
-      streamRafRef.current = null;
-    }
+  /** Drain buffered chunks into the streaming message (shared by flush + RAF). */
+  const drainPendingChunks = useCallback(() => {
     const pending = streamPendingRef.current;
     if (!pending) return;
     streamPendingRef.current = "";
@@ -281,21 +278,25 @@ export function CoachingPage({ anchorProblemId }: Props) {
     );
   }, []);
 
-  const appendStreamChunk = useCallback((text: string) => {
-    streamPendingRef.current += text;
-    if (streamRafRef.current != null) return;
-    streamRafRef.current = requestAnimationFrame(() => {
+  const flushPendingStreamChunks = useCallback(() => {
+    if (streamRafRef.current != null) {
+      cancelAnimationFrame(streamRafRef.current);
       streamRafRef.current = null;
-      const pending = streamPendingRef.current;
-      streamPendingRef.current = "";
-      if (!pending) return;
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === STREAMING_ID ? { ...m, content: m.content + pending } : m,
-        ),
-      );
-    });
-  }, []);
+    }
+    drainPendingChunks();
+  }, [drainPendingChunks]);
+
+  const appendStreamChunk = useCallback(
+    (text: string) => {
+      streamPendingRef.current += text;
+      if (streamRafRef.current != null) return;
+      streamRafRef.current = requestAnimationFrame(() => {
+        streamRafRef.current = null;
+        drainPendingChunks();
+      });
+    },
+    [drainPendingChunks],
+  );
 
   const syncThreadAfterAbort = useCallback(async (activeThreadId: string | null) => {
     if (!activeThreadId) {
