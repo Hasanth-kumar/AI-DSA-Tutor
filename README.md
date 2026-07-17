@@ -16,6 +16,7 @@ DSA Mastery OS turns a personal Notion DSA setup into a study system that plans 
 | **Flashcard review** | Optional Review tab — interleaved due cards across all topics, hard daily cap, inline triage |
 | **Card bank** | Seeded baseline + batch LLM generation from notes; closed concept vocabulary; semantic dedup |
 | **Topic revision queue** | SM-2 revision queue for topics that need reinforcement (legacy intelligence path) |
+| **Problem re-solve queue** | Per-problem spaced repetition — solves that showed struggle signals get scheduled for full re-solves (FSRS) |
 | **Weakness detection** | Multi-signal analysis of mistake patterns, stagnation, and confidence gaps |
 | **Adaptive difficulty** | Recommends problem difficulty based on topic mastery and recent performance |
 | **Roadmap enforcement** | DAG-based prerequisite graph with violation detection |
@@ -71,9 +72,9 @@ flowchart LR
 - **Per-card FSRS** (`ts-fsrs`) drives warm-up and the Review tab — each flashcard has its own stability, difficulty, and due date.
 - **Topic-level SM-2** (`RevisionEngine`) still powers the revision queue and session analytics — separate from the flashcard bank.
 
-**Intelligence layer:** Five pure TypeScript engines (`@dsa/intelligence`) — topic priority, revision (SM-2), weakness, difficulty, and roadmap — are orchestrated without I/O. The backend feeds them snapshot data and persists the results.
+**Intelligence layer:** Pure TypeScript engines (`@dsa/intelligence`) — topic priority, revision (SM-2), weakness, difficulty, roadmap, curriculum, and problem re-solve — plus analytics, all orchestrated without I/O. The backend feeds them snapshot data and persists the results.
 
-**Flashcard system:** Design spec in `docs/flashcard-system-design.md`. Implementation status in `flashcard-system-validation.md` and `docs/flashcard-implementation-progress.md`.
+**Design docs:** flashcard system in `docs/flashcard-system-design.md`; problem re-solve in `docs/problem-spaced-repetition-design.md`; architecture decisions in `docs/adr/`.
 
 ---
 
@@ -82,7 +83,7 @@ flowchart LR
 | Layer | Technologies |
 |-------|--------------|
 | Monorepo | pnpm workspaces, TypeScript 5, ESLint, Vitest |
-| API | Fastify, Pino |
+| API | Fastify |
 | Database | SQLite + Drizzle ORM |
 | Flashcards | `ts-fsrs`, local embeddings (Ollama / transformers.js) |
 | Cache / jobs | In-process TTL cache + node-cron (weekly digest only) |
@@ -230,6 +231,7 @@ All routes are prefixed with `/api` unless noted.
 | Warm-up | `GET /api/warmup/:topicId`, `POST /api/warmup/grade` |
 | Flashcard review | `GET /api/review/queue`, `POST /api/review/grade`, `PATCH\|DELETE /api/review/:cardId` |
 | Problems & revision | `GET /api/problems`, `GET /api/revision` |
+| Re-solve | `GET /api/resolve/queue`, `POST /api/resolve/:problemId/complete\|skip\|admit` |
 | Coaching | `GET /api/coaching/hint`, `GET /api/coaching/debrief`, `POST /api/coaching/chat` |
 | Analytics | `GET /api/analytics/summary`, `/streak`, `/mastery-velocity`, `/weakness-trend`, `/difficulty` |
 | Sync | `POST /api/sync`, `POST /api/sync/flush`, `GET /api/sync/status`, `GET /api/sync/conflicts` |

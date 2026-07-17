@@ -1,35 +1,161 @@
 erDiagram
-    TOPICS {
+    %% Source of truth: database/schema/sqlite.schema.ts (regenerate this diagram
+    %% when the schema changes). Key columns only — see the schema for full detail.
+
+    %% -- Notion-mirrored core -------------------------------------------------
+    topics {
         text id PK
         text name
         text difficulty
         text status
+        int confidence
+        int is_weak_area
         int revision_count
         int last_revised
-        int confidence
-        bool is_weak_area
-        real priority_score
         int next_revision_at
+        int sm2_interval
+        int sm2_repetition
+        real sm2_efactor
         text prerequisites
     }
-    PROBLEMS {
+    problems {
         text id PK
-        text name
         text topic_id FK
+        text name
         text difficulty
         text leetcode_link
+        text github_url
         text status
         int attempts
         int time_taken
-        text notes
     }
-    SESSIONS {
+    sessions {
         text id PK
-        int date
         text topic_id FK
+        int date
         int problems_solved
         int study_duration
         int productivity_score
     }
-    TOPICS ||--o{ PROBLEMS : has
-    TOPICS ||--o{ SESSIONS : studied_in
+
+    %% -- Local-only signals (survive Notion pulls) ----------------------------
+    problem_attempts {
+        text id PK
+        text problem_id
+        text topic_id
+        text session_id
+        int solved_at
+        text mistake_tag
+        int used_coach
+        int hint_count
+        text kind
+    }
+    problem_reviews {
+        text problem_id PK
+        int admitted_at
+        text admission_reason
+        int retired
+        int suspended
+        real stability
+        real difficulty
+        int due
+        int reps
+        int lapses
+        int state
+    }
+    notes {
+        text id PK
+        text path
+        text title
+        text problem_id
+        text topic_id
+        text content
+        text matched_by
+    }
+
+    %% -- Flashcard bank (content Notion-authoritative, FSRS state local) ------
+    cards {
+        text id PK
+        text topic_id FK
+        text type
+        text front
+        text back
+        int suspended
+        int leech
+        real stability
+        real difficulty
+        int due
+        int reps
+        int lapses
+        int state
+        text origin
+        text notion_page_id
+        int dirty
+    }
+    card_concepts {
+        text card_id FK
+        text concept_id
+    }
+    card_events {
+        text id PK
+        text card_id
+        text type
+        text payload
+        int created_at
+    }
+    card_embeddings {
+        text card_id PK
+        text model
+        int dim
+        blob vector
+        text source_hash
+    }
+    topic_generation {
+        text topic_id PK
+        int dirty
+        int dirty_since
+        text note_hash
+        int last_generated_at
+    }
+
+    %% -- Coach chat ------------------------------------------------------------
+    chat_threads {
+        text id PK
+        int created_at
+        int updated_at
+    }
+    chat_messages {
+        text id PK
+        text thread_id FK
+        text role
+        text content
+        int created_at
+    }
+
+    %% -- Sync bookkeeping ------------------------------------------------------
+    sync_meta {
+        text key PK
+        text value
+    }
+    sync_conflicts {
+        text id PK
+        text entity_type
+        text entity_id
+        text local_value
+        text remote_value
+        int detected_at
+        int resolved_at
+        text winner
+    }
+
+    topics ||--o{ problems : "has"
+    topics ||--o{ sessions : "studied in"
+    topics ||--o{ cards : "has"
+    topics ||--o| topic_generation : "dirty flag"
+    problems ||--o{ problem_attempts : "attempted"
+    problems ||--o| problem_reviews : "re-solve pool"
+    problems ||--o{ notes : "documented by"
+    cards ||--o{ card_concepts : "tagged"
+    cards ||--o{ card_events : "logged"
+    cards ||--o| card_embeddings : "embedded"
+    chat_threads ||--o{ chat_messages : "contains"

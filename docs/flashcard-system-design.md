@@ -3,16 +3,12 @@
 > Summary of design decisions worth implementing. Source of truth for the
 > spaced-repetition flashcard rework. Date: 2026-06-25 (Rev 2).
 >
-> **Implementation status:** see `flashcard-system-validation.md` (101/103 boxes)
-> and `docs/flashcard-implementation-progress.md` for the build log. Stages 1–8
-> of §15 are complete. The daily-loop UX budget (§12) is now verified by
-> `daily-loop.test.ts`. The remaining 2 boxes are a design-decision conflict and a
-> live/manual check, not new code: §7 "no SM-2 anywhere in scheduling" (conflicts
-> with the **intentional** topic-level revision SM-2 documented in `CLAUDE.md` —
-> the *flashcard* scheduling path is already 100% FSRS, but topic-revision
-> scheduling deliberately retains SM-2, so the literal "anywhere" box stays open),
-> and live Notion e2e (§8 "Notion is durable source of record" — requires a real
-> remote round-trip, deliberately not exercised in autonomous/offline runs).
+> **Implementation status: complete.** Stages 1–8 of §15 shipped; the daily-loop
+> UX budget (§12) is verified by `daily-loop.test.ts`. One deliberate deviation:
+> §7's "no SM-2 anywhere in scheduling" — *flashcard* scheduling is 100% FSRS,
+> but topic-level revision deliberately retains SM-2 (see `CLAUDE.md`, "Dual
+> scheduling"). Live Notion e2e durability is exercised manually, not in
+> autonomous/offline runs.
 
 > **Rev 2 changes:** adopted FSRS over SM-2 (§7); enforced a fixed concept
 > vocabulary the LLM may not extend (§4); added provenance fields and an

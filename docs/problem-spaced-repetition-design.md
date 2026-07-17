@@ -2,7 +2,10 @@
 
 > Source of truth for per-problem spaced repetition. Date: 2026-07-08 (Rev 1).
 >
-> **Status:** design approved, not yet implemented. See §13 for stages.
+> **Status: implemented.** `ProblemReviewEngine` (intelligence),
+> `ProblemReviewService` + `/api/resolve/*` routes (backend), and the Re-solve
+> page (frontend) shipped in July 2026; per-problem scheduling rides the same
+> FSRS wrapper as the card bank (`backend/src/services/fsrs.ts`).
 >
 > **Decisions locked in Rev 1:** automated problem selection over manual
 > weekend topic-switching (§2); full re-solve as the only review mode — the
