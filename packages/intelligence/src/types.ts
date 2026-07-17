@@ -39,13 +39,6 @@ export type MistakeTag =
   | "off-by-one"
   | "pattern-recall";
 
-export const MISTAKE_TAGS: MistakeTag[] = [
-  "wrong-approach",
-  "edge-case",
-  "off-by-one",
-  "pattern-recall",
-];
-
 export const MISTAKE_TAG_LABELS: Record<MistakeTag, string> = {
   "wrong-approach": "Wrong approach",
   "edge-case": "Edge case",

@@ -160,12 +160,6 @@ async function checkNotion(ctx: AppContext): Promise<ServiceHealth> {
   }
 }
 
-/** @deprecated Use checkHealthFromContext — avoids reopening the DB per probe. */
-export async function checkHealth(config: AppConfig): Promise<HealthResponse> {
-  void config;
-  throw new Error("checkHealth(config) requires AppContext — use checkHealthFromContext");
-}
-
 async function checkLlmHealth(config: AppConfig): Promise<ServiceHealth> {
   const apiKey = config.llm.openrouter.apiKey;
   if (!apiKey) {
