@@ -194,94 +194,72 @@ export class ChatService {
         await this.prepareTurn(input);
 
       const userMessage = this.chatRepo.addMessage(thread.id, "user", message);
-      yield { type: "meta", threadId: thread.id, userMessage: toMessageDto(userMessage) };
-
-      let reply = "";
-      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
+      yield* this.streamReply({
+        threadId: thread.id,
+        userMessage,
+        model: input.model,
         learningContext,
         history,
-        message,
+        content: message,
         coachOptions,
         signal,
-      )) {
-        if (signal?.aborted) break;
-        reply += chunk;
-        yield { type: "chunk", text: chunk };
-      }
-
-      const trimmed = reply.trim();
-      if (signal?.aborted && !trimmed) {
-        this.chatRepo.deleteMessage(userMessage.id);
-        yield { type: "error", message: "Generation stopped" };
-        return;
-      }
-
-      // Soft degradation: always persist whatever we got (including LLM fallback text).
-      const assistantContent =
-        trimmed ||
-        "Coach is temporarily unavailable. Please try again or switch models.";
-      const assistantMessage = this.chatRepo.addMessage(
-        thread.id,
-        "assistant",
-        assistantContent,
-      );
-      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+        // A stop before any output leaves no trace of the aborted turn.
+        onAbortedEmpty: () => this.chatRepo.deleteMessage(userMessage.id),
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Chat failed";
       yield { type: "error", message: msg };
     }
   }
 
-  async regenerateMessage(input: {
+  /**
+   * Shared tail of every chat stream: meta → chunks → abort handling →
+   * persist (soft degradation keeps LLM fallback text) → done.
+   */
+  private async *streamReply(args: {
     threadId: string;
-    problemId?: string;
-    includeContext?: boolean;
-    directMode?: boolean;
+    userMessage: Parameters<typeof toMessageDto>[0];
     model?: string;
-  }): Promise<SendChatResult> {
-    const thread = this.chatRepo.findThreadById(input.threadId);
-    if (!thread) {
-      throw new Error(`Thread not found: ${input.threadId}`);
-    }
-
-    const messages = this.chatRepo.findMessagesByThread(input.threadId);
-    if (messages.length < 2) {
-      throw new Error("Nothing to regenerate");
-    }
-
-    const last = messages[messages.length - 1]!;
-    if (last.role !== "assistant") {
-      throw new Error("Last message is not from the coach");
-    }
-
-    const userMsg = messages[messages.length - 2]!;
-    if (userMsg.role !== "user") {
-      throw new Error("Expected a user message before the coach reply");
-    }
-
-    this.chatRepo.deleteMessage(last.id);
-
-    const history = messages.slice(0, -2).map(toHistoryMessage);
-    const learningContext = input.includeContext
-      ? await this.buildLearningContext(input.problemId)
-      : input.problemId
-        ? await this.buildProblemOnlyContext(input.problemId)
-        : null;
-
-    const reply = await this.resolveLlm(input.model).generateChatReply(
-      learningContext,
-      history,
-      userMsg.content,
-      { directMode: input.directMode, anchored: Boolean(input.problemId) },
-    );
-
-    const assistantMessage = this.chatRepo.addMessage(input.threadId, "assistant", reply);
-
-    return {
-      threadId: input.threadId,
-      userMessage: toMessageDto(userMsg),
-      assistantMessage: toMessageDto(assistantMessage),
+    learningContext: ChatLearningContext | null;
+    history: ChatHistoryMessage[];
+    content: string;
+    coachOptions: { directMode?: boolean; anchored: boolean };
+    signal?: AbortSignal;
+    onAbortedEmpty?: () => void;
+  }): AsyncGenerator<ChatStreamEvent> {
+    yield {
+      type: "meta",
+      threadId: args.threadId,
+      userMessage: toMessageDto(args.userMessage),
     };
+
+    let reply = "";
+    for await (const chunk of this.resolveLlm(args.model).generateChatReplyStream(
+      args.learningContext,
+      args.history,
+      args.content,
+      args.coachOptions,
+      args.signal,
+    )) {
+      if (args.signal?.aborted) break;
+      reply += chunk;
+      yield { type: "chunk", text: chunk };
+    }
+
+    const trimmed = reply.trim();
+    if (args.signal?.aborted && !trimmed) {
+      args.onAbortedEmpty?.();
+      yield { type: "error", message: "Generation stopped" };
+      return;
+    }
+
+    const assistantMessage = this.chatRepo.addMessage(
+      args.threadId,
+      "assistant",
+      trimmed ||
+        "Coach is temporarily unavailable. Please try again or switch models.",
+    );
+    yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
   }
 
   async *regenerateMessageStream(
@@ -321,105 +299,20 @@ export class ChatService {
 
       this.chatRepo.deleteMessage(last.id);
 
-      const history = messages.slice(0, -2).map(toHistoryMessage);
-      const learningContext = input.includeContext
-        ? await this.buildLearningContext(input.problemId)
-        : input.problemId
-          ? await this.buildProblemOnlyContext(input.problemId)
-          : null;
-
-      yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMsg) };
-
-      let reply = "";
-      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
-        learningContext,
-        history,
-        userMsg.content,
-        { directMode: input.directMode, anchored: Boolean(input.problemId) },
+      yield* this.streamReply({
+        threadId: input.threadId,
+        userMessage: userMsg,
+        model: input.model,
+        learningContext: await this.resolveContext(input),
+        history: messages.slice(0, -2).map(toHistoryMessage),
+        content: userMsg.content,
+        coachOptions: { directMode: input.directMode, anchored: Boolean(input.problemId) },
         signal,
-      )) {
-        if (signal?.aborted) break;
-        reply += chunk;
-        yield { type: "chunk", text: chunk };
-      }
-
-      const trimmed = reply.trim();
-      if (signal?.aborted && !trimmed) {
-        yield { type: "error", message: "Generation stopped" };
-        return;
-      }
-
-      const assistantContent =
-        trimmed ||
-        "Coach is temporarily unavailable. Please try again or switch models.";
-      const assistantMessage = this.chatRepo.addMessage(
-        input.threadId,
-        "assistant",
-        assistantContent,
-      );
-      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Regenerate failed";
       yield { type: "error", message: msg };
     }
-  }
-
-  async editMessage(input: {
-    threadId: string;
-    messageId: string;
-    content: string;
-    problemId?: string;
-    includeContext?: boolean;
-    directMode?: boolean;
-    model?: string;
-  }): Promise<SendChatResult> {
-    const content = input.content.trim();
-    if (!content) {
-      throw new Error("content is required");
-    }
-
-    const thread = this.chatRepo.findThreadById(input.threadId);
-    if (!thread) {
-      throw new Error(`Thread not found: ${input.threadId}`);
-    }
-
-    const target = this.chatRepo.findMessageById(input.messageId);
-    if (!target || target.threadId !== input.threadId) {
-      throw new Error("Message not found");
-    }
-    if (target.role !== "user") {
-      throw new Error("Only user messages can be edited");
-    }
-
-    this.chatRepo.updateMessageContent(input.messageId, content);
-    this.chatRepo.deleteMessagesAfter(input.threadId, target.createdAt);
-
-    const prior = this.chatRepo
-      .findMessagesByThread(input.threadId)
-      .filter((m) => m.createdAt < target.createdAt)
-      .map(toHistoryMessage);
-
-    const learningContext = input.includeContext
-      ? await this.buildLearningContext(input.problemId)
-      : input.problemId
-        ? await this.buildProblemOnlyContext(input.problemId)
-        : null;
-
-    const reply = await this.resolveLlm(input.model).generateChatReply(
-      learningContext,
-      prior,
-      content,
-      { directMode: input.directMode, anchored: Boolean(input.problemId) },
-    );
-
-    const userMessage = this.chatRepo.findMessageById(input.messageId)!;
-    const assistantMessage = this.chatRepo.addMessage(input.threadId, "assistant", reply);
-
-    return {
-      threadId: input.threadId,
-      userMessage: toMessageDto(userMessage),
-      assistantMessage: toMessageDto(assistantMessage),
-    };
   }
 
   async *editMessageStream(
@@ -465,43 +358,16 @@ export class ChatService {
         .filter((m) => m.createdAt < target.createdAt)
         .map(toHistoryMessage);
 
-      const learningContext = input.includeContext
-        ? await this.buildLearningContext(input.problemId)
-        : input.problemId
-          ? await this.buildProblemOnlyContext(input.problemId)
-          : null;
-
-      const userMessage = this.chatRepo.findMessageById(input.messageId)!;
-      yield { type: "meta", threadId: input.threadId, userMessage: toMessageDto(userMessage) };
-
-      let reply = "";
-      for await (const chunk of this.resolveLlm(input.model).generateChatReplyStream(
-        learningContext,
-        prior,
+      yield* this.streamReply({
+        threadId: input.threadId,
+        userMessage: this.chatRepo.findMessageById(input.messageId)!,
+        model: input.model,
+        learningContext: await this.resolveContext(input),
+        history: prior,
         content,
-        { directMode: input.directMode, anchored: Boolean(input.problemId) },
+        coachOptions: { directMode: input.directMode, anchored: Boolean(input.problemId) },
         signal,
-      )) {
-        if (signal?.aborted) break;
-        reply += chunk;
-        yield { type: "chunk", text: chunk };
-      }
-
-      const trimmed = reply.trim();
-      if (signal?.aborted && !trimmed) {
-        yield { type: "error", message: "Generation stopped" };
-        return;
-      }
-
-      const assistantContent =
-        trimmed ||
-        "Coach is temporarily unavailable. Please try again or switch models.";
-      const assistantMessage = this.chatRepo.addMessage(
-        input.threadId,
-        "assistant",
-        assistantContent,
-      );
-      yield { type: "done", assistantMessage: toMessageDto(assistantMessage) };
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Edit failed";
       yield { type: "error", message: msg };
@@ -521,21 +387,27 @@ export class ChatService {
       .findMessagesByThread(activeThread.id)
       .map(toHistoryMessage);
 
-    const learningContext = input.includeContext
-      ? await this.buildLearningContext(input.problemId)
-      : input.problemId
-        ? await this.buildProblemOnlyContext(input.problemId)
-        : null;
-
     return {
       thread: activeThread,
       history,
-      learningContext,
+      learningContext: await this.resolveContext(input),
       coachOptions: {
         directMode: input.directMode,
         anchored: Boolean(input.problemId),
       },
     };
+  }
+
+  /**
+   * Context for a coach turn: full learning context when requested, problem-only
+   * context when merely anchored to a problem, otherwise none.
+   */
+  private async resolveContext(input: {
+    includeContext?: boolean;
+    problemId?: string;
+  }): Promise<ChatLearningContext | null> {
+    if (input.includeContext) return this.buildLearningContext(input.problemId);
+    return input.problemId ? this.buildProblemOnlyContext(input.problemId) : null;
   }
 
   private async buildLearningContext(problemId?: string): Promise<ChatLearningContext> {
