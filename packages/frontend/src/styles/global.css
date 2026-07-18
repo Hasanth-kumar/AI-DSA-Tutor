@@ -1096,22 +1096,13 @@ button:focus-visible,
 }
 
 .coach-layout--empty .coach-settings-bar {
-  position: absolute;
-  top: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
   z-index: 2;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  width: auto;
 }
 
 .coach-layout--empty .coach-options-panel {
-  position: absolute;
-  top: 2.5rem;
-  right: 0;
   z-index: 2;
-  margin: 0;
   justify-content: flex-end;
 }
 

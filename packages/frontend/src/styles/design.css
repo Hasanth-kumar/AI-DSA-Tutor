@@ -2884,12 +2884,11 @@ button.settings-row {
   font-size: 12.5px;
 }
 
-/* Coach keeps its production streaming behavior inside the reference's
-   centered 820px editorial composition. */
+/* Coach fills the main pane edge-to-edge. */
 .app-shell-v2.coach-active .main {
   display: flex;
   flex-direction: column;
-  padding: 44px 56px 0;
+  padding: 0;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
@@ -2906,6 +2905,9 @@ button.settings-row {
 .app-shell-v2.coach-active .main .coach-layout {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
 }
 
 .coach-layout {
@@ -2913,16 +2915,16 @@ button.settings-row {
   flex-direction: column;
   position: relative;
   width: 100%;
-  max-width: 820px;
+  max-width: none;
   flex: 1;
   min-height: 0;
-  height: auto;
-  margin: 0 auto;
-  padding: 0;
+  height: 100%;
+  margin: 0;
+  padding: 28px 40px 0;
 }
 
 .coach-layout--empty {
-  max-width: 48rem;
+  max-width: none;
 }
 
 .coach-settings-bar {
@@ -2985,7 +2987,9 @@ button.settings-row {
 }
 
 .coach-thread-inner {
-  max-width: 820px;
+  max-width: 48rem;
+  width: 100%;
+  margin: 0 auto;
   padding: 0 0 24px;
   gap: 20px;
 }
@@ -3016,7 +3020,9 @@ button.settings-row {
 }
 
 .coach-composer-inner {
-  max-width: 820px;
+  max-width: 48rem;
+  width: 100%;
+  margin: 0 auto;
   min-height: 0;
   padding: 14px 16px 10px;
   border-radius: 18px;
@@ -3034,7 +3040,8 @@ button.settings-row {
 }
 
 .coach-composer-prompts {
-  max-width: 820px;
+  max-width: 48rem;
+  width: 100%;
   flex-direction: row;
   flex-wrap: wrap;
   gap: 8px;
@@ -3289,19 +3296,19 @@ button.settings-row {
 }
 
 .coach-layout--empty .coach-settings-bar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: auto;
-  display: flex;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  text-align: right;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 2;
 }
 
 .coach-layout--empty .coach-settings-actions {
-  position: static;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.coach-layout--empty .coach-options-panel {
+  justify-content: flex-end;
 }
 
 @media (max-width: 960px) {
@@ -3314,11 +3321,12 @@ button.settings-row {
   }
 
   .app-shell-v2.coach-active .main {
-    padding: 28px 24px 0;
+    padding: 0;
   }
 
   .coach-layout {
-    min-height: calc(100dvh - 28px);
+    padding: 20px 20px 0;
+    min-height: 100%;
   }
 
   .coach-settings-actions {

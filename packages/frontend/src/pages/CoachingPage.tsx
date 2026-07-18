@@ -706,21 +706,19 @@ export function CoachingPage({ anchorProblemId }: Props) {
   return (
     <div className={`coach-layout${isEmpty ? " coach-layout--empty" : ""}`}>
       <div className="coach-settings-bar">
-        {!isEmpty && (
-          <div className="coach-settings-heading">
-            <div className="coach-page-eyebrow">Socratic guide</div>
-            <h1 className="coach-settings-title">Coach</h1>
-            {anchoredProblem && (
-              <div className="coach-settings-anchor">
-                <span className="coach-settings-anchor-dot" aria-hidden />
-                <span>
-                  Anchored to{" "}
-                  <span className="coach-settings-anchor-topic">{anchoredProblem.name}</span>
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="coach-settings-heading">
+          <div className="coach-page-eyebrow">Thinking partner</div>
+          <h1 className="coach-settings-title">Coach</h1>
+          {anchoredProblem && (
+            <div className="coach-settings-anchor">
+              <span className="coach-settings-anchor-dot" aria-hidden />
+              <span>
+                Anchored to{" "}
+                <span className="coach-settings-anchor-topic">{anchoredProblem.name}</span>
+              </span>
+            </div>
+          )}
+        </div>
 
         <div className="coach-settings-actions">
           <button
