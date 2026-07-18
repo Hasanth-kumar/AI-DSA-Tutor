@@ -259,5 +259,4 @@ gitignored. Copy `docs/learner-profile.example.md` and fill it in.
 
 ## License
 
-No license has been chosen yet — all rights reserved. You may read and reference
-the code, but reuse requires permission until a license is added.
+[MIT](LICENSE) © 2026 Hasanth Kumar Majji

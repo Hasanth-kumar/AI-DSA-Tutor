@@ -2,6 +2,7 @@
   "name": "dsa-mastery-os",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Autonomous DSA learning intelligence layer over Notion, OpenRouter, n8n, and WhatsApp",
   "scripts": {
