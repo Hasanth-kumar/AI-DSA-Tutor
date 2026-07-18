@@ -53,7 +53,6 @@ export function App() {
   const [tab, setTab] = useState<AppTab>("today");
   const [coachAnchorId, setCoachAnchorId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { theme, toggleTheme, accentGlow } = useAppPreferences();
   const navMeta = useNavMeta(tab, coachAnchorId);
   const shortcutsModalRef = useRef<HTMLDivElement>(null);
@@ -145,20 +144,14 @@ export function App() {
   }, [selectTab, toggleTheme]);
 
   return (
-    <div
-      className={`app-shell-v2${tab === "coach" ? " coach-active" : ""}${
-        sidebarCollapsed ? " sidebar-v2-collapsed" : ""
-      }`}
-    >
+    <div className={`app-shell-v2${tab === "coach" ? " coach-active" : ""}`}>
       <Sidebar
         tab={tab}
         meta={navMeta}
         theme={theme}
-        collapsed={sidebarCollapsed}
         onSelect={selectTab}
         onToggleTheme={toggleTheme}
         onOpenShortcuts={() => setShowShortcuts(true)}
-        onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
       />
 
       <main className="main">
