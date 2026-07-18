@@ -250,6 +250,14 @@ GitHub Actions runs on push and pull requests to `main` / `master`: install → 
 
 ---
 
+## Personalization
+
+The coach's per-learner configuration lives in `docs/learner-profile.md`, which is
+gitignored. Copy `docs/learner-profile.example.md` and fill it in.
+
+---
+
 ## License
 
-Private project — all rights reserved unless otherwise specified by the repository owner.
+No license has been chosen yet — all rights reserved. You may read and reference
+the code, but reuse requires permission until a license is added.

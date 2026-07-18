@@ -1,7 +1,8 @@
 # Teaching Strategy (universal)
 
 > The teaching logic for the DSA Mastery OS coach — independent of any one learner.
-> Personal configuration lives in `learner-profile.md`. Per-pattern notes use
+> Personal configuration lives in `learner-profile.md` (gitignored — copy
+> `learner-profile.example.md` to create yours). Per-pattern notes use
 > `templates/pattern-note.md`. Pairs with the prompts in
 > `packages/integrations/src/prompts/` (chat, hint, debrief). Warm-up flashcards
 > are served locally from the card bank — warmup prompts are legacy, off the hot path.

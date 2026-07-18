@@ -22,3 +22,8 @@ IMPLEMENTATION_CHECKLIST.md
 # Generated local card export (regenerable from SQLite via flush; §10 portable export)
 data/cards-export/
 *.tsbuildinfo
+
+# Local-only personal + runtime files (open-source hygiene)
+docs/learner-profile.md
+data/backups/
+.study/

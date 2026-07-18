@@ -9,13 +9,13 @@
 //   Launch (double-click) -> runs `pnpm study:prod` (1 server + sync + browser)
 //   Quit  (Cmd-Q / Dock>Quit) -> runs `pnpm study:stop` (backup SQLite + shutdown)
 //
-// The repo path is compiled in. If you move the project, edit DSA_REPO (or pass
-// -DDSA_REPO=...) and rebuild with infrastructure/macapp/build.sh.
+// The repo path is compiled in: build.sh passes -DDSA_REPO derived from its own
+// location. The fallback below only applies when compiling launcher.m by hand.
 
 #import <Cocoa/Cocoa.h>
 
 #ifndef DSA_REPO
-#define DSA_REPO "/Users/hasanth/Desktop/dsa-mastery-os"
+#define DSA_REPO "/path/to/dsa-mastery-os"
 #endif
 
 static NSString * const kRepo = @DSA_REPO;
