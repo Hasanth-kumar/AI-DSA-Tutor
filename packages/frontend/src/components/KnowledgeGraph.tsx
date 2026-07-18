@@ -74,7 +74,6 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
   useEffect(() => {
     if (!ref.current || !containerRef.current || topics.length === 0) return;
 
-    const svgEl = ref.current;
     const containerEl = containerRef.current;
     // Mutable so ResizeObserver can keep viewBox / forces aligned with the box.
     let width = containerEl.clientWidth || 720;
