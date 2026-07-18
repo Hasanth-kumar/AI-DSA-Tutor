@@ -179,6 +179,7 @@ export function Sidebar({
     <>
       <aside className="sidebar-v2 fan-nav">
         <div className="fan-scrim" aria-hidden />
+        <div className="fan-hit" aria-hidden />
         <nav className="nav-v2" aria-label="Primary">
           {NAV_ITEMS.map((item, i) => {
             const row = i - MID;
@@ -186,7 +187,9 @@ export function Sidebar({
             const style = {
               "--row": row,
               "--bow": Math.cos(theta).toFixed(4),
-              "--d": `${Math.round(Math.abs(row) * 28)}ms`,
+              /* Center blooms first on open; edges tuck first on close. */
+              "--d": `${Math.round(Math.abs(row) * 18)}ms`,
+              "--d-out": `${Math.round((MID - Math.abs(row)) * 16)}ms`,
             } as CSSProperties;
             const ctx = item.context?.(meta);
             const badge = item.badge?.(meta);

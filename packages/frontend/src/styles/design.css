@@ -2730,13 +2730,17 @@ button.settings-row {
 }
 
 .graph-container {
-  min-height: 460px;
-  height: 460px;
+  min-height: 480px;
+  height: 480px;
   padding: 0;
+  overflow: hidden;
 }
 
 .graph-container .chart-svg {
-  min-height: 460px !important;
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  display: block;
 }
 
 .graph-legend {
@@ -3306,16 +3310,13 @@ button.settings-row {
     box-shadow: none;
     overflow: visible;
     z-index: 40;
-    transition: width 0s linear;
+    /* Empty rail must not capture hover — only the cluster hit zone expands. */
+    pointer-events: none;
   }
 
-  .fan-nav:hover,
+  .fan-nav:has(.fan-hit:hover, .nav-v2:hover),
   .fan-nav:has(:focus-visible) {
     width: 264px;
-  }
-
-  .fan-nav:not(:hover):not(:has(:focus-visible)) {
-    transition-delay: 0.35s; /* keep the hover zone wide briefly after leaving */
   }
 
   /* Soft scrim so chips and labels read over page content */
@@ -3326,13 +3327,38 @@ button.settings-row {
     background: linear-gradient(90deg, var(--bg) 42%, transparent);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.28s ease 0.3s;
+    /* Fade out with the gather */
+    transition: opacity 0.32s cubic-bezier(0.4, 0.05, 0.15, 1) 0.04s;
   }
 
-  .fan-nav:hover .fan-scrim,
+  .fan-nav:has(.fan-hit:hover, .nav-v2:hover) .fan-scrim,
   .fan-nav:has(:focus-visible) .fan-scrim {
     opacity: 1;
-    transition-delay: 0.04s;
+    transition-duration: 0.28s;
+    transition-delay: 0s;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Invisible pad around the collapsed dots — hover this area to expand.
+     When open, it grows under the fan so gaps between buttons stay hovered. */
+  .fan-nav .fan-hit {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    translate: 0 -50%;
+    width: 56px;
+    height: 220px;
+    pointer-events: auto;
+    transition:
+      width 0s linear 0.22s,
+      height 0s linear 0.22s;
+  }
+
+  .fan-nav:has(.fan-hit:hover, .nav-v2:hover) .fan-hit,
+  .fan-nav:has(:focus-visible) .fan-hit {
+    width: 280px;
+    height: 520px;
+    transition-delay: 0s;
   }
 
   .fan-nav .nav-v2 {
@@ -3340,17 +3366,18 @@ button.settings-row {
     left: 0;
     top: 50%;
     display: block;
+    pointer-events: auto;
   }
 
   /* Each item is absolutely positioned; --row (vertical slot),
-     --bow (cos of its arc angle) and --d (stagger delay) come from React. */
+     --bow (cos of its arc angle) and --d / --d-out come from React. */
   .fan-nav .nav-v2-btn {
     position: absolute;
     left: 0;
     top: 0;
     width: auto;
-    margin: 0;
-    padding: 0;
+    margin: -10px 0;
+    padding: 10px 12px 10px 0;
     border: none;
     border-radius: 12px;
     background: transparent;
@@ -3359,7 +3386,8 @@ button.settings-row {
     gap: 12px;
     cursor: pointer;
     transform: translate(10px, calc(var(--row) * 15px - 19px));
-    transition: transform 0.4s cubic-bezier(0.3, 1.35, 0.35, 1) var(--d);
+    /* Expand: soft spring bloom from center */
+    transition: transform 0.42s cubic-bezier(0.22, 1.15, 0.35, 1) var(--d);
   }
 
   .fan-nav .nav-v2-btn:hover,
@@ -3367,7 +3395,7 @@ button.settings-row {
     background: transparent;
   }
 
-  .fan-nav:hover .nav-v2-btn,
+  .fan-nav:has(.fan-hit:hover, .nav-v2:hover) .nav-v2-btn,
   .fan-nav:has(:focus-visible) .nav-v2-btn {
     transform: translate(calc(24px + var(--bow) * 44px), calc(var(--row) * 48px - 19px));
   }
@@ -3387,18 +3415,18 @@ button.settings-row {
     flex-shrink: 0;
     transform: scale(1);
     transition:
-      transform 0.4s cubic-bezier(0.3, 1.35, 0.35, 1) var(--d),
-      background 0.25s ease var(--d),
-      border-color 0.25s ease var(--d),
-      color 0.2s ease,
-      box-shadow 0.25s ease;
+      transform 0.42s cubic-bezier(0.22, 1.15, 0.35, 1) var(--d),
+      background 0.28s cubic-bezier(0.4, 0, 0.2, 1) var(--d),
+      border-color 0.28s cubic-bezier(0.4, 0, 0.2, 1) var(--d),
+      color 0.22s ease var(--d),
+      box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1) var(--d);
   }
 
   .fan-nav .nav-v2-btn .nav-v2-tile svg {
     width: 17px;
     height: 17px;
     opacity: 1;
-    transition: opacity 0.2s ease calc(var(--d) + 0.1s);
+    transition: opacity 0.22s ease calc(var(--d) + 0.06s);
   }
 
   .fan-nav .nav-v2-btn:hover .nav-v2-tile {
@@ -3433,9 +3461,10 @@ button.settings-row {
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: opacity 0.2s ease calc(var(--d) + 0.08s);
   }
 
-  /* Label + context line */
+  /* Label + context line — trail the chip slightly on open */
   .fan-nav .nav-v2-body {
     display: flex;
     flex-direction: column;
@@ -3443,8 +3472,8 @@ button.settings-row {
     opacity: 1;
     transform: translateX(0);
     transition:
-      opacity 0.22s ease calc(var(--d) + 0.08s),
-      transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1) calc(var(--d) + 0.08s);
+      opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--d) + 0.08s),
+      transform 0.36s cubic-bezier(0.22, 1.1, 0.36, 1) calc(var(--d) + 0.06s);
   }
 
   .fan-nav .nav-v2-label {
@@ -3470,42 +3499,66 @@ button.settings-row {
     display: block;
   }
 
-  /* ── Collapsed: bowed dot cluster ── */
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-tile {
+  /* ── Collapsed: soft gather into the bowed dot cluster ──
+     Choreography: labels dissolve → icons fade → chips arc in & shrink.
+     Edges lead; center settles last. */
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-tile {
     background: var(--text-subtle);
     border-color: transparent;
     box-shadow: none;
     transform: scale(0.185);
-    transition-delay: calc(0.3s + var(--d));
+    transition-duration: 0.36s, 0.3s, 0.3s, 0.24s, 0.3s;
+    transition-timing-function:
+      cubic-bezier(0.5, 0.05, 0.15, 1),
+      cubic-bezier(0.4, 0.05, 0.2, 1),
+      cubic-bezier(0.4, 0.05, 0.2, 1),
+      cubic-bezier(0.4, 0.05, 0.2, 1),
+      cubic-bezier(0.4, 0.05, 0.2, 1);
+    transition-delay: calc(0.08s + var(--d-out));
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-tile svg {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-tile svg {
     opacity: 0;
-    transition-delay: calc(0.3s + var(--d));
+    transition-duration: 0.14s;
+    transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+    transition-delay: calc(0.05s + var(--d-out));
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-btn {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-btn {
     transform: translate(calc(10px + var(--bow) * 6px), calc(var(--row) * 15px - 19px));
-    transition-delay: calc(0.3s + var(--d));
+    transition-duration: 0.36s;
+    transition-timing-function: cubic-bezier(0.5, 0.05, 0.15, 1);
+    transition-delay: calc(0.08s + var(--d-out));
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-body {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-body {
+    /* Out of flow so invisible labels don't widen the hover target. */
+    position: absolute;
+    left: calc(100% + 12px);
     opacity: 0;
-    transform: translateX(-8px);
-    transition-delay: calc(0.25s + var(--d));
+    pointer-events: none;
+    transform: translateX(-14px);
+    /* Labels drift inward and dissolve before the chips move */
+    transition-duration: 0.16s, 0.2s;
+    transition-timing-function:
+      cubic-bezier(0.4, 0, 1, 1),
+      cubic-bezier(0.45, 0.05, 0.2, 1);
+    transition-delay: 0.04s, 0.04s;
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-badge {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-badge {
     opacity: 0;
-    transition: opacity 0.15s ease calc(0.25s + var(--d));
+    transition-duration: 0.12s;
+    transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+    transition-delay: 0.04s;
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-btn.active .nav-v2-tile {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-btn.active .nav-v2-tile {
     background: var(--accent);
     box-shadow: 0 0 10px var(--accent-soft), 0 0 3px var(--accent);
   }
 
-  .fan-nav:not(:hover):not(:has(:focus-visible)) .nav-v2-btn:has(.nav-v2-badge):not(.active) .nav-v2-tile {
+  .fan-nav:not(:has(.fan-hit:hover, .nav-v2:hover)):not(:has(:focus-visible)) .nav-v2-btn:has(.nav-v2-badge):not(.active) .nav-v2-tile {
     background: var(--accent-ink);
   }
 

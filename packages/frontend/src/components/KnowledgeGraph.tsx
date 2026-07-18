@@ -59,6 +59,7 @@ function nodeRadius(node: GraphNode): number {
 }
 
 export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const ref = useRef<SVGSVGElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
   // Latest click handler, read through a ref so changing it never rebuilds the
@@ -71,10 +72,13 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
   const selectedIdRef = useRef<string | null>(selectedId ?? null);
 
   useEffect(() => {
-    if (!ref.current || topics.length === 0) return;
+    if (!ref.current || !containerRef.current || topics.length === 0) return;
 
-    const width = ref.current.clientWidth || 720;
-    const height = 480;
+    const svgEl = ref.current;
+    const containerEl = containerRef.current;
+    // Mutable so ResizeObserver can keep viewBox / forces aligned with the box.
+    let width = containerEl.clientWidth || 720;
+    let height = containerEl.clientHeight || 480;
     const now = Date.now();
 
     // d3 transitions are JS-driven, so the CSS reduced-motion guard can't reach
@@ -346,7 +350,25 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
     g.style("opacity", 0).transition().duration(dur(600)).style("opacity", 1);
     applyHighlight(selectedIdRef.current);
 
+    // Keep the simulation canvas matched to the box (panel open/close, resize).
+    const ro = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect;
+      if (!next || next.width < 10 || next.height < 10) return;
+      if (Math.abs(next.width - width) < 1 && Math.abs(next.height - height) < 1) {
+        return;
+      }
+      width = next.width;
+      height = next.height;
+      svg.attr("viewBox", `0 0 ${width} ${height}`);
+      simulation.force("center", forceCenter(width / 2, height / 2));
+      simulation.force("x", forceX(width / 2).strength(0.045));
+      simulation.force("y", forceY(height / 2).strength(0.16));
+      fitView();
+    });
+    ro.observe(containerEl);
+
     return () => {
+      ro.disconnect();
       simulation.stop();
       svg.on(".zoom", null);
       fitRef.current = null;
@@ -373,7 +395,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
   }
 
   return (
-    <div className="graph-container card">
+    <div ref={containerRef} className="graph-container card">
       <button
         type="button"
         className="graph-fit-btn"
@@ -382,7 +404,7 @@ export function KnowledgeGraph({ topics, selectedId, onNodeClick }: Props) {
       >
         ⊡ Fit view
       </button>
-      <svg ref={ref} className="chart-svg" style={{ minHeight: 480 }} />
+      <svg ref={ref} className="chart-svg" />
       <div className="graph-legend">
         <span><i style={{ background: GRAPH_COLORS.mastered }} /> Mastered</span>
         <span><i style={{ background: GRAPH_COLORS.inProgress }} /> In progress</span>
