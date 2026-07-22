@@ -280,7 +280,7 @@ export function ReviewPage() {
                   disabled={busy}
                   onClick={() => setRevealed(true)}
                 >
-                  Show answer <span className="review-space-hint">space</span>
+                  Show answer
                 </button>
               ) : (
                 <div className="review-answer-v2">
@@ -312,10 +312,10 @@ export function ReviewPage() {
 
           <div className="review-triage">
             <button type="button" className="review-triage-btn" disabled={busy} onClick={() => void suspend()}>
-              s suspend
+              suspend
             </button>
             <button type="button" className="review-triage-btn" disabled={busy} onClick={startEdit}>
-              e edit
+              edit
             </button>
             <button
               type="button"

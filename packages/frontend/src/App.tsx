@@ -47,6 +47,10 @@ const SHORTCUTS: { key: string; action: string }[] = [
   { key: "c", action: "Focus coach chat" },
   { key: "t", action: "Toggle light / dark mode" },
   { key: "?", action: "Toggle this help" },
+  { key: "space", action: "Show answer (Review)" },
+  { key: "1–4", action: "Grade card: Again / Hard / Good / Easy (Review)" },
+  { key: "s", action: "Suspend card (Review)" },
+  { key: "e", action: "Edit card (Review)" },
 ];
 
 export function App() {
@@ -201,7 +205,7 @@ export function App() {
             </div>
             <ul>
               {SHORTCUTS.map((s) => (
-                <li key={s.key}>
+                <li key={`${s.key}-${s.action}`}>
                   <kbd>{s.key}</kbd>
                   <span>{s.action}</span>
                 </li>
