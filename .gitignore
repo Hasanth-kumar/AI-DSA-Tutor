@@ -1,4 +1,5 @@
 node_modules/
+.pnpm-store/
 dist/
 
 # Build artifacts of @dsa/database belong in dist/, never next to sources
