@@ -27,4 +27,8 @@ data/cards-export/
 # Local-only personal + runtime files (open-source hygiene)
 docs/learner-profile.md
 data/backups/
+data/dsa.db
+data/dsa.db-*
+data/problem-suggestions.json
+data/problem-suggestions.md
 .study/
