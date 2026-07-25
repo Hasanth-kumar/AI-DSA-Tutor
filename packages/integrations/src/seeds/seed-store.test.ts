@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MIGRATIONS } from "../sqlite/migrations.js";
 import { loadAllSeeds } from "./seed-loader.js";
-import { seedTopics, buildSeedRows, type SeedDb } from "./seed-store.js";
+import { seedTopics, buildSeedRows } from "./seed-store.js";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 
 /**
  * Stage-2 persistence acceptance (design §§2,8,15.2). Seeds the curated
@@ -21,16 +22,16 @@ interface StmtLike {
   get(...p: unknown[]): Record<string, unknown>;
   all(...p: unknown[]): Array<Record<string, unknown>>;
 }
-interface SqliteLike {
+interface TestDb {
   exec(sql: string): void;
   prepare(sql: string): StmtLike;
 }
 
 const sqliteModule = "node:sqlite";
-let DatabaseSync: (new (path: string) => SqliteLike) | undefined;
+let DatabaseSync: (new (path: string) => TestDb) | undefined;
 try {
   const mod = (await import(/* @vite-ignore */ sqliteModule)) as {
-    DatabaseSync: new (path: string) => SqliteLike;
+    DatabaseSync: new (path: string) => TestDb;
   };
   DatabaseSync = mod.DatabaseSync;
 } catch {
@@ -41,7 +42,7 @@ const repoRoot = resolve(fileURLToPath(new URL("../../../..", import.meta.url)))
 const SEEDS_ROOT = resolve(repoRoot, "database/seeds");
 const NOW = 1_700_000_000_000;
 
-function freshDb(): SqliteLike {
+function freshDb(): TestDb {
   const db = new DatabaseSync!(":memory:");
   for (const file of MIGRATIONS) {
     const sql = readFileSync(resolve(repoRoot, "database/migrations", file), "utf-8");
@@ -78,7 +79,7 @@ describe.skipIf(!DatabaseSync)("seed-store (§2, §8)", () => {
     const insTopic = db.prepare("INSERT INTO topics(id,name,updated_at) VALUES(?,?,?)");
     for (const t of topics) insTopic.run(t.topicId, t.topicName, NOW);
 
-    const result = seedTopics(db as unknown as SeedDb, topics, NOW);
+    const result = seedTopics(db as unknown as SqliteLike, topics, NOW);
     const total = topics.reduce((n, t) => n + t.cards.length, 0);
     expect(result.cardsInserted).toBe(total);
 
@@ -102,7 +103,7 @@ describe.skipIf(!DatabaseSync)("seed-store (§2, §8)", () => {
     const topics = loadAllSeeds(SEEDS_ROOT);
     const insTopic = db.prepare("INSERT INTO topics(id,name,updated_at) VALUES(?,?,?)");
     for (const t of topics) insTopic.run(t.topicId, t.topicName, NOW);
-    seedTopics(db as unknown as SeedDb, topics, NOW);
+    seedTopics(db as unknown as SqliteLike, topics, NOW);
 
     const coverage = db
       .prepare(
@@ -124,13 +125,13 @@ describe.skipIf(!DatabaseSync)("seed-store (§2, §8)", () => {
     const insTopic = db.prepare("INSERT INTO topics(id,name,updated_at) VALUES(?,?,?)");
     for (const t of topics) insTopic.run(t.topicId, t.topicName, NOW);
 
-    seedTopics(db as unknown as SeedDb, topics, NOW);
+    seedTopics(db as unknown as SqliteLike, topics, NOW);
     // Simulate a review having advanced a card's FSRS state.
     const sample = String(topics[0].cards[0].id);
     db.prepare("UPDATE cards SET reps=5, state=2, stability=12.3 WHERE id=?").run(sample);
 
     const before = Number(db.prepare("SELECT COUNT(*) AS n FROM cards").get().n);
-    const second = seedTopics(db as unknown as SeedDb, topics, NOW + 1);
+    const second = seedTopics(db as unknown as SqliteLike, topics, NOW + 1);
     const after = Number(db.prepare("SELECT COUNT(*) AS n FROM cards").get().n);
 
     expect(second.cardsInserted).toBe(0);

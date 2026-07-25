@@ -4,7 +4,7 @@ import {
 } from "@dsa/intelligence";
 import { createSqliteDb, runMigrations, createSeedVocabularyResolver, markTopicDirty } from "@dsa/integrations";
 import type { LLMService } from "@dsa/integrations";
-import { createAppLLMService, createCoachLLMService } from "./llm.factory.js";
+import { createCoachLLMService } from "./llm.factory.js";
 import { TopicRepository } from "./repositories/TopicRepository.js";
 import { AttemptRepository } from "./repositories/AttemptRepository.js";
 import { CardRepository } from "./repositories/CardRepository.js";
@@ -19,7 +19,6 @@ import { BackupService } from "./services/BackupService.js";
 import { CacheService } from "./services/CacheService.js";
 import { DebriefService } from "./services/DebriefService.js";
 import { EventBus } from "./services/EventBus.js";
-import { GitHubSyncService } from "./services/GitHubSyncService.js";
 import { ChatService } from "./services/ChatService.js";
 import { HintService } from "./services/HintService.js";
 import { ChatRepository } from "./repositories/ChatRepository.js";
@@ -31,7 +30,7 @@ import { CurriculumService } from "./services/CurriculumService.js";
 import { PlanService } from "./services/PlanService.js";
 import { ProblemReviewService } from "./services/ProblemReviewService.js";
 import { SessionService } from "./services/SessionService.js";
-import type { CardSyncDb } from "@dsa/integrations";
+import type { SqliteLike } from "@dsa/integrations";
 import { findRepoRoot, type AppConfig } from "@dsa/shared";
 import { CardBankSyncService } from "./services/CardBankSyncService.js";
 import { CardService, type CardServiceDeps } from "./services/CardService.js";
@@ -53,7 +52,6 @@ export interface AppContext {
   noteRepo: NoteRepository;
   conflictRepo: ConflictRepository;
   cache: CacheService;
-  llm: LLMService;
   events: EventBus;
   curriculumService: CurriculumService;
   planService: PlanService;
@@ -67,7 +65,6 @@ export interface AppContext {
   chatService: ChatService;
   warmupService: WarmupService;
   leetcodeService: LeetCodeService;
-  githubSync: GitHubSyncService;
   notionSync: NotionSyncService;
   obsidianNotes: ObsidianNoteService;
   backupService: BackupService;
@@ -102,7 +99,6 @@ export function createAppContext(
   const noteRepo = new NoteRepository(db, mirrorCache);
   const conflictRepo = new ConflictRepository(db);
   const cache = new CacheService();
-  const llm = createAppLLMService(config);
   const events = new EventBus();
   const intelligence = createIntelligenceOrchestrator(config.intelligenceWeights);
   const notionSync = new NotionSyncService(
@@ -154,8 +150,6 @@ export function createAppContext(
     topicRepo,
     sessionRepo,
     problemRepo,
-    undefined,
-    cardRepo, // on-demand card analytics over the append-only event log (§9)
   );
   events.subscribe((event) => {
     if (
@@ -197,7 +191,6 @@ export function createAppContext(
   cardBankSync.startPeriodicFlush(config.cards.flushIntervalMs);
   const warmupService = new WarmupService(topicRepo, cardService);
   const leetcodeService = new LeetCodeService(config, syncMetaRepo);
-  const githubSync = new GitHubSyncService(config, problemRepo, mirrorCache);
   const backupService = new BackupService(config, sqlite);
 
   return {
@@ -214,7 +207,6 @@ export function createAppContext(
     noteRepo,
     conflictRepo,
     cache,
-    llm,
     events,
     curriculumService,
     planService,
@@ -228,7 +220,6 @@ export function createAppContext(
     chatService,
     warmupService,
     leetcodeService,
-    githubSync,
     notionSync,
     obsidianNotes,
     backupService,
@@ -249,7 +240,7 @@ export function createAppContext(
 }
 
 function buildCardServiceDeps(
-  sqlite: CardSyncDb,
+  sqlite: SqliteLike,
   noteRepo: NoteRepository,
   cardRepo: CardRepository,
 ): CardServiceDeps {

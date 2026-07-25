@@ -77,10 +77,3 @@ export {
   groupBy,
   type TopicSignalExtras,
 } from "./analytics/build-topic-snapshot.js";
-
-export type {
-  CardAnalyticsOptions,
-  CardAnalyticsReport,
-  CardEventRecord,
-} from "./card-analytics/types.js";
-export { computeCardAnalytics } from "./card-analytics/cardAnalytics.js";

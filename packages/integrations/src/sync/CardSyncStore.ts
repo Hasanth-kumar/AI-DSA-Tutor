@@ -14,19 +14,9 @@
  *     own table and never reach a sync target (§6).
  */
 import { randomUUID } from "node:crypto";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import type { CardSyncRecord } from "./SyncTarget.js";
 import type { PulledCardContent } from "./card-properties.js";
-
-/** Minimal statement surface shared by better-sqlite3 and node:sqlite. */
-export interface SyncStatement {
-  run(...params: unknown[]): unknown;
-  get(...params: unknown[]): unknown;
-  all(...params: unknown[]): unknown[];
-}
-export interface SyncDb {
-  exec(sql: string): void;
-  prepare(sql: string): SyncStatement;
-}
 
 /** Unit-separator joins concept ids in SQL — never collides with flat tag ids. */
 const SEP = String.fromCharCode(31);
@@ -94,7 +84,7 @@ const SELECT_COLS = `
  * their concept tags aggregated. A clean bank yields an empty array, so a flush
  * with nothing to do is a no-op — never a full re-push.
  */
-export function dirtyCardDeltas(db: SyncDb, limit = 500): CardSyncRecord[] {
+export function dirtyCardDeltas(db: SqliteLike, limit = 500): CardSyncRecord[] {
   const rows = db
     .prepare(
       `SELECT ${SELECT_COLS} FROM cards c WHERE c.dirty = 1 ORDER BY c.updated_at, c.id LIMIT ?`,
@@ -104,14 +94,14 @@ export function dirtyCardDeltas(db: SyncDb, limit = 500): CardSyncRecord[] {
 }
 
 /** Every card as a sync record — the one-time first upload / full export (§8/§10). */
-export function allCardRecords(db: SyncDb): CardSyncRecord[] {
+export function allCardRecords(db: SqliteLike): CardSyncRecord[] {
   const rows = db
     .prepare(`SELECT ${SELECT_COLS} FROM cards c ORDER BY c.created_at, c.id`)
     .all() as CardRowRaw[];
   return rows.map(rowToRecord);
 }
 
-export function countDirtyCards(db: SyncDb): number {
+export function countDirtyCards(db: SqliteLike): number {
   const row = db.prepare(`SELECT COUNT(*) AS n FROM cards WHERE dirty = 1`).get() as {
     n: number;
   };
@@ -133,7 +123,7 @@ UPDATE cards
  * wins, keyed on `updated_at`, no lost reviews. Returns how many rows cleared.
  */
 export function markCardsSynced(
-  db: SyncDb,
+  db: SqliteLike,
   pushed: Array<Pick<CardSyncRecord, "id" | "updatedAt">>,
   pageIds: Record<string, string>,
   now: number = Date.now(),
@@ -204,7 +194,7 @@ INSERT INTO cards (
  * locally. Concept links are fully replaced to match the remote tag set.
  */
 export function applyPulledContent(
-  db: SyncDb,
+  db: SqliteLike,
   contents: PulledCardContent[],
   now: number = Date.now(),
 ): PullApplyResult {

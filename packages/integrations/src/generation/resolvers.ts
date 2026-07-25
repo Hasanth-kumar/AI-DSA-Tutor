@@ -10,9 +10,7 @@
 import { createHash } from "node:crypto";
 import { loadAllSeeds } from "../seeds/seed-loader.js";
 import { extractMistakeSection } from "./generation.prompt.js";
-import type {
-  GenDb,
-} from "./GenerationStore.js";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import type {
   NoteProvider,
   TopicNotes,
@@ -51,7 +49,7 @@ function excerptOf(content: string, max = 1200): string {
  * `note_version` hash (over the notes' content hashes) used for provenance (§8)
  * and to let the dirty queue skip a no-op run.
  */
-export function createDbNoteProvider(db: GenDb): NoteProvider {
+export function createDbNoteProvider(db: SqliteLike): NoteProvider {
   return (topicId: string): TopicNotes => {
     const rows = db
       .prepare(

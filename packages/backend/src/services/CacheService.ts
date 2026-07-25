@@ -14,8 +14,6 @@ interface CacheEntry {
 export class CacheService {
   private readonly store = new Map<string, CacheEntry>();
 
-  async connect(): Promise<void> {}
-
   async disconnect(): Promise<void> {
     this.store.clear();
   }

@@ -15,15 +15,12 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "drizzle-orm": "^0.39.3"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.30.4",
     "@typescript/native": "npm:typescript@^7.0.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2"
   }

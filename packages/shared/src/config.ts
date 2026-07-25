@@ -39,8 +39,6 @@ const envSchema = z.object({
   COACH_LLM_MODEL: z.string().optional(),
   /** Comma-separated models tried in order after COACH_LLM_MODEL fails. */
   COACH_LLM_FALLBACK_MODELS: z.string().optional(),
-  /** Model for warm-up quizzes (defaults to OPENROUTER_MODEL). */
-  WARMUP_LLM_MODEL: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   /** Separate OpenRouter key for coach paths (falls back to OPENROUTER_API_KEY). */
   OPENROUTER_COACH_API_KEY: z.string().optional(),
@@ -52,11 +50,11 @@ const envSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_API_VERSION: z.string().default("v21.0"),
-  /** Default recipient for cron/n8n notifications (E.164 without +, e.g. 15551234567) */
+  /** Default recipient for scheduled notifications (E.164 without +, e.g. 15551234567) */
   WHATSAPP_DEFAULT_RECIPIENT: z.string().optional(),
   /** Comma-separated wa_ids allowed to use bot commands (empty = allow all) */
   WHATSAPP_ALLOWED_RECIPIENTS: z.string().optional(),
-  /** Optional shared secret for POST /api/notifications/* (n8n cron) */
+  /** Optional shared secret for POST /api/notifications/weekly-digest */
   WHATSAPP_NOTIFY_SECRET: z.string().optional(),
   /** Meta app secret — enables X-Hub-Signature-256 verification on webhook POSTs */
   WHATSAPP_APP_SECRET: z.string().optional(),
@@ -88,9 +86,6 @@ const envSchema = z.object({
   RESOLVE_LEECH_LAPSES: z.coerce.number().default(4),
   RESOLVE_ESCALATE_DAYS: z.coerce.number().default(14),
   LEETCODE_USERNAME: z.string().optional(),
-  GITHUB_TOKEN: z.string().optional(),
-  GITHUB_REPO: z.string().optional(),
-  GITHUB_SOLUTIONS_PATH: z.string().default(""),
 });
 
 /** A coach LLM the user can pick from in the UI. */
@@ -127,16 +122,6 @@ export type AppConfig = {
     flushIntervalMs: number;
   };
   llm: {
-    model: string;
-    openrouter: {
-      apiKey?: string;
-      baseUrl: string;
-      siteUrl: string;
-      siteName: string;
-    };
-  };
-  /** Warm-up quiz LLM — may use a lighter/faster model than the coach. */
-  warmupLlm: {
     model: string;
     openrouter: {
       apiKey?: string;
@@ -184,11 +169,6 @@ export type AppConfig = {
     timezone: string;
   };
   leetcode: { username?: string };
-  github: {
-    token?: string;
-    repo?: string;
-    solutionsPath: string;
-  };
   /** Problem re-solve scheduling (spaced-repetition design §6, §12). `engine`
    *  is shape-compatible with @dsa/intelligence ProblemReviewConfig. */
   resolve: {
@@ -251,15 +231,6 @@ export function loadConfig(envPath?: string): AppConfig {
         siteName: env.OPENROUTER_SITE_NAME,
       },
     },
-    warmupLlm: {
-      model: env.WARMUP_LLM_MODEL ?? env.OPENROUTER_MODEL,
-      openrouter: {
-        apiKey: coachOpenRouterKey(env),
-        baseUrl: env.OPENROUTER_BASE_URL,
-        siteUrl: env.OPENROUTER_SITE_URL,
-        siteName: env.OPENROUTER_SITE_NAME,
-      },
-    },
     coachLlm: resolveCoachLlm(env),
     whatsapp: {
       phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID,
@@ -300,11 +271,6 @@ export function loadConfig(envPath?: string): AppConfig {
       timezone: env.SCHEDULER_TIMEZONE,
     },
     leetcode: { username: env.LEETCODE_USERNAME },
-    github: {
-      token: env.GITHUB_TOKEN,
-      repo: env.GITHUB_REPO,
-      solutionsPath: env.GITHUB_SOLUTIONS_PATH,
-    },
     resolve: {
       slotsWeekday: env.RESOLVE_SLOTS_WEEKDAY,
       slotsWeekend: env.RESOLVE_SLOTS_WEEKEND,
@@ -409,16 +375,7 @@ function buildCoachModels(
   };
 
   add(coach);
-  if (env.WARMUP_LLM_MODEL && env.WARMUP_LLM_MODEL !== coach.model) {
-    add({
-      model: env.WARMUP_LLM_MODEL,
-      apiKey: apiKeyForCoachModel(env, env.WARMUP_LLM_MODEL),
-    });
-  }
-  if (
-    env.OPENROUTER_MODEL !== coach.model &&
-    env.OPENROUTER_MODEL !== env.WARMUP_LLM_MODEL
-  ) {
+  if (env.OPENROUTER_MODEL !== coach.model) {
     add({
       model: env.OPENROUTER_MODEL,
       apiKey: apiKeyForCoachModel(env, env.OPENROUTER_MODEL),

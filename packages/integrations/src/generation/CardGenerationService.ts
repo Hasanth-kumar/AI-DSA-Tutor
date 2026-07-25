@@ -24,13 +24,11 @@ import {
   type DedupConfig,
   type DedupCandidate,
   type Embedder,
-  type EmbeddingDb,
 } from "../embeddings/index.js";
 import {
   findCrossConceptPairs,
   DEFAULT_CONFUSION_CONFIG,
   type ConfusionPairConfig,
-  type ConfusionDb,
 } from "../embeddings/confusion.js";
 import {
   parseGeneratedCards,
@@ -49,12 +47,12 @@ import {
   storeGeneratedCards,
   clearTopicDirty,
   listDirtyTopics,
-  type GenDb,
 } from "./GenerationStore.js";
 import type { GenerationClient } from "./GenerationProvider.js";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 
 /** The DB handle must satisfy the generation store, embedding store, and confusion detector. */
-export type GenerationDb = GenDb & EmbeddingDb & ConfusionDb;
+export type GenerationDb = SqliteLike;
 
 /** A topic's closed vocabulary + display name (from concepts.yaml). */
 export interface TopicVocabulary {

@@ -10,22 +10,13 @@
  * Inserts are **idempotent and non-destructive**: re-running the seed uses
  * INSERT OR IGNORE keyed on the card's UUID, so a card a learner has already
  * reviewed never has its FSRS state reset. The store talks to a tiny
- * {@link SeedDb} interface satisfied by both better-sqlite3 (production) and
+ * {@link SqliteLike} interface satisfied by both better-sqlite3 (production) and
  * node:sqlite (tests) — it deliberately does NOT import the Notion client or
  * any sync target (§10).
  */
 import { createHash } from "node:crypto";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import type { SeedTopic } from "./seed-loader.js";
-
-/** Minimal statement surface shared by better-sqlite3 and node:sqlite. */
-export interface SeedStatement {
-  run(...params: unknown[]): unknown;
-}
-/** Minimal DB surface shared by better-sqlite3 and node:sqlite. */
-export interface SeedDb {
-  exec(sql: string): void;
-  prepare(sql: string): SeedStatement;
-}
 
 /** A `cards` row ready for insertion (positional-friendly plain object). */
 export interface SeedCardRow {
@@ -122,7 +113,7 @@ const INSERT_CONCEPT = `INSERT OR IGNORE INTO card_concepts (card_id, concept_id
  * card UUID) and wrapped in a single transaction.
  */
 export function seedTopics(
-  db: SeedDb,
+  db: SqliteLike,
   topics: SeedTopic[],
   now: number = Date.now(),
 ): SeedResult {

@@ -41,19 +41,4 @@ export async function integrationsRoutes(
       }
     },
   );
-
-  app.post("/sync/github", async (request, reply) => {
-    if (!ctx.githubSync.isConfigured()) {
-      return reply.status(503).send({ error: "GitHub is not configured" });
-    }
-
-    try {
-      const result = await ctx.githubSync.syncSolutions();
-      return reply.send(serializeForJson(result));
-    } catch (err) {
-      request.log.error(err);
-      const message = err instanceof Error ? err.message : "GitHub sync failed";
-      return reply.status(502).send({ error: message });
-    }
-  });
 }

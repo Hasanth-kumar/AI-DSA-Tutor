@@ -192,23 +192,7 @@ export interface DifficultyRecommendation {
   ratio: [number, number];
 }
 
-export interface PrerequisiteViolation {
-  topicId: string;
-  topicName: string;
-  missingPrerequisites: string[];
-}
-
 export interface IntelligenceUpdate {
   sm2: SM2State;
   weaknessUpdate: WeaknessAnalysis;
-}
-
-export interface IntelligenceSnapshot {
-  generatedAt: Date;
-  topicScores: PriorityScore[];
-  revisionQueue: TopicState[];
-  weaknessReport: WeaknessReport;
-  prerequisiteViolations: PrerequisiteViolation[];
-  unlockedTopicIds: string[];
-  summary: string;
 }

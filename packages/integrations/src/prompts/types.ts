@@ -67,10 +67,3 @@ export interface ChatCoachOptions {
   /** True when the chat is anchored to a specific problem — enables the hint ladder. */
   anchored?: boolean;
 }
-
-export interface WarmupQuestionContext {
-  topicName: string;
-  /** Note excerpts from the user's own vault for this topic (may be empty). */
-  noteExcerpts: { title: string; excerpt: string }[];
-  questionCount: number;
-}

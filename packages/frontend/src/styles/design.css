@@ -196,10 +196,6 @@
   display: block;
 }
 
-.nav-v2-btn.active .nav-v2-rail {
-  opacity: 1;
-}
-
 .nav-v2-tile {
   width: 28px;
   height: 28px;

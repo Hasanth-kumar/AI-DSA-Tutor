@@ -66,6 +66,5 @@ Established helpers to reuse instead of copying endpoint bodies:
 - **Dual scheduling** (per-card FSRS + topic-level SM-2) — see ADR 0001.
 - Repository / MirrorCache layering, `context.ts` composition root, and the
   card-bank `SyncTarget` seam — load-bearing architecture, kept as-is.
-- The `warmupLlm` config block in `@dsa/shared` (vestigial after its consumer
-  was deleted) — removing it changes the `.env` surface; do it alongside the
-  next config change.
+- The `warmupLlm` config block was removed from `@dsa/shared` (vestigial after
+  its consumer was deleted; warm-up is local FSRS cards only).

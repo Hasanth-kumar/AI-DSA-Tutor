@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, extname, join, relative } from "node:path";
-import { slugifyProblemName } from "../github/GitHubClient.js";
+import { slugifyProblemName } from "../util/slugify.js";
 
 export interface ObsidianNoteFile {
   /** Path relative to the vault root. */

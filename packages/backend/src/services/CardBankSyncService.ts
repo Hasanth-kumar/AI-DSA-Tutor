@@ -8,9 +8,9 @@ import {
   CardSyncService,
   createJsonFileSyncTarget,
   createNotionSyncTarget,
-  type CardSyncDb,
   type CardSyncReport,
   type PullApplyResult,
+  type SqliteLike,
 } from "@dsa/integrations";
 import type { AppConfig } from "@dsa/shared";
 
@@ -29,7 +29,7 @@ export class CardBankSyncService {
   private intervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    sqlite: CardSyncDb,
+    sqlite: SqliteLike,
     config: AppConfig,
     meta: { get(key: string): string | null; set(key: string, value: string): void },
   ) {

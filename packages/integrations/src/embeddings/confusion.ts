@@ -15,6 +15,7 @@
  * if two cards are above the dedup threshold and share a concept, they are
  * near-duplicates, not useful confusion pairs.
  */
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import { cosineSimilarity } from "./vector.js";
 import { deserializeVector } from "./vector.js";
 
@@ -110,12 +111,8 @@ export function detectConfusionPairs(
 
 // ---------------------------------------------------------------------------
 // DB-backed variant (same interface as EmbeddingStore — works with any
-// binding-free EmbeddingDb that satisfies `prepare().all()`).
+// binding-free SqliteLike that satisfies `prepare().all()`).
 // ---------------------------------------------------------------------------
-
-export interface ConfusionDb {
-  prepare(sql: string): { all(...params: unknown[]): unknown[] };
-}
 
 /**
  * Load embeddings from `card_embeddings` + concept tags, optionally filtered to
@@ -127,7 +124,7 @@ export interface ConfusionDb {
  * Returns pairs sorted by descending similarity (most confusable first).
  */
 export function findCrossConceptPairs(
-  db: ConfusionDb,
+  db: SqliteLike,
   model: string,
   opts: {
     topicId?: string;

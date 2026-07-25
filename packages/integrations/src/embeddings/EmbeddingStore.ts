@@ -6,18 +6,9 @@
  * and never imports a native driver. Embeddings are LOCAL ONLY — this module has
  * no concept of a sync target (§6).
  */
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import { serializeVector, deserializeVector } from "./vector.js";
 import type { DedupCandidate } from "./dedup.js";
-
-export interface EmbeddingStatement {
-  run(...params: unknown[]): unknown;
-  get(...params: unknown[]): unknown;
-  all(...params: unknown[]): unknown[];
-}
-export interface EmbeddingDb {
-  exec(sql: string): void;
-  prepare(sql: string): EmbeddingStatement;
-}
 
 export interface StoredEmbedding {
   cardId: string;
@@ -60,7 +51,7 @@ ON CONFLICT(card_id) DO UPDATE SET
 
 /** Insert or replace a card's vector (idempotent; preserves created_at). */
 export function upsertEmbedding(
-  db: EmbeddingDb,
+  db: SqliteLike,
   params: {
     cardId: string;
     model: string;
@@ -82,7 +73,7 @@ export function upsertEmbedding(
 }
 
 /** Fetch one stored embedding, with its vector deserialized. */
-export function getEmbedding(db: EmbeddingDb, cardId: string): StoredEmbedding | undefined {
+export function getEmbedding(db: SqliteLike, cardId: string): StoredEmbedding | undefined {
   const row = db
     .prepare(
       `SELECT card_id, model, dim, vector, source_hash FROM card_embeddings WHERE card_id = ?`,
@@ -106,7 +97,7 @@ export function getEmbedding(db: EmbeddingDb, cardId: string): StoredEmbedding |
  * This is the work list for the embed sweep (and re-embed after an edit).
  */
 export function cardsNeedingEmbedding(
-  db: EmbeddingDb,
+  db: SqliteLike,
   model: string,
 ): CardNeedingEmbedding[] {
   const rows = db
@@ -148,7 +139,7 @@ export function cardsNeedingEmbedding(
  * bank the §5 generation pipeline dedupes new cards against.
  */
 export function loadDedupCandidates(
-  db: EmbeddingDb,
+  db: SqliteLike,
   model: string,
   opts: { topicId?: string } = {},
 ): DedupCandidate[] {

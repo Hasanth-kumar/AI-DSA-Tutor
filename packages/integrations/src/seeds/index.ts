@@ -19,8 +19,6 @@ export {
   buildSeedRows,
   seedTopics,
   cardSourceHash,
-  type SeedDb,
-  type SeedStatement,
   type SeedCardRow,
   type SeedConceptRow,
   type SeedResult,

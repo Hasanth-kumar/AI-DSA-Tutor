@@ -5,22 +5,6 @@ import {
 } from "@dsa/integrations";
 import type { AppConfig, CoachModelOption } from "@dsa/shared";
 
-export function toLLMServiceConfig(config: AppConfig): LLMServiceConfig {
-  return {
-    model: config.llm.model,
-    openrouter: {
-      apiKey: config.llm.openrouter.apiKey ?? "",
-      baseUrl: config.llm.openrouter.baseUrl,
-      siteUrl: config.llm.openrouter.siteUrl,
-      siteName: config.llm.openrouter.siteName,
-    },
-  };
-}
-
-export function createAppLLMService(config: AppConfig): LLMService {
-  return createLLMService(toLLMServiceConfig(config));
-}
-
 /** Coaching/hint/debrief LLM — honors COACH_LLM_MODEL for a stronger coach model. */
 export function toCoachLLMServiceConfig(config: AppConfig): LLMServiceConfig {
   const modelApiKeys = coachModelApiKeys(config);

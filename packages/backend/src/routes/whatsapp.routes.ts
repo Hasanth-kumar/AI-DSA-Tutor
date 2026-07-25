@@ -146,7 +146,5 @@ export async function whatsappNotificationRoutes(
     });
   };
 
-  registerNotification("/notifications/daily-plan", (r) => notifications.sendDailyPlan(r));
-  registerNotification("/notifications/revision-check", (r) => notifications.sendRevisionCheck(r));
   registerNotification("/notifications/weekly-digest", (r) => notifications.sendWeeklyDigest(r));
 }

@@ -1,4 +1,3 @@
-import type { WarmupItem } from "@dsa/integrations";
 import type { TopicRepository } from "../repositories/TopicRepository.js";
 import type { CardService, WarmupGradeResult } from "./CardService.js";
 
@@ -8,7 +7,9 @@ export interface WarmupAnswerRevealResult {
 }
 
 /** A warm-up question backed by a real local card (front/back from the bank). */
-export interface WarmupQuestion extends WarmupItem {
+export interface WarmupQuestion {
+  question: string;
+  answer: string;
   /** The source card id (null only if a future non-card item is ever served). */
   cardId: string | null;
   /** Card type (§3) for display/analytics. */
