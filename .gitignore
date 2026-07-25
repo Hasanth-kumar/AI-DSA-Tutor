@@ -32,3 +32,7 @@ data/dsa.db-*
 data/problem-suggestions.json
 data/problem-suggestions.md
 .study/
+
+# Local agent context (owner machine only — never commit)
+.cursor/local/
+.cursor/rules/local-*.mdc
