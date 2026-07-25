@@ -1,6 +1,6 @@
 /**
  * Orchestrates write-through sync of the card bank to a {@link SyncTarget}
- * (design §8, §10). Binding-free (talks to {@link SyncDb}, not Drizzle), so it
+ * (design §8, §10). Binding-free (talks to {@link SqliteLike}, not Drizzle), so it
  * runs in prod against better-sqlite3 and in tests against node:sqlite, and it
  * knows nothing about Notion — only the interface. The app wires a concrete
  * target (Notion when configured, the JSON file otherwise) and calls `flush`.
@@ -17,8 +17,8 @@ import {
   dirtyCardDeltas,
   markCardsSynced,
   type PullApplyResult,
-  type SyncDb,
 } from "./CardSyncStore.js";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import {
   isCodeHeavy,
   CODE_IN_BODY_NOTICE,
@@ -41,7 +41,7 @@ const EMPTY: CardSyncReport = { dirty: 0, pushed: 0, failed: 0, cleared: 0 };
 
 export class CardSyncService {
   constructor(
-    private readonly db: SyncDb,
+    private readonly db: SqliteLike,
     private readonly target: SyncTarget,
   ) {}
 

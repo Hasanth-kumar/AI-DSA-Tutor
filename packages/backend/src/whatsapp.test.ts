@@ -87,7 +87,7 @@ describe("WhatsApp webhook", () => {
     await app.close();
   });
 
-  it("POST /api/notifications/daily-plan requires secret when configured", async () => {
+  it("POST /api/notifications/weekly-digest requires secret when configured", async () => {
     config = {
       ...config,
       whatsapp: {
@@ -103,7 +103,7 @@ describe("WhatsApp webhook", () => {
 
     const unauthorized = await app.inject({
       method: "POST",
-      url: "/api/notifications/daily-plan",
+      url: "/api/notifications/weekly-digest",
     });
     expect(unauthorized.statusCode).toBe(401);
 

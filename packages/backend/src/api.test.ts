@@ -302,23 +302,6 @@ describe("API routes", () => {
     await app.close();
   });
 
-  it("GET /api/analytics/summary returns weekly stats", async () => {
-    const app = buildApp(config, ctx);
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/analytics/summary",
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      sessionsCount: expect.any(Number),
-      currentStreakDays: expect.any(Number),
-      longestStreakDays: expect.any(Number),
-      velocityTrend: expect.stringMatching(/up|down|stable/),
-      intelligenceSummary: expect.any(String),
-    });
-    await app.close();
-  });
-
   it("GET /api/analytics/streak returns streak info", async () => {
     const app = buildApp(config, ctx);
     const response = await app.inject({
@@ -331,30 +314,6 @@ describe("API routes", () => {
       longestStreakDays: expect.any(Number),
       activeDays: expect.any(Array),
     });
-    await app.close();
-  });
-
-  it("GET /api/analytics/mastery-velocity returns weekly velocity", async () => {
-    const app = buildApp(config, ctx);
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/analytics/mastery-velocity?weeks=4",
-    });
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.weekly).toHaveLength(4);
-    expect(body.topics).toEqual(expect.any(Array));
-    await app.close();
-  });
-
-  it("GET /api/analytics/weakness-trend returns trend points", async () => {
-    const app = buildApp(config, ctx);
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/analytics/weakness-trend?weeks=4",
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().trend).toHaveLength(4);
     await app.close();
   });
 
@@ -444,16 +403,6 @@ describe("API routes", () => {
     await app.close();
   });
 
-  it("POST /api/sync/github returns 503 when not configured", async () => {
-    const app = buildApp(config, ctx);
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/sync/github",
-    });
-    expect(response.statusCode).toBe(503);
-    await app.close();
-  });
-
   it("GET /api/analytics/dashboard returns consolidated analytics", async () => {
     const app = buildApp(config, ctx);
     const response = await app.inject({
@@ -478,18 +427,4 @@ describe("API routes", () => {
     await app.close();
   });
 
-  it("GET /api/analytics/difficulty returns comparative analysis", async () => {
-    const app = buildApp(config, ctx);
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/analytics/difficulty",
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      byDifficulty: expect.any(Array),
-      byTopic: expect.any(Array),
-      summary: expect.any(String),
-    });
-    await app.close();
-  });
 });

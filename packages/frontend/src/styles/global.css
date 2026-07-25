@@ -98,29 +98,6 @@ textarea {
   font: inherit;
 }
 
-.nav button.active {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-
-/* Active rail: left on desktop sidebar, bottom on mobile nav */
-.nav button.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 55%;
-  width: 2.5px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-
-.nav button.active svg {
-  opacity: 1;
-}
-
 /* ─── Main content ───────────────────────── */
 .main {
   padding: var(--space-6) 2.5rem 3rem;
@@ -226,10 +203,6 @@ textarea {
 
 .chart-svg text {
   font-family: var(--font-sans);
-}
-
-.chart-svg text.chart-mono {
-  font-family: var(--font-mono);
 }
 
 .graph-container {
@@ -1573,11 +1546,6 @@ button:focus-visible,
   box-shadow: none;
 }
 
-.coach-send-btn--loading {
-  opacity: 1;
-  cursor: wait;
-}
-
 .coach-send-btn svg {
   width: 14px;
   height: 14px;
@@ -1966,160 +1934,11 @@ button:focus-visible,
   display: inline-block;
 }
 
-.action-row .btn-primary {
-  flex: 1;
-  text-align: center;
-  justify-content: center;
-}
-
 /* ─── Responsive ─────────────────────────── */
 @media (max-width: 960px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
-    min-height: 100vh;
-    min-height: 100dvh;
-  }
-
-  .app-shell--mobile .main {
-    order: 1;
-  }
-
-  .app-shell--mobile .sidebar {
-    order: 2;
-  }
-
-  .sidebar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    top: auto;
-    z-index: 100;
-    height: auto;
-    max-height: 70dvh;
-    padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
-    border-right: none;
-    border-top: 1px solid var(--border);
-    border-bottom: none;
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.35);
-    overflow: hidden;
-    cursor: pointer;
-    transition:
-      max-height 0.25s ease,
-      padding 0.25s ease;
-  }
-
-  .brand {
-    padding: 0.35rem 0.25rem 0.5rem;
-    margin-bottom: 0;
-    border-bottom: none;
-    cursor: pointer;
-  }
-
-  .sidebar--collapsed .brand-text,
-  .sidebar--collapsed .nav-section-label,
-  .sidebar--collapsed .sidebar-footer {
-    display: none;
-  }
-
-  .sidebar--collapsed {
-    max-height: none;
-    padding-top: 0.4rem;
-    padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px));
-  }
-
-  .sidebar--collapsed .nav {
-    justify-content: flex-start;
-  }
-
-  .nav {
-    flex-direction: row;
-    flex-wrap: nowrap;
-    justify-content: space-around;
-    gap: 0.15rem;
-  }
-
-  .nav button {
-    flex: 1;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 0.2rem;
-    padding: 0.45rem 0.25rem;
-    font-size: 0.65rem;
-    text-align: center;
-    min-width: 0;
-    cursor: pointer;
-  }
-
-  .nav button svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  .nav button.active svg {
-    transform: translateY(-1px) scale(1.06);
-  }
-
-  /* Bottom rail variant for the mobile tab bar */
-  .nav button.active::before {
-    left: 50%;
-    top: auto;
-    bottom: 1px;
-    transform: translateX(-50%);
-    width: 1.25rem;
-    height: 2.5px;
-  }
-
-  .sidebar--collapsed .nav button {
-    padding: 0.35rem 0.15rem;
-    gap: 0;
-  }
-
-  .sidebar--collapsed .nav-label {
-    display: none;
-  }
-
-  .nav-section-label,
-  .sidebar-footer {
-    display: none;
-  }
-
-  .sidebar:not(.sidebar--collapsed) .nav-section-label {
-    display: block;
-    padding-top: 0;
-    padding-bottom: 0.15rem;
-  }
-
-  .sidebar:not(.sidebar--collapsed) .sidebar-footer {
-    display: block;
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-  }
-
   .main {
     padding: 1.25rem 1rem calc(5.5rem + env(safe-area-inset-bottom, 0px)) 1rem;
     transition: padding-bottom 0.25s ease;
-  }
-
-  .sidebar-collapsed .main {
-    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
-  }
-
-  .app-shell.coach-active.app-shell--mobile .main {
-    padding: 0;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .app-shell.coach-active.app-shell--mobile .coach-composer-wrap {
-    padding-bottom: calc(4.35rem + env(safe-area-inset-bottom, 0px));
-  }
-
-  .app-shell.coach-active.app-shell--mobile.sidebar-collapsed .coach-composer-wrap {
-    padding-bottom: calc(3.65rem + env(safe-area-inset-bottom, 0px));
   }
 
   .coach-thread-inner {
@@ -2200,11 +2019,6 @@ button:focus-visible,
   .coach-select {
     max-width: none;
     width: 100%;
-  }
-
-  .coach-anchor-bar {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .coach-msg-row--user {
@@ -2292,10 +2106,6 @@ button:focus-visible,
 
   .coach-welcome-heading {
     font-size: 1.4rem;
-  }
-
-  .coach-welcome-sub {
-    font-size: 0.86rem;
   }
 
   .coach-code-block pre {
@@ -2637,41 +2447,6 @@ button:focus-visible,
   flex-wrap: wrap;
 }
 
-/* ─── Flashcard review (§11) — centered study card, warm-up visual language ─── */
-.main .page-transition:has(.review-page) {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.review-page > .card {
-  width: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.review-body .warmup-question {
-  max-width: 34rem;
-  margin-bottom: var(--space-4);
-}
-
-.review-body .warmup-show-answer-btn {
-  margin-bottom: 0;
-}
-
-.review-card .warmup-title {
-  font-size: 1.35rem;
-}
-
-.review-card .warmup-answer-text {
-  display: block;
-  -webkit-line-clamp: unset;
-  overflow: visible;
-}
-
 .warmup-answer-markdown {
   margin: 0;
   font-family: var(--font-display);
@@ -2707,12 +2482,6 @@ button:focus-visible,
 .warmup-answer-markdown strong {
   font-weight: 600;
   color: var(--text);
-}
-
-.review-card .warmup-answer-markdown {
-  display: block;
-  -webkit-line-clamp: unset;
-  overflow: visible;
 }
 
 .review-triage {
@@ -2765,7 +2534,6 @@ button:focus-visible,
 .grade-success:hover { border-color: var(--success); }
 .grade-accent:hover { border-color: var(--accent); }
 
-.grade-key { font-family: var(--font-mono, monospace); }
 @keyframes reviewReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
 /* ─── Priority score bar (3.2) ───────────── */
@@ -3179,20 +2947,6 @@ button:focus-visible,
 /* Coach composer grows smoothly as the textarea auto-resizes */
 .coach-composer-inner textarea {
   transition: height 0.12s ease;
-}
-
-/* Active nav rail fades in instead of snapping (orientation-agnostic) */
-@keyframes ui-rail-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.nav button.active::before {
-  animation: ui-rail-in 0.18s ease-out;
 }
 
 /* Per-problem Coach button — arrow rotates on hover to signal a tab jump */

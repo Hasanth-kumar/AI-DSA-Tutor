@@ -26,8 +26,6 @@ export {
   clearTopicDirty,
   listDirtyTopics,
   getTopicGeneration,
-  type GenDb,
-  type GenStatement,
   type CoverageReport,
   type StoreResult,
   type DirtyTopic,

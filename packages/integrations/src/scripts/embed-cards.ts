@@ -3,16 +3,15 @@
  * Run via: pnpm db:embed-cards            (embed all cards missing/stale vectors)
  *          pnpm db:embed-cards -- --golden (evaluate + sweep the dedup threshold)
  *
- * Uses the configured LOCAL embedder (Ollama `nomic-embed-text` by default, or
- * transformers.js `Xenova/all-MiniLM-L6-v2` when EMBEDDING_PROVIDER=transformers).
- * Vectors are stored as blobs in SQLite — no vector DB, never synced to Notion.
+ * Uses the LOCAL embedder (Ollama `nomic-embed-text`). Vectors are stored as
+ * blobs in SQLite — no vector DB, never synced to Notion.
  */
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "@dsa/shared";
 import { createSqliteDb, runMigrations } from "../sqlite/client.js";
 import {
-  createEmbedder,
+  createOllamaEmbedder,
   cardEmbeddingText,
   cardsNeedingEmbedding,
   upsertEmbedding,
@@ -29,7 +28,7 @@ async function embedAll(): Promise<void> {
   const cfg = loadConfig(resolve(repoRoot, ".env"));
   runMigrations(cfg.sqlite.path);
 
-  const embedder = createEmbedder();
+  const embedder = createOllamaEmbedder();
   console.log(`Embedder: ${embedder.model} (${embedder.dimension}d)`);
 
   const { sqlite } = createSqliteDb(cfg.sqlite.path);
@@ -60,7 +59,7 @@ async function embedAll(): Promise<void> {
 }
 
 async function evaluateGolden(): Promise<void> {
-  const embedder = createEmbedder();
+  const embedder = createOllamaEmbedder();
   console.log(`Evaluating golden set with ${embedder.model} (${embedder.dimension}d)`);
   const scored = await scoreGoldenPairs(embedder);
   const atDefault = evaluateScoredPairs(scored, {

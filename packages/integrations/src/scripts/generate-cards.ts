@@ -14,7 +14,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "@dsa/shared";
 import { createSqliteDb, runMigrations } from "../sqlite/client.js";
-import { createEmbedder } from "../embeddings/index.js";
+import { createOllamaEmbedder } from "../embeddings/index.js";
 import { createOpenRouterClient } from "../llm/OpenRouterClient.js";
 import {
   CardGenerationService,
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     const service = new CardGenerationService({
       db: sqlite,
       llm,
-      embedder: createEmbedder(),
+      embedder: createOllamaEmbedder(),
       resolveVocabulary: createSeedVocabularyResolver(resolve(repoRoot, "database/seeds")),
       loadNotes: createDbNoteProvider(sqlite),
       modelVersion: process.env.GENERATION_PROVIDER === "ollama" ? localModel : cloudModel,

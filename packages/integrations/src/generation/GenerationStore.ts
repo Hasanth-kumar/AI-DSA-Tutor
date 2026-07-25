@@ -14,18 +14,8 @@
  * are upserted separately by the service after the card rows exist (FK order).
  */
 import { randomUUID } from "node:crypto";
+import type { SqliteLike } from "../sqlite/sqlite-like.js";
 import type { GeneratedCardRow } from "./generation.js";
-
-/** Minimal statement surface shared by better-sqlite3 and node:sqlite. */
-export interface GenStatement {
-  run(...params: unknown[]): unknown;
-  get(...params: unknown[]): unknown;
-  all(...params: unknown[]): unknown[];
-}
-export interface GenDb {
-  exec(sql: string): void;
-  prepare(sql: string): GenStatement;
-}
 
 /** Per-topic coverage snapshot (§4): the deterministic generation input. */
 export interface CoverageReport {
@@ -46,7 +36,7 @@ export interface CoverageReport {
  * counts so the caller can respect the cap.
  */
 export function computeCoverage(
-  db: GenDb,
+  db: SqliteLike,
   topicId: string,
   knownConcepts: Iterable<string>,
 ): CoverageReport {
@@ -74,7 +64,7 @@ export function computeCoverage(
 }
 
 /** Fronts of existing (non-suspended) cards for a topic — Stage-A dedup (§5). */
-export function existingFronts(db: GenDb, topicId: string, limit = 200): string[] {
+export function existingFronts(db: SqliteLike, topicId: string, limit = 200): string[] {
   const rows = db
     .prepare(
       `SELECT front FROM cards WHERE topic_id = ? AND suspended = 0 ORDER BY created_at LIMIT ?`,
@@ -116,7 +106,7 @@ export interface StoreResult {
  * written for cards actually inserted this run.
  */
 export function storeGeneratedCards(
-  db: GenDb,
+  db: SqliteLike,
   rows: GeneratedCardRow[],
   now: number = Date.now(),
   eventIdFactory: () => string = randomUUID,
@@ -201,7 +191,7 @@ ON CONFLICT(topic_id) DO UPDATE SET
  * batch job merge several edits into a single generation run.
  */
 export function markTopicDirty(
-  db: GenDb,
+  db: SqliteLike,
   topicId: string,
   noteHash: string | null = null,
   now: number = Date.now(),
@@ -221,7 +211,7 @@ ON CONFLICT(topic_id) DO UPDATE SET
 
 /** Clear the dirty flag after a successful generation run (§5). */
 export function clearTopicDirty(
-  db: GenDb,
+  db: SqliteLike,
   topicId: string,
   generatedHash: string | null = null,
   now: number = Date.now(),
@@ -230,7 +220,7 @@ export function clearTopicDirty(
 }
 
 /** Topics awaiting generation, oldest-dirty first (the batch job's work list). */
-export function listDirtyTopics(db: GenDb): DirtyTopic[] {
+export function listDirtyTopics(db: SqliteLike): DirtyTopic[] {
   const rows = db
     .prepare(
       `SELECT topic_id, note_hash, dirty_since
@@ -248,7 +238,7 @@ export function listDirtyTopics(db: GenDb): DirtyTopic[] {
 
 /** Read the generation bookkeeping row for a topic (or undefined). */
 export function getTopicGeneration(
-  db: GenDb,
+  db: SqliteLike,
   topicId: string,
 ): { dirty: boolean; noteHash: string | null; lastGeneratedHash: string | null } | undefined {
   const row = db

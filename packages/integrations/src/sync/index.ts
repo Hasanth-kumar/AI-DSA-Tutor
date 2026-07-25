@@ -19,8 +19,6 @@ export {
   markCardsSynced,
   applyPulledContent,
   newSyncId,
-  type SyncDb,
-  type SyncStatement,
   type PullApplyResult,
 } from "./CardSyncStore.js";
 export {

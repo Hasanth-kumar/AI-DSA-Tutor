@@ -52,7 +52,7 @@ Packages live in `packages/*` plus the top-level `database/`. Dependency directi
 - `@dsa/shared` — config loading (`loadConfig`) and shared types. Bottom of the stack.
 - `@dsa/database` — Drizzle SQLite schema (`schema/sqlite.schema.ts`) + Notion type definitions. The single source of truth for table shapes; SQL lives in `database/migrations/`.
 - `@dsa/intelligence` — pure, I/O-free decision engines (see below).
-- `@dsa/integrations` — all external I/O: Notion, WhatsApp, LeetCode, GitHub, OpenRouter/LLM, the SQLite driver (`better-sqlite3`), embeddings, card generation, card sync adapters.
+- `@dsa/integrations` — all external I/O: Notion, WhatsApp, LeetCode, OpenRouter/LLM, the SQLite driver (`better-sqlite3`), embeddings, card generation, card sync adapters.
 - `@dsa/backend` — Fastify API that wires everything together via dependency injection.
 - `@dsa/frontend` — React 19 + Vite + D3 dashboard (Today, Review, Coach, Graph, Activity, Session tabs).
 
@@ -62,7 +62,7 @@ Packages live in `packages/*` plus the top-level `database/`. Dependency directi
 
 **Repositories vs. services.** Repositories (`backend/src/repositories/*`) are the only things that touch the SQLite mirror, going through `MirrorCache`. Services (`backend/src/services/*`) hold business logic and orchestrate repos, the intelligence orchestrator, and integration clients. Routes (`backend/src/routes/*`) stay thin and call services.
 
-**Intelligence engines are pure.** `@dsa/intelligence` contains the engines — topic priority, revision (SM-2), weakness, difficulty, roadmap, curriculum, problem re-solve (`ProblemReviewEngine`) — plus analytics/card-analytics and an `IntelligenceOrchestrator`. They take snapshot data in and return results with **no I/O, no DB, no network**. The backend feeds them data and persists outcomes. Keep them that way: this is what makes them unit-testable in isolation, and most of the test suite lives here. The topic→`TopicState` mapper (`buildTopicState` in `analytics/build-topic-snapshot.ts`) is the single source of truth used by both the backend mirror and the analytics engine — don't re-copy it. The package barrel (`src/index.ts`) is the deliberate public API; internal helpers stay exported from their own modules only.
+**Intelligence engines are pure.** `@dsa/intelligence` contains the engines — topic priority, revision (SM-2), weakness, difficulty, roadmap, curriculum, problem re-solve (`ProblemReviewEngine`) — plus analytics and an `IntelligenceOrchestrator`. They take snapshot data in and return results with **no I/O, no DB, no network**. The backend feeds them data and persists outcomes. Keep them that way: this is what makes them unit-testable in isolation, and most of the test suite lives here. The topic→`TopicState` mapper (`buildTopicState` in `analytics/build-topic-snapshot.ts`) is the single source of truth used by both the backend mirror and the analytics engine — don't re-copy it. The package barrel (`src/index.ts`) is the deliberate public API; internal helpers stay exported from their own modules only.
 
 **Dual scheduling (intentional).** Flashcards use **per-card FSRS** (`ts-fsrs` via `CardService` / `fsrs.ts`). The legacy **topic-level SM-2** path (`RevisionEngine`, `SessionService.applyRecallQuality`) still powers the revision queue and session analytics. Warm-up and Review tab scheduling are FSRS-only; do not conflate the two.
 
@@ -74,13 +74,13 @@ Packages live in `packages/*` plus the top-level `database/`. Dependency directi
 
 **Sync model.** Notion is canonical. Reads serve from the SQLite mirror; local edits queue and flush back to Notion (push-only on shutdown via `flushPendingToNotion` + card bank flush, plus `POST /api/sync`). Failed pushes stay queued and replay on the next sync. Conflicts surface through `ConflictRepository` / `GET /api/sync/conflicts`.
 
-**Dual LLM config.** There are two LLM services: an app LLM (`createAppLLMService`) and a separate coach LLM (`createCoachLLMService`) used by hint/debrief/chat. Batch card generation uses a separate Ollama-first chain (`createGenerationLLMClient`). Tests inject a stub coach via `createAppContext(config, { coachLlm })` to avoid real LLM calls — follow that pattern when testing coaching paths.
+**Dual LLM config.** Coaching uses a dedicated coach LLM (`createCoachLLMService`) for hint/debrief/chat. Batch card generation uses a separate Ollama-first chain (`createGenerationLLMClient`). Tests inject a stub coach via `createAppContext(config, { coachLlm })` to avoid real LLM calls — follow that pattern when testing coaching paths.
 
-**Live updates.** Dashboard receives push updates over SSE at `GET /api/events`, backed by the in-process `EventBus`. Background work (weekly digest only) runs on in-process `node-cron` schedulers gated by `ENABLE_SCHEDULERS` — Docker is **not** required for normal dev; it's only for the optional n8n add-on.
+**Live updates.** Dashboard receives push updates over SSE at `GET /api/events`, backed by the in-process `EventBus`. Background work (weekly digest only) runs on in-process `node-cron` schedulers gated by `ENABLE_SCHEDULERS` — Docker is **not** required for normal dev; it's only for running the API in a container.
 
 ## Config & environment
 
-Config is centralized in `@dsa/shared` `loadConfig()`, read from a single `.env` at the repo root (copy from `infrastructure/.env.example` or run `pnpm setup`). Required for core function: `NOTION_TOKEN` + the three `NOTION_*_DB_ID`s and `OPENROUTER_API_KEY`. Optional card bank: `NOTION_CARDS_DB_ID` (falls back to `CARDS_EXPORT_DIR`). WhatsApp, LeetCode, and GitHub vars are optional. Note: scheduler-driven WhatsApp notifications and the n8n workflows overlap — enable one path, not both, or you'll get duplicate messages.
+Config is centralized in `@dsa/shared` `loadConfig()`, read from a single `.env` at the repo root (copy from `infrastructure/.env.example` or run `pnpm setup`). Required for core function: `NOTION_TOKEN` + the three `NOTION_*_DB_ID`s and `OPENROUTER_API_KEY`. Optional card bank: `NOTION_CARDS_DB_ID` (falls back to `CARDS_EXPORT_DIR`). WhatsApp and LeetCode vars are optional.
 
 ## Gotchas
 

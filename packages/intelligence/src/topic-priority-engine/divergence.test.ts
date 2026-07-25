@@ -14,10 +14,9 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "../utils/dates.js";
 import { FIXED_NOW, makeTopic } from "../test-fixtures/sample-topics.js";
-import { RevisionEngine } from "../revision-engine/RevisionEngine.js";
 import { TopicPriorityEngine } from "./TopicPriorityEngine.js";
 
-const engine = new TopicPriorityEngine(new RevisionEngine());
+const engine = new TopicPriorityEngine();
 
 // Recallable-but-unsolvable: SM-2 not due (far-future review) but weak execution.
 const divergent = makeTopic({

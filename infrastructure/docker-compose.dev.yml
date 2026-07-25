@@ -1,11 +1,5 @@
-# Dev overrides: run backend locally with hot reload; only opt-in add-ons in Docker.
+# Dev overrides: run backend locally with hot reload; Docker is opt-in only.
 services:
   backend:
     profiles:
       - full
-
-  n8n:
-    profiles:
-      - n8n
-    ports:
-      - "5678:5678"

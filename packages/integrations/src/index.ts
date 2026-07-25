@@ -14,7 +14,6 @@ export {
 } from "./whatsapp/commands/parse-command.js";
 export { formatStudyPlanForWhatsApp } from "./whatsapp/formatters/plan.formatter.js";
 export { formatProgressForWhatsApp } from "./whatsapp/formatters/progress.formatter.js";
-export { formatRevisionReminder } from "./whatsapp/formatters/revision.formatter.js";
 export { NotionClient, createNotionClient } from "./notion/NotionClient.js";
 export { normalizeProblemStatus } from "./notion/problem-fields.js";
 export { syncNotionToSqlite, type SyncResult } from "./sqlite/sync.js";
@@ -24,9 +23,9 @@ export {
   createNotionSyncTarget,
   type CardSyncReport,
   type PullApplyResult,
-  type SyncDb as CardSyncDb,
 } from "./sync/index.js";
 export { createSqliteDb, runMigrations, type SqliteDb } from "./sqlite/client.js";
+export type { SqliteLike, SqliteStatement } from "./sqlite/sqlite-like.js";
 export type { ConceptDefinition } from "./seeds/index.js";
 export {
   markTopicDirty,
@@ -49,7 +48,6 @@ export type {
   DebriefContext,
   HintContext,
 } from "./prompts/types.js";
-export { type WarmupItem } from "./prompts/warmup.prompt.js";
 export {
   ObsidianVault,
   createObsidianVault,
@@ -62,9 +60,4 @@ export {
   type LeetCodeActivity,
   type LeetCodeUserStats,
 } from "./leetcode/LeetCodeClient.js";
-export {
-  GitHubClient,
-  createGitHubClient,
-  matchProblemToFile,
-  slugifyProblemName,
-} from "./github/GitHubClient.js";
+export { slugifyProblemName } from "./util/slugify.js";

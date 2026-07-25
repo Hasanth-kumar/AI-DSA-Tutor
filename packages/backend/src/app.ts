@@ -71,13 +71,8 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       problems: "GET /api/problems",
       session: "POST /api/session",
       analytics: {
-        summary: "GET /api/analytics/summary",
         streak: "GET /api/analytics/streak",
-        masteryVelocity: "GET /api/analytics/mastery-velocity?weeks=8",
-        weaknessTrend: "GET /api/analytics/weakness-trend?weeks=8",
-        difficulty: "GET /api/analytics/difficulty",
         dashboard: "GET /api/analytics/dashboard?weeks=8",
-        cards: "GET /api/analytics/cards?weeks=8",
       },
       explainScore: "GET /api/topics/:id/score/explain",
       weaknessEvidence: "GET /api/topics/:id/weakness",
@@ -114,7 +109,6 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       integrations: {
         leetcodeStats: "GET /api/integrations/leetcode/stats",
         leetcodeActivity: "GET /api/integrations/leetcode/activity",
-        githubSync: "POST /api/sync/github",
       },
       sync: "POST /api/sync",
       syncFlush: "POST /api/sync/flush",
@@ -122,8 +116,6 @@ export function buildApp(config: AppConfig, ctx: AppContext) {
       syncCardsStatus: "GET /api/sync/cards/status",
       syncCardsPull: "POST /api/sync/cards/pull",
       notifications: {
-        dailyPlan: "POST /api/notifications/daily-plan",
-        revisionCheck: "POST /api/notifications/revision-check",
         weeklyDigest: "POST /api/notifications/weekly-digest",
       },
     },

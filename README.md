@@ -24,7 +24,7 @@ DSA Mastery OS turns a personal Notion DSA setup into a study system that plans 
 | **Analytics** | Streaks, mastery velocity, weakness trends, and difficulty breakdowns |
 | **Web dashboard** | Today view, overview charts, knowledge graph, activity heatmap, live session timer, coach chat, Review tab |
 | **WhatsApp bot** *(optional)* | `plan`, `done`, `hint`, `debrief`, and scheduled digests via Meta Cloud API |
-| **External sync** *(optional)* | LeetCode profile stats and GitHub solution linking |
+| **External sync** *(optional)* | LeetCode profile stats |
 
 ---
 
@@ -35,7 +35,7 @@ flowchart LR
   subgraph sources [Sources of truth]
     Notion[(Notion DBs)]
     Seeds[(Seed cards + concepts.yaml)]
-    LC[LeetCode / GitHub]
+    LC[LeetCode]
   end
 
   subgraph core [Core]
@@ -85,12 +85,12 @@ flowchart LR
 | Monorepo | pnpm workspaces, TypeScript 5, ESLint, Vitest |
 | API | Fastify |
 | Database | SQLite + Drizzle ORM |
-| Flashcards | `ts-fsrs`, local embeddings (Ollama / transformers.js) |
+| Flashcards | `ts-fsrs`, local embeddings (Ollama) |
 | Cache / jobs | In-process TTL cache + node-cron (weekly digest only) |
 | Integrations | Notion API, Meta WhatsApp Cloud API, LeetCode GraphQL |
 | AI | OpenRouter (coaching); Ollama + OpenRouter fallback (batch card generation) |
 | Frontend | React 19, Vite, D3.js |
-| Infrastructure | optional Docker Compose (n8n), optional nginx |
+| Infrastructure | optional Docker Compose, optional nginx |
 
 ---
 
@@ -99,7 +99,7 @@ flowchart LR
 - **Node.js** ≥ 20 and **pnpm** 9 (`corepack enable`)
 - A **Notion** integration token and three database IDs (topics, problems, sessions)
 - **OpenRouter** API key for AI coaching
-- *(Optional)* Notion card bank database ID, Ollama for local generation/embeddings, Docker (n8n add-on), Meta WhatsApp app credentials, LeetCode username, GitHub token
+- *(Optional)* Notion card bank database ID, Ollama for local generation/embeddings, Meta WhatsApp app credentials, LeetCode username
 
 ---
 
@@ -151,15 +151,13 @@ Copy `infrastructure/.env.example` to `.env` at the repo root (or run `pnpm setu
 | Notion | `NOTION_TOKEN`, `NOTION_*_DB_ID` | Topics, problems, sessions databases |
 | Card bank | `NOTION_CARDS_DB_ID`, `CARDS_EXPORT_DIR`, `CARDS_SYNC_FLUSH_INTERVAL_MS` | Card sync to Notion (or local JSON export fallback) |
 | LLM | `OPENROUTER_*`, `COACH_LLM_MODEL` | Coaching, hints, debriefs; batch generation uses Ollama-first chain |
-| Embeddings | `EMBEDDING_PROVIDER` | Local Ollama (`nomic-embed-text`) or transformers.js |
-| WhatsApp | `WHATSAPP_*`, `WHATSAPP_NOTIFY_SECRET` | Bot commands and cron notifications |
+| Embeddings | — | Local Ollama (`nomic-embed-text`) |
+| WhatsApp | `WHATSAPP_*`, `WHATSAPP_NOTIFY_SECRET` | Bot commands and the weekly digest |
 | Intelligence | `WEIGHT_*` | Topic priority scoring weights |
 | Schedulers | `ENABLE_SCHEDULERS`, `WEEKLY_DIGEST_CRON`, `SCHEDULER_TIMEZONE` | In-process cron (weekly digest only) |
-| External | `LEETCODE_USERNAME`, `GITHUB_*` | Profile stats and solution linking |
+| External | `LEETCODE_USERNAME` | Profile stats |
 
-Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_COACH_API_KEY` / `COACH_LLM_MODEL`) for AI coaching. Scheduler-based WhatsApp notifications and n8n workflows overlap — enable one path, not both, unless you want duplicate messages.
-
-WhatsApp setup details: [workflows/WHATSAPP_SETUP.md](workflows/WHATSAPP_SETUP.md).
+Set `OPENROUTER_API_KEY` (and optionally `OPENROUTER_COACH_API_KEY` / `COACH_LLM_MODEL`) for AI coaching. WhatsApp is optional: bot commands run through the webhook, and the only scheduled push is the Sunday weekly digest.
 
 ---
 
@@ -177,7 +175,6 @@ dsa-mastery-os/
 │   ├── integrations/     # Notion, sync, generation, embeddings, LLM
 │   ├── frontend/         # React + Vite dashboard (Today, Review, Coach, …)
 │   └── shared/           # Shared types and config
-├── workflows/            # Optional n8n workflow exports
 └── data/sqlite/          # Local SQLite mirror (gitignored)
 ```
 
@@ -207,10 +204,9 @@ pnpm --filter @dsa/integrations db:seed
 
 ### Docker profiles
 
-The default dev flow needs no Docker — the cache and scheduler run in-process. Docker is only for optional add-ons:
+The default dev flow needs no Docker — the cache and scheduler run in-process. Docker is only for running the API in a container:
 
 ```bash
-docker compose -f infrastructure/docker-compose.yml --profile n8n up -d   # n8n
 docker compose -f infrastructure/docker-compose.yml --profile full up -d  # containerized backend
 ```
 
@@ -236,7 +232,7 @@ All routes are prefixed with `/api` unless noted.
 | Analytics | `GET /api/analytics/summary`, `/streak`, `/mastery-velocity`, `/weakness-trend`, `/difficulty` |
 | Sync | `POST /api/sync`, `POST /api/sync/flush`, `GET /api/sync/status`, `GET /api/sync/conflicts` |
 | Card sync | `POST /api/sync/cards/flush`, `GET /api/sync/cards/status`, `POST /api/sync/cards/pull` |
-| Integrations | `GET /api/integrations/leetcode/stats`, `POST /api/sync/github` |
+| Integrations | `GET /api/integrations/leetcode/stats` |
 | WhatsApp | `GET\|POST /webhooks/whatsapp` |
 | Health | `GET /health`, `/health/live`, `/health/ready` |
 

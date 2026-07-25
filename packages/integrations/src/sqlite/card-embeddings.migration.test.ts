@@ -8,7 +8,6 @@ import {
   getEmbedding,
   cardsNeedingEmbedding,
   loadDedupCandidates,
-  type EmbeddingDb,
 } from "../embeddings/index.js";
 
 /**
@@ -17,7 +16,7 @@ import {
  * and dedup-candidate queries join concepts correctly, and embeddings cascade
  * with their card. Uses node:sqlite so it is native-module-independent.
  */
-interface SqliteLike extends EmbeddingDb {
+interface TestDb {
   exec(sql: string): void;
   prepare(sql: string): {
     run(...p: unknown[]): unknown;
@@ -27,10 +26,10 @@ interface SqliteLike extends EmbeddingDb {
 }
 
 const sqliteModule = "node:sqlite";
-let DatabaseSync: (new (path: string) => SqliteLike) | undefined;
+let DatabaseSync: (new (path: string) => TestDb) | undefined;
 try {
   const mod = (await import(/* @vite-ignore */ sqliteModule)) as {
-    DatabaseSync: new (path: string) => SqliteLike;
+    DatabaseSync: new (path: string) => TestDb;
   };
   DatabaseSync = mod.DatabaseSync;
 } catch {
@@ -39,7 +38,7 @@ try {
 
 const repoRoot = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
-function freshDb(): SqliteLike {
+function freshDb(): TestDb {
   const db = new DatabaseSync!(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const file of MIGRATIONS) {
@@ -57,7 +56,7 @@ function freshDb(): SqliteLike {
 }
 
 function insertCard(
-  db: SqliteLike,
+  db: TestDb,
   id: string,
   sourceHash: string,
   concepts: string[],

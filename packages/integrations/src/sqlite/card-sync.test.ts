@@ -12,19 +12,18 @@ import {
   markCardsSynced,
   applyPulledContent,
   countDirtyCards,
-  type SyncDb,
 } from "../sync/index.js";
 import { upsertEmbedding } from "../embeddings/index.js";
 
 /**
- * Stage-6 end-to-end acceptance (design §8, §10). Drives the real card-sync
+ * Stage-6 end-to-end acceptance (design ?8, ?10). Drives the real card-sync
  * service against node:sqlite + the offline JsonFileSyncTarget, proving:
  * delta-only batched flush clears dirty + stamps synced_at, a clean bank is a
- * no-op, embeddings never leave the local table (§6), the updated_at conflict
+ * no-op, embeddings never leave the local table (?6), the updated_at conflict
  * guard keeps a concurrently-reviewed card dirty, and a pull rewrites content
- * while leaving local SR state untouched (§8 field ownership).
+ * while leaving local SR state untouched (?8 field ownership).
  */
-interface SqliteLike extends SyncDb {
+interface TestDb {
   exec(sql: string): void;
   prepare(sql: string): {
     run(...p: unknown[]): { changes?: number | bigint };
@@ -34,10 +33,10 @@ interface SqliteLike extends SyncDb {
 }
 
 const sqliteModule = "node:sqlite";
-let DatabaseSync: (new (path: string) => SqliteLike) | undefined;
+let DatabaseSync: (new (path: string) => TestDb) | undefined;
 try {
   const mod = (await import(/* @vite-ignore */ sqliteModule)) as {
-    DatabaseSync: new (path: string) => SqliteLike;
+    DatabaseSync: new (path: string) => TestDb;
   };
   DatabaseSync = mod.DatabaseSync;
 } catch {
@@ -46,7 +45,7 @@ try {
 
 const repoRoot = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
-function freshDb(): SqliteLike {
+function freshDb(): TestDb {
   const db = new DatabaseSync!(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const file of MIGRATIONS) {
@@ -66,7 +65,7 @@ function freshDb(): SqliteLike {
 const TOPIC = "two-pointers";
 
 function insertCard(
-  db: SqliteLike,
+  db: TestDb,
   id: string,
   over: { stability?: number; due?: number; updatedAt?: number; dirty?: number } = {},
 ): void {
@@ -97,11 +96,11 @@ function insertCard(
   db.prepare(`INSERT INTO card_concepts(card_id,concept_id) VALUES(?,?)`).run(id, "overflow");
 }
 
-function setup(db: SqliteLike): void {
+function setup(db: TestDb): void {
   db.prepare(`INSERT INTO topics(id,name,updated_at) VALUES(?,?,1)`).run(TOPIC, "Two Pointers");
   insertCard(db, "A", { stability: 4.2, due: 5000, updatedAt: 100 });
   insertCard(db, "B", { stability: 1.1, due: 6000, updatedAt: 100 });
-  // A local embedding for A — must never reach the sync target (§6).
+  // A local embedding for A ��� must never reach the sync target (?6).
   upsertEmbedding(db, {
     cardId: "A",
     model: "fake",
@@ -118,8 +117,8 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
-  it("flushes only dirty deltas, clears them, and stamps synced_at (§8)", async () => {
+describe.skipIf(!DatabaseSync)("Stage-6 card sync (?8, ?10)", () => {
+  it("flushes only dirty deltas, clears them, and stamps synced_at (?8)", async () => {
     const db = freshDb();
     setup(db);
     const target = new JsonFileSyncTarget({ dir });
@@ -136,7 +135,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     expect(rows.every((r) => Number(r.dirty) === 0)).toBe(true);
     expect(rows.every((r) => Number(r.synced_at) === 2000)).toBe(true);
 
-    // The canonical export holds both cards and no vector (§6/§10).
+    // The canonical export holds both cards and no vector (?6/?10).
     const raw = readFileSync(join(dir, "cards.json"), "utf-8");
     expect(JSON.parse(raw).cards).toHaveLength(2);
     expect(raw.toLowerCase()).not.toContain("vector");
@@ -174,7 +173,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     expect(a.stability).toBe(9.9);
   });
 
-  it("the updated_at guard keeps a card dirty if it is reviewed mid-flush (§8)", () => {
+  it("the updated_at guard keeps a card dirty if it is reviewed mid-flush (?8)", () => {
     const db = freshDb();
     setup(db);
     const deltas = dirtyCardDeltas(db); // snapshot at updated_at=100
@@ -191,7 +190,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     expect(countDirtyCards(db)).toBe(1); // A still dirty
   });
 
-  it("pull rewrites content but never touches local SR state (§8 field ownership)", async () => {
+  it("pull rewrites content but never touches local SR state (?8 field ownership)", async () => {
     const db = freshDb();
     setup(db);
 
@@ -247,7 +246,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     expect(Number(c.dirty)).toBe(0);
   });
 
-  it("keeps code-heavy cards local-authoritative on pull — pointer never clobbers local content (§8)", async () => {
+  it("keeps code-heavy cards local-authoritative on pull ��� pointer never clobbers local content (?8)", async () => {
     const db = freshDb();
     db.prepare(`INSERT INTO topics(id,name,updated_at) VALUES(?,?,1)`).run(TOPIC, "Two Pointers");
     // A local cloze (code) card with real, formatted content + SR state.
@@ -277,7 +276,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     );
 
     // The remote pull carries only the page-body pointer in `back` and the
-    // code-heavy flag — content is local-authoritative and must be preserved.
+    // code-heavy flag ��� content is local-authoritative and must be preserved.
     const res = applyPulledContent(
       db,
       [
@@ -287,7 +286,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
           topicId: TOPIC,
           type: "cloze",
           front: "Binary search update:\n```py\nmid = (lo + hi) // 2\n```",
-          back: "⤵ code / long content in page body — card kept local-authoritative (§8)",
+          back: "? code / long content in page body ��� card kept local-authoritative (?8)",
           conceptTags: ["overflow"],
           codeHeavy: true,
         },
@@ -297,7 +296,7 @@ describe.skipIf(!DatabaseSync)("Stage-6 card sync (§8, §10)", () => {
     expect(res.updated).toBe(1);
 
     const z = db.prepare(`SELECT * FROM cards WHERE id='Z'`).get() as Record<string, unknown>;
-    // Local content is intact — the pointer did NOT overwrite the real code body.
+    // Local content is intact ��� the pointer did NOT overwrite the real code body.
     expect(String(z.back)).toContain("lo = mid + 1");
     expect(String(z.back)).not.toContain("page body");
     expect(z.type).toBe("cloze");

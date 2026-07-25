@@ -12,37 +12,9 @@ export async function analyticsRoutes(
   app: FastifyInstance,
   ctx: AppContext,
 ): Promise<void> {
-  app.get("/analytics/summary", async (_request, reply) => {
-    const summary = ctx.analyticsService.getWeeklySummary();
-    return reply.send(serializeForJson(summary));
-  });
-
   app.get("/analytics/streak", async (_request, reply) => {
     const streak = ctx.analyticsService.getStreak();
     return reply.send(serializeForJson(streak));
-  });
-
-  app.get<{ Querystring: { weeks?: string } }>(
-    "/analytics/mastery-velocity",
-    async (request, reply) => {
-      const weeks = parseWeeks(request.query.weeks);
-      const data = ctx.analyticsService.getMasteryVelocity(weeks);
-      return reply.send(serializeForJson(data));
-    },
-  );
-
-  app.get<{ Querystring: { weeks?: string } }>(
-    "/analytics/weakness-trend",
-    async (request, reply) => {
-      const weeks = parseWeeks(request.query.weeks);
-      const trend = ctx.analyticsService.getWeaknessTrend(weeks);
-      return reply.send(serializeForJson({ weeks, trend }));
-    },
-  );
-
-  app.get("/analytics/difficulty", async (_request, reply) => {
-    const analysis = ctx.analyticsService.getDifficultyAnalysis();
-    return reply.send(serializeForJson(analysis));
   });
 
   app.get<{ Querystring: { weeks?: string } }>(
@@ -54,17 +26,6 @@ export async function analyticsRoutes(
         ctx.planService.generateTodaysPlan(),
       ]);
       return reply.send(serializeForJson({ ...dashboard, plan }));
-    },
-  );
-
-  // On-demand flashcard analytics over the append-only event log (§9):
-  // coverage/retention trends, per-card quality, and auto-retire candidates.
-  app.get<{ Querystring: { weeks?: string } }>(
-    "/analytics/cards",
-    async (request, reply) => {
-      const weeks = parseWeeks(request.query.weeks);
-      const report = ctx.analyticsService.getCardAnalytics({ weeks });
-      return reply.send(serializeForJson(report));
     },
   );
 }
