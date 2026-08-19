@@ -63,7 +63,7 @@ function Row({
 
   return (
     <div
-      className={`rsv-row${offRail ? " rsv-row--paused" : ""}`}
+      className={`rsv-row${offRail ? " rsv-row--paused" : ""}${completing ? " rsv-row--open" : ""}`}
       style={{ "--i": index } as React.CSSProperties}
     >
       {!offRail && (
@@ -87,6 +87,7 @@ function Row({
           {offRail && (
             <span className="rsv-flag">{item.status === "suspended" ? "leech" : "retired"}</span>
           )}
+          <span className="rsv-fill" aria-hidden />
           <span className={`rsv-distance${overdue ? " rsv-distance--overdue" : ""}`}>
             {offRail ? "" : distance(item)}
           </span>

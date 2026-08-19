@@ -28,13 +28,18 @@ export const RATING_LABELS: Record<ResolveRating, string> = {
   easy: "Easy",
 };
 
-const OUTCOMES: { id: ResolveOutcomeKind; label: string }[] = [
-  { id: "solved", label: "Solved cold" },
-  { id: "assisted", label: "Needed help" },
-  { id: "failed", label: "Couldn't solve" },
+const OUTCOMES: { id: ResolveOutcomeKind; label: string; hint: string; tone: string }[] = [
+  { id: "solved", label: "Solved cold", hint: "No help", tone: "got" },
+  { id: "assisted", label: "Needed help", hint: "Hint or coach", tone: "shaky" },
+  { id: "failed", label: "Couldn't solve", hint: "Stuck", tone: "forgot" },
 ];
 
-const RATINGS: ResolveRating[] = ["again", "hard", "good", "easy"];
+const RATINGS: { id: ResolveRating; hint: string; tone: string }[] = [
+  { id: "again", hint: "Failed", tone: "danger" },
+  { id: "hard", hint: "With help", tone: "warning" },
+  { id: "good", hint: "Solved", tone: "success" },
+  { id: "easy", hint: "Fast & cold", tone: "accent" },
+];
 
 interface Props {
   problemId: string;
@@ -74,6 +79,7 @@ export function ResolveCompleteForm({
     [outcome, timeTakenMin, difficulty, slowThresholdMin],
   );
   const rating = override ?? inferred;
+  const overridden = override != null && override !== inferred;
 
   const submit = async () => {
     setSaving(true);
@@ -92,57 +98,81 @@ export function ResolveCompleteForm({
   };
 
   return (
-    <div className="mistake-capture">
-      <div className="mistake-capture-question">
-        How did the re-solve of <strong>{problemName}</strong> go?
+    <div className="rsv-complete" role="group" aria-label={`Record re-solve of ${problemName}`}>
+      <p className="rsv-complete-question">How did the re-solve go?</p>
+
+      <div className="rsv-complete-block">
+        <div className="rsv-complete-head">
+          <div className="rsv-complete-label" id={`rsv-outcome-label-${problemId}`}>
+            Outcome
+          </div>
+          <div className="rsv-min">
+            <input
+              id={`rsv-min-${problemId}`}
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder="—"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              aria-label="Minutes taken"
+            />
+            <span>min</span>
+          </div>
+        </div>
+        <div className="rsv-complete-outcomes" role="group" aria-labelledby={`rsv-outcome-label-${problemId}`}>
+          {OUTCOMES.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className={`rsv-outcome-btn rsv-outcome-btn--${o.tone}${outcome === o.id ? " is-active" : ""}`}
+              aria-pressed={outcome === o.id}
+              onClick={() => {
+                setOutcome(o.id);
+                setOverride(null);
+              }}
+            >
+              <span className="rsv-outcome-btn__label">{o.label}</span>
+              <span className="rsv-outcome-btn__hint">{o.hint}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="mistake-capture-options">
-        {OUTCOMES.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            className={`btn mistake-tag-btn${outcome === o.id ? " mistake-tag-btn--active" : ""}`}
-            onClick={() => {
-              setOutcome(o.id);
-              setOverride(null);
-            }}
-          >
-            {o.label}
-          </button>
-        ))}
-        <label className="muted text-sm" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-          <input
-            type="number"
-            min={1}
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
-            style={{ width: "4.5rem" }}
-            aria-label="Minutes taken"
-          />
-          min
-        </label>
+
+      <div className="rsv-complete-block">
+        <div className="rsv-complete-label" id={`rsv-rating-label-${problemId}`}>
+          Rating
+          <span className="rsv-complete-label-meta">
+            {overridden ? "overridden" : `suggested ${RATING_LABELS[inferred]}`}
+          </span>
+        </div>
+        <div
+          className="review-grade-grid rsv-rating-grid"
+          role="group"
+          aria-labelledby={`rsv-rating-label-${problemId}`}
+        >
+          {RATINGS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              className={`review-grade-btn grade-${r.tone}${rating === r.id ? " is-active" : ""}`}
+              aria-pressed={rating === r.id}
+              title={r.hint}
+              onClick={() => setOverride(r.id === inferred ? null : r.id)}
+            >
+              <span className="review-grade-btn__label">{RATING_LABELS[r.id]}</span>
+              <span className="review-grade-btn__hint">{r.hint}</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="mistake-capture-options" role="group" aria-label="FSRS rating">
-        <span className="muted text-sm">
-          Rating{override && override !== inferred ? " (overridden)" : ""}:
-        </span>
-        {RATINGS.map((r) => (
-          <button
-            key={r}
-            type="button"
-            className={`btn mistake-tag-btn${rating === r ? " mistake-tag-btn--active" : ""}`}
-            onClick={() => setOverride(r === inferred ? null : r)}
-          >
-            {RATING_LABELS[r]}
-          </button>
-        ))}
-      </div>
-      <div className="mistake-capture-actions">
-        <button type="button" className="btn-secondary-v2" onClick={onCancel}>
+
+      <div className="rsv-complete-actions">
+        <button type="button" className="btn-ghost-v2" onClick={onCancel}>
           Cancel
         </button>
         <button type="button" className="btn-primary-v2" disabled={saving} onClick={() => void submit()}>
-          {saving ? "Saving…" : "Record re-solve"}
+          {saving ? "Saving…" : "Record"}
         </button>
       </div>
       {error && <div className="error-banner mt-2">{error}</div>}
