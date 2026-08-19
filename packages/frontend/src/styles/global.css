@@ -3134,7 +3134,7 @@ button:focus-visible,
 
 .rsv-row {
   position: relative;
-  padding: 0.55rem 0 0.8rem;
+  padding: 0.7rem 0 0.9rem;
   animation: rsv-rise 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
   animation-delay: calc(var(--i, 0) * 35ms);
 }
@@ -3143,10 +3143,14 @@ button:focus-visible,
   border-top: 1px solid var(--border-soft);
 }
 
+.rsv-row--open {
+  padding: 0.85rem 0 1.05rem;
+}
+
 .rsv-marker {
   position: absolute;
   left: -1.9rem;
-  top: 1.05rem;
+  top: 1.15rem;
   width: 9px;
   height: 9px;
   margin-left: 0.235rem;
@@ -3161,14 +3165,25 @@ button:focus-visible,
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.rsv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
 .rsv-line {
   display: flex;
   align-items: baseline;
   gap: 0.6rem;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .rsv-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-size: 1.125rem;
   font-weight: 500;
@@ -3180,8 +3195,14 @@ a.rsv-name:hover {
   color: var(--accent-hover);
 }
 
+.rsv-fill {
+  flex: 1;
+  min-width: 1rem;
+  border-bottom: 1px dotted var(--border);
+  transform: translateY(-4px);
+}
+
 .rsv-distance {
-  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 0.74rem;
   color: var(--text-muted);
@@ -3194,12 +3215,13 @@ a.rsv-name:hover {
 }
 
 .rsv-line--meta {
-  margin-top: 0.15rem;
+  gap: 0.75rem;
 }
 
 .rsv-reason {
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   color: var(--text-muted);
+  min-width: 0;
 }
 
 .rsv-fsrs {
@@ -3244,7 +3266,196 @@ a.rsv-name:hover {
 }
 
 .rsv-form {
-  margin-top: 0.6rem;
+  margin-top: 0.85rem;
+}
+
+.problem-row-v2 > .rsv-complete {
+  margin-top: 0.5rem;
+}
+
+/* Nested record panel — same surface as panel-v2 / review-card-v2. */
+.rsv-complete {
+  padding: 1.05rem 1.15rem 0.95rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+}
+
+.rsv-complete-question {
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.rsv-complete-block + .rsv-complete-block {
+  margin-top: 0.85rem;
+}
+
+.rsv-complete-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.rsv-complete-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  margin: 0 0 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.rsv-complete-head .rsv-complete-label {
+  margin-bottom: 0;
+}
+
+.rsv-complete-label-meta {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-muted);
+}
+
+.rsv-complete-outcomes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.rsv-outcome-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.12rem;
+  padding: 0.7rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.rsv-outcome-btn:hover {
+  border-color: var(--text-subtle);
+  color: var(--text);
+}
+
+.rsv-outcome-btn.is-active {
+  background: var(--bg-surface);
+}
+
+.rsv-outcome-btn--got.is-active {
+  border-color: var(--success);
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.rsv-outcome-btn--shaky.is-active {
+  border-color: var(--warning);
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.rsv-outcome-btn--forgot.is-active {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.rsv-outcome-btn__label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.rsv-outcome-btn__hint {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  color: var(--text-subtle);
+}
+
+.rsv-outcome-btn.is-active .rsv-outcome-btn__hint {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.rsv-min {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.rsv-min input {
+  width: 4.25rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  text-align: center;
+}
+
+.rsv-min input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+.rsv-min input::placeholder {
+  color: var(--text-subtle);
+}
+
+.rsv-min input::-webkit-outer-spin-button,
+.rsv-min input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.rsv-min input[type="number"] {
+  appearance: textfield;
+}
+
+.rsv-rating-grid {
+  margin-top: 0;
+}
+
+.rsv-complete .review-grade-btn.is-active {
+  border-color: currentColor;
+  background: var(--bg-surface);
+}
+
+.rsv-complete-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px dotted var(--border);
+}
+
+.rsv-complete-actions .btn-primary-v2,
+.rsv-complete-actions .btn-ghost-v2 {
+  padding: 0.5rem 1.15rem;
+  font-size: 0.78rem;
+  box-shadow: none;
 }
 
 /* The TODAY rule — the page's one bold gesture. */
@@ -3352,6 +3563,14 @@ a.rsv-name:hover {
 }
 
 @media (max-width: 640px) {
+  .rsv-fill {
+    display: none;
+  }
+
+  .rsv-line {
+    flex-wrap: wrap;
+  }
+
   .rsv-distance,
   .rsv-fsrs {
     margin-left: 0;
@@ -3365,5 +3584,17 @@ a.rsv-name:hover {
 
   .rsv-today-meta {
     white-space: normal;
+  }
+
+  .rsv-complete {
+    padding: 1rem 0.9rem 0.95rem;
+  }
+
+  .rsv-complete-outcomes {
+    grid-template-columns: 1fr;
+  }
+
+  .rsv-complete-actions {
+    flex-wrap: wrap;
   }
 }
